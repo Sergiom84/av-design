@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: av-design
+    runtime: node
+    region: frankfurt
+    # El plan gratuito duerme el servicio tras 15 min de inactividad y el primer
+    # acceso tarda. Si lo va a abrir un técnico en obra, subir a starter.
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false

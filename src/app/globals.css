@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------
+   Sistema visual · ver design-system/MASTER.md
+   Dos familias: Cormorant Garamond para títulos, JetBrains Mono para todo
+   lo demás. Tres tamaños semánticos: título, subtítulo, texto.
+   --------------------------------------------------------------------- */
+
+:root {
+  --papel: #fbfaf8;
+  --papel-hundido: #f4f2ed;
+  --tinta: #1a1a18;
+  --tinta-tenue: #6b6862;
+  --linea: #e2ded6;
+  --linea-fuerte: #cdc7ba;
+  --acento: #1f4d46;
+  --acento-suave: #e8f0ed;
+  --alerta: #8c3a2b;
+  --alerta-suave: #f7ece9;
+  --aviso: #8a6d1f;
+}
+
+@theme inline {
+  --color-papel: var(--papel);
+  --color-papel-hundido: var(--papel-hundido);
+  --color-tinta: var(--tinta);
+  --color-tinta-tenue: var(--tinta-tenue);
+  --color-linea: var(--linea);
+  --color-linea-fuerte: var(--linea-fuerte);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-alerta: var(--alerta);
+  --color-alerta-suave: var(--alerta-suave);
+  --color-aviso: var(--aviso);
+
+  --font-titulo: var(--fuente-titulo), Georgia, serif;
+  --font-mono: var(--fuente-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--fuente-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--fuente-titulo), Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Título · subtítulo · texto. El texto es el más pequeño, a propósito. */
+.t-titulo {
+  font-family: var(--fuente-titulo), Georgia, serif;
+  font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 500;
+}
+
+.t-subtitulo {
+  font-family: var(--fuente-titulo), Georgia, serif;
+  font-size: clamp(1.1rem, 0.95rem + 0.6vw, 1.375rem);
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.t-etiqueta {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+/* Tablas de datos: alineación tabular y filas legibles */
+table.datos {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+table.datos th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--linea-fuerte);
+  white-space: nowrap;
+}
+
+table.datos td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--linea);
+  vertical-align: top;
+}
+
+table.datos tbody tr:hover {
+  background: var(--papel-hundido);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controles */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--papel);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 2px;
+  padding: 0.3rem 0.5rem;
+  color: var(--tinta);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+::placeholder {
+  color: var(--tinta-tenue);
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

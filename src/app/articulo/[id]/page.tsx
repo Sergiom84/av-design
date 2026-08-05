@@ -1,7 +1,15 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
-import { obtenerArticulo, usosDeArticulo, SIN_MARCA } from '@/lib/datos';
+import {
+  obtenerArticulo,
+  preciosDeArticulo,
+  puertosDeArticulo,
+  usosDeArticulo,
+  SIN_MARCA,
+} from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
+import { TablaPrecios } from '@/components/precios/tabla-precios';
+import { TablaPuertos } from '@/components/puertos/tabla-puertos';
 import { Aviso, Boton, Cabecera, Campo, Enlace, Tarjeta } from '@/components/ui';
 import { desactivarArticulo, guardarArticulo } from '../../acciones';
 import { ETIQUETA_SENAL } from '@/lib/tipos';
@@ -12,7 +20,12 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const [articulo, usos] = await Promise.all([obtenerArticulo(id), usosDeArticulo(id)]);
+  const [articulo, usos, precios, puertos] = await Promise.all([
+    obtenerArticulo(id),
+    usosDeArticulo(id),
+    preciosDeArticulo(id),
+    puertosDeArticulo(id),
+  ]);
   if (!articulo) notFound();
 
   const marca = articulo.marca ?? SIN_MARCA;
@@ -110,17 +123,30 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
                 <input
                   name="coste"
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   defaultValue={articulo.coste ?? ''}
                   className="w-full num"
                 />
               </Campo>
+              <Campo
+                etiqueta="Tipo de precio"
+                ayuda="Marcado: es una referencia para dimensionar. Sin marcar: es el precio real de compra."
+              >
+                <label className="flex items-center gap-2 h-9">
+                  <input
+                    type="checkbox"
+                    name="coste_orientativo"
+                    defaultChecked={articulo.coste_orientativo}
+                  />
+                  Orientativo
+                </label>
+              </Campo>
               <Campo etiqueta="PVP (€)" ayuda="Lo que se repercute, si aplica.">
                 <input
                   name="pvp"
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   defaultValue={articulo.pvp ?? ''}
                   className="w-full num"
@@ -146,7 +172,7 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
                 <input
                   name="stock_minimo"
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   defaultValue={articulo.stock_minimo ?? ''}
                   className="w-full num"
@@ -256,6 +282,17 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
           <Boton>Guardar ficha</Boton>
         </div>
       </form>
+
+      {/* Fuera del formulario de la ficha: un formulario no puede anidarse. */}
+      <div className="mt-6">
+        <TablaPuertos articuloId={articulo.id} puertos={puertos} />
+      </div>
+
+      {precios.length > 0 && (
+        <div className="mt-6">
+          <TablaPrecios precios={precios} unidad={articulo.unidad} />
+        </div>
+      )}
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
+import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
 
 const numero = (v: FormDataEntryValue | null): number | null => {
   if (v == null || String(v).trim() === '') return null;
@@ -52,42 +53,83 @@ function extremoPorCategoria(categoria: string): string {
   return 'pared';
 }
 
+/**
+ * La sede se escribe a mano y se da de alta sola. Es el `Location` de XTEN-AV
+ * —lo que permite decir que esta sala está en Madrid— y no merece una pantalla
+ * de mantenimiento propia mientras solo sea un nombre.
+ */
+async function sedeId(nombre: string | null): Promise<string | null> {
+  if (!nombre) return null;
+  const [s] = await sql<Array<{ id: string }>>`
+    insert into sedes (nombre) values (${nombre})
+    on conflict (nombre) do update set nombre = excluded.nombre
+    returning id`;
+  return s.id;
+}
+
+/**
+ * Da de alta la sala, con plantilla o sin ella, y tantas copias como se pidan.
+ *
+ * Dos diferencias deliberadas con el flujo de XTEN-AV (docs/06, apartados 2 y 6):
+ *
+ * - Las **medidas vienen siempre del formulario**, no de la plantilla. La
+ *   plantilla las propone y el formulario las trae rellenas, pero lo que se
+ *   guarda es lo que el técnico ha visto y confirmado. Sin medidas no hay
+ *   metros, y la sala se crea igual: la falta se avisa, no se bloquea.
+ * - **`copias`** es el `Number of Designs` de ellos. Con 144 salas de la misma
+ *   tipología es la diferencia entre un clic y ciento cuarenta y cuatro; el
+ *   patrón de nombre evita que salgan 144 salas llamadas igual.
+ */
 export async function crearSala(datos: FormData) {
   const plantillaId = texto(datos.get('plantilla_id'));
+  const copias = Math.min(
+    MAXIMO_COPIAS,
+    Math.max(1, Math.round(numero(datos.get('copias')) ?? 1)),
+  );
+  const patronNombre = texto(datos.get('nombre')) ?? 'Sala sin nombre';
+  const patronCodigo = texto(datos.get('codigo'));
+  const sede = await sedeId(texto(datos.get('sede')));
 
-  const id = await sql.begin(async (tx) => {
-    // Si hay plantilla, la sala hereda sus medidas y su tipología.
-    const plantilla = plantillaId
-      ? (
-          await tx<Array<Record<string, unknown>>>`
-            select * from plantillas_sala where id = ${plantillaId}`
-        )[0]
-      : undefined;
+  const comun = {
+    sede_id: sede,
+    edificio: texto(datos.get('edificio')),
+    nivel: texto(datos.get('nivel')),
+    plantilla_id: plantillaId,
+    tipologia: texto(datos.get('tipologia')),
+    aforo: numero(datos.get('aforo')),
+    largo_m: numero(datos.get('largo_m')) ?? 0,
+    ancho_m: numero(datos.get('ancho_m')) ?? 0,
+    alto_m: numero(datos.get('alto_m')) ?? 0,
+    alto_falso_techo_m: numero(datos.get('alto_falso_techo_m')),
+    ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
+  };
 
-    const [sala] = await tx<Array<{ id: string }>>`
-      insert into salas ${tx({
-        nombre: texto(datos.get('nombre')) ?? 'Sala sin nombre',
-        edificio: texto(datos.get('edificio')),
-        nivel: texto(datos.get('nivel')),
-        codigo: texto(datos.get('codigo')),
-        plantilla_id: plantilla ? plantillaId : null,
-        tipologia: (plantilla?.tipologia as string) ?? null,
-        aforo: (plantilla?.aforo as number) ?? null,
-        largo_m: Number(plantilla?.largo_m ?? 0),
-        ancho_m: Number(plantilla?.ancho_m ?? 0),
-        alto_m: Number(plantilla?.alto_m ?? 0),
-        alto_falso_techo_m: (plantilla?.alto_falso_techo_m as number) ?? null,
-        ruta_por_defecto: (plantilla?.ruta_por_defecto as string) ?? 'falso_techo',
-      })}
-      returning id`;
+  const ids = await sql.begin(async (tx) => {
+    // El equipamiento estándar de la plantilla se lee una vez y se copia a
+    // todas las salas de la serie. Lo marcado como `no en todas` no se hereda.
+    const lineas = plantillaId
+      ? await tx<
+          Array<{
+            articulo_id: string | null;
+            categoria: string;
+            cantidad: string;
+            modelo_texto: string | null;
+          }>
+        >`select articulo_id, categoria, cantidad, modelo_texto
+          from plantilla_articulos
+          where plantilla_id = ${plantillaId} and not opcional`
+      : [];
 
-    // Arrastra el equipamiento estándar de la plantilla.
-    if (plantillaId) {
-      const lineas = await tx<
-        Array<{ articulo_id: string | null; categoria: string; cantidad: string; modelo_texto: string | null }>
-      >`select articulo_id, categoria, cantidad, modelo_texto
-        from plantilla_articulos
-        where plantilla_id = ${plantillaId} and not opcional`;
+    const creadas: string[] = [];
+
+    for (let i = 1; i <= copias; i++) {
+      const [sala] = await tx<Array<{ id: string }>>`
+        insert into salas ${tx({
+          ...comun,
+          nombre: expandirPatron(patronNombre, i, copias),
+          codigo: patronCodigo ? expandirPatron(patronCodigo, i, copias) : null,
+        })}
+        returning id`;
 
       for (const l of lineas) {
         await tx`
@@ -96,20 +138,99 @@ export async function crearSala(datos: FormData) {
                   ${Math.max(1, Math.round(Number(l.cantidad) || 1))},
                   ${extremoPorCategoria(l.categoria)}::extremo_cable)`;
       }
+
+      creadas.push(sala.id);
     }
 
-    return sala.id;
+    return creadas;
   });
 
   revalidatePath('/salas');
-  redirect(`/salas/${id}`);
+  revalidatePath('/');
+  // Una sala se abre para seguir trabajando en ella; una serie de veinte, no.
+  redirect(ids.length === 1 ? `/salas/${ids[0]}` : '/salas');
+}
+
+/**
+ * El camino de vuelta: una sala terminada se convierte en plantilla propia.
+ *
+ * Así el departamento construye sus plantillas reales —medidas comprobadas en
+ * obra y el equipamiento que de verdad se puso— en vez de quedarse con las 16
+ * deducidas del inventario.
+ *
+ * El nombre de la plantilla es único en la base. En vez de fallar delante del
+ * usuario, se desambigua con un sufijo: `Sala TP Madrid (2)`.
+ */
+export async function crearPlantillaDesdeSala(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+
+  const [sala] = await sql<Array<Record<string, unknown>>>`
+    select * from salas where id = ${salaId}`;
+  if (!sala) return;
+
+  const base =
+    texto(datos.get('nombre')) ?? `${String(sala.nombre)} (plantilla)`;
+  const medida = (v: unknown): number | null => {
+    const n = v == null ? 0 : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const plantillaId = await sql.begin(async (tx) => {
+    let id: string | undefined;
+    for (let intento = 1; intento <= 50 && !id; intento++) {
+      const nombre = intento === 1 ? base : `${base} (${intento})`;
+      const [fila] = await tx<Array<{ id: string }>>`
+        insert into plantillas_sala ${tx({
+          nombre,
+          tipologia: (sala.tipologia as string | null) ?? 'OTRA',
+          aforo: (sala.aforo as number | null) ?? null,
+          largo_m: medida(sala.largo_m),
+          ancho_m: medida(sala.ancho_m),
+          alto_m: medida(sala.alto_m),
+          alto_falso_techo_m: medida(sala.alto_falso_techo_m),
+          ruta_por_defecto: (sala.ruta_por_defecto as string) ?? 'falso_techo',
+          notas: `Guardada desde la sala ${String(sala.nombre)}.`,
+        })}
+        on conflict (nombre) do nothing
+        returning id`;
+      id = fila?.id;
+    }
+    if (!id) return null;
+
+    // El equipamiento de la sala pasa a ser el estándar de la plantilla. La
+    // sección sale del catálogo cuando el equipo viene de él; si se escribió a
+    // mano, no hay de dónde sacarla.
+    const equipos = await tx<
+      Array<{ articulo_id: string | null; nombre: string; cantidad: number; categoria: string | null }>
+    >`select e.articulo_id, e.nombre, e.cantidad, a.categoria
+      from sala_equipos e
+      left join articulos a on a.id = e.articulo_id
+      where e.sala_id = ${salaId}
+      order by e.nombre`;
+
+    for (const e of equipos) {
+      await tx`
+        insert into plantilla_articulos (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional)
+        values (${id}, ${e.articulo_id}, ${e.categoria ?? 'SIN CATEGORIA'},
+                ${e.nombre}, ${Math.max(1, Math.round(Number(e.cantidad) || 1))}, false)`;
+    }
+
+    return id;
+  });
+
+  revalidatePath('/plantillas');
+  revalidatePath('/');
+  if (plantillaId) redirect(`/plantillas#p-${plantillaId}`);
 }
 
 export async function guardarSala(datos: FormData) {
   const id = String(datos.get('id'));
+  const sede = await sedeId(texto(datos.get('sede')));
   await sql`
     update salas set
       nombre               = ${texto(datos.get('nombre')) ?? 'Sala sin nombre'},
+      sede_id              = ${sede},
+      tipologia            = ${texto(datos.get('tipologia'))},
       edificio             = ${texto(datos.get('edificio'))},
       nivel                = ${texto(datos.get('nivel'))},
       codigo               = ${texto(datos.get('codigo'))},
@@ -146,13 +267,14 @@ export async function anadirEquipo(datos: FormData) {
   }
 
   await sql`
-    insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m)
+    insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m, toma_red_id)
     values (${salaId}, ${articuloId}, ${nombre ?? 'Equipo'},
             ${numero(datos.get('cantidad')) ?? 1},
             ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
             ${numero(datos.get('x_m')) ?? 0},
             ${numero(datos.get('y_m')) ?? 0},
-            ${numero(datos.get('z_m')) ?? 0})`;
+            ${numero(datos.get('z_m')) ?? 0},
+            ${texto(datos.get('toma_red_id'))})`;
   revalidatePath(`/salas/${salaId}`);
 }
 
@@ -165,7 +287,8 @@ export async function guardarEquipo(datos: FormData) {
       extremo  = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
       x_m      = ${numero(datos.get('x_m')) ?? 0},
       y_m      = ${numero(datos.get('y_m')) ?? 0},
-      z_m      = ${numero(datos.get('z_m')) ?? 0}
+      z_m      = ${numero(datos.get('z_m')) ?? 0},
+      toma_red_id = ${texto(datos.get('toma_red_id'))}
     where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
@@ -187,6 +310,51 @@ export async function borrarEquipo(datos: FormData) {
   revalidatePath(`/salas/${salaId}`);
 }
 
+// --------------------------------------------------------------- tomas de red
+//
+// La roseta del edificio: el número de la placa del suelo o de la pared. Es un
+// dato de esta sala, no del catálogo. La ubicación se guarda como texto y se
+// normaliza a minúsculas aquí para que no acaben conviviendo "Suelo", "suelo" y
+// "SUELO", que es exactamente lo que ensució el inventario de partida.
+
+export async function anadirToma(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+  const codigo = texto(datos.get('codigo'));
+  if (!salaId || !codigo) return;
+
+  await sql`
+    insert into tomas_red (sala_id, codigo, ubicacion, x_m, y_m, z_m, notas)
+    values (${salaId}, ${codigo},
+            ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
+            ${numero(datos.get('x_m'))},
+            ${numero(datos.get('y_m'))},
+            ${numero(datos.get('z_m'))},
+            ${texto(datos.get('notas'))})
+    on conflict (sala_id, codigo) do nothing`;
+  revalidatePath(`/salas/${salaId}`);
+}
+
+export async function guardarToma(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+  await sql`
+    update tomas_red set
+      codigo    = ${texto(datos.get('codigo')) ?? 'sin código'},
+      ubicacion = ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
+      x_m       = ${numero(datos.get('x_m'))},
+      y_m       = ${numero(datos.get('y_m'))},
+      z_m       = ${numero(datos.get('z_m'))},
+      notas     = ${texto(datos.get('notas'))}
+    where id = ${String(datos.get('id'))}`;
+  revalidatePath(`/salas/${salaId}`);
+}
+
+/** Los equipos que pinchaban en ella se quedan sin toma, no se borran. */
+export async function borrarToma(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+  await sql`delete from tomas_red where id = ${String(datos.get('id'))}`;
+  revalidatePath(`/salas/${salaId}`);
+}
+
 // ---------------------------------------------------------------- conexiones
 export async function anadirConexion(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
@@ -197,12 +365,34 @@ export async function anadirConexion(datos: FormData) {
   const ruta = texto(datos.get('ruta'));
   await sql`
     insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id,
-                            senal, ruta, longitud_manual_m)
+                            senal, ruta, longitud_manual_m,
+                            puerto_origen_id, puerto_destino_id)
     values (${salaId}, ${origen}, ${destino},
             ${texto(datos.get('articulo_cable_id'))},
             ${texto(datos.get('senal')) ?? 'otro'}::senal,
             ${ruta}::ruta_cable,
-            ${numero(datos.get('longitud_manual_m'))})`;
+            ${numero(datos.get('longitud_manual_m'))},
+            ${texto(datos.get('puerto_origen_id'))},
+            ${texto(datos.get('puerto_destino_id'))})`;
+  revalidatePath(`/salas/${salaId}`);
+}
+
+/**
+ * Detallar una conexión que ya existe. Hace falta porque hay tiradas dadas de
+ * alta antes de que hubiera catálogo de puertos: se les añaden ahora sin
+ * volver a crearlas, que cambiaría su identificador de cable.
+ */
+export async function guardarConexion(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+  await sql`
+    update conexiones set
+      articulo_cable_id = ${texto(datos.get('articulo_cable_id'))},
+      senal             = ${texto(datos.get('senal')) ?? 'otro'}::senal,
+      ruta              = ${texto(datos.get('ruta'))}::ruta_cable,
+      longitud_manual_m = ${numero(datos.get('longitud_manual_m'))},
+      puerto_origen_id  = ${texto(datos.get('puerto_origen_id'))},
+      puerto_destino_id = ${texto(datos.get('puerto_destino_id'))}
+    where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
 
@@ -255,27 +445,41 @@ export async function anadirLineaPlantilla(datos: FormData) {
   revalidatePath('/plantillas');
 }
 
-export async function guardarLineaPlantilla(datos: FormData) {
-  await sql`
-    update plantilla_articulos set
-      cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
-      opcional = ${datos.get('opcional') === 'on'}
-    where id = ${String(datos.get('id'))}`;
-  revalidatePath('/plantillas');
-}
+/**
+ * Todo lo que se le puede hacer a una línea del equipamiento: sumar, restar,
+ * guardar y quitar. Lo dice el botón pulsado, en `operacion`.
+ *
+ * Es una sola acción porque antes eran cuatro formularios por fila, y cada uno
+ * repetía en el HTML el identificador de la línea y el de su acción. Con más
+ * de cien líneas en `/plantillas` eso pesaba más que el propio contenido.
+ */
+export async function operarLineaPlantilla(datos: FormData) {
+  const id = String(datos.get('id'));
 
-/** Suma o resta unidades de una línea de plantilla. */
-export async function ajustarLineaPlantilla(datos: FormData) {
-  const paso = Number(datos.get('paso')) || 1;
-  await sql`
-    update plantilla_articulos
-    set cantidad = greatest(1, cantidad + ${paso})
-    where id = ${String(datos.get('id'))}`;
-  revalidatePath('/plantillas');
-}
+  switch (texto(datos.get('operacion'))) {
+    case 'mas':
+    case 'menos': {
+      const paso = datos.get('operacion') === 'mas' ? 1 : -1;
+      await sql`
+        update plantilla_articulos
+        set cantidad = greatest(1, cantidad + ${paso})
+        where id = ${id}`;
+      break;
+    }
+    case 'quitar':
+      await sql`delete from plantilla_articulos where id = ${id}`;
+      break;
+    case 'guardar':
+      await sql`
+        update plantilla_articulos set
+          cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
+          opcional = ${datos.get('opcional') === 'on'}
+        where id = ${id}`;
+      break;
+    default:
+      return;
+  }
 
-export async function borrarLineaPlantilla(datos: FormData) {
-  await sql`delete from plantilla_articulos where id = ${String(datos.get('id'))}`;
   revalidatePath('/plantillas');
 }
 
@@ -312,6 +516,7 @@ export async function guardarArticulo(datos: FormData) {
       caracteristicas          = ${texto(datos.get('caracteristicas'))},
       observaciones            = ${texto(datos.get('observaciones'))},
       coste                    = ${numero(datos.get('coste'))},
+      coste_orientativo        = ${datos.get('coste_orientativo') != null},
       pvp                      = ${numero(datos.get('pvp'))},
       proveedor_id             = ${idProveedor},
       plazo_dias               = ${numero(datos.get('plazo_dias'))},
@@ -343,6 +548,7 @@ export async function crearArticulo(datos: FormData) {
       observaciones: texto(datos.get('observaciones')),
       unidad: texto(datos.get('unidad')) ?? 'ud',
       coste: numero(datos.get('coste')),
+      coste_orientativo: datos.get('coste_orientativo') != null,
       pvp: numero(datos.get('pvp')),
       proveedor_id: idProveedor,
     })}
@@ -350,6 +556,55 @@ export async function crearArticulo(datos: FormData) {
 
   revalidatePath('/catalogo');
   redirect(`/articulo/${a.id}`);
+}
+
+// --------------------------------------------------------------- puertos
+//
+// Un puerto es un conector físico del equipo. Lo que se da de alta aquí lleva
+// `fuente = 'app'`: alguien lo ha mirado en el equipo real, así que la siembra
+// no lo toca nunca, aunque data/puertos.csv diga otra cosa.
+
+/** Nombre y sentido son lo mínimo: sin ellos el puerto no dice nada. */
+export async function anadirPuerto(datos: FormData) {
+  const articuloId = String(datos.get('articulo_id'));
+  const nombre = texto(datos.get('nombre'));
+  if (!articuloId || !nombre) return;
+
+  await sql`
+    insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+    values (${articuloId}, ${nombre},
+            ${Math.max(1, Math.round(numero(datos.get('total')) ?? 1))},
+            ${texto(datos.get('sentido')) ?? 'entrada'}::sentido_puerto,
+            ${texto(datos.get('senal')) ?? 'otro'}::senal,
+            ${texto(datos.get('conector'))},
+            ${numero(datos.get('orden'))},
+            ${texto(datos.get('notas'))},
+            'app')
+    on conflict (articulo_id, nombre) do nothing`;
+  revalidatePath(`/articulo/${articuloId}`);
+  revalidatePath('/catalogo');
+}
+
+export async function guardarPuerto(datos: FormData) {
+  const articuloId = String(datos.get('articulo_id'));
+  await sql`
+    update puertos set
+      nombre   = ${texto(datos.get('nombre')) ?? 'Sin nombre'},
+      total    = ${Math.max(1, Math.round(numero(datos.get('total')) ?? 1))},
+      sentido  = ${texto(datos.get('sentido')) ?? 'entrada'}::sentido_puerto,
+      senal    = ${texto(datos.get('senal')) ?? 'otro'}::senal,
+      conector = ${texto(datos.get('conector'))},
+      orden    = ${numero(datos.get('orden'))},
+      notas    = ${texto(datos.get('notas'))}
+    where id = ${String(datos.get('id'))}`;
+  revalidatePath(`/articulo/${articuloId}`);
+}
+
+export async function borrarPuerto(datos: FormData) {
+  const articuloId = String(datos.get('articulo_id'));
+  await sql`delete from puertos where id = ${String(datos.get('id'))}`;
+  revalidatePath(`/articulo/${articuloId}`);
+  revalidatePath('/catalogo');
 }
 
 /** No se borra: se desactiva, para no romper las salas que ya lo usan. */

@@ -1,0 +1,40 @@
+presupuesto;proveedor;fecha;referencia;marca;modelo;descripcion;tipo;categoria;unidad;senal;conector_a;conector_b;longitud_m;bobina_m;cantidad;precio_compra;unidades_por_compra;moneda;revisar
+Referencia web · equipos;;2026-08-05;;CISCO;ROOM NAVIGATOR;;equipo;PANEL TÁCTIL;ud;;;;;;;1055;1;USD;Rango 1.055-2.265 USD. Table 1.055, Wall 1.195 CSRP; distribuidores hasta 2.265
+Referencia web · equipos;;2026-08-05;;SAMSUNG;QB65R-B;;equipo;PANTALLA;ud;;;;;;;1099;1;USD;Precio de lista. Varios distribuidores piden contactar para precio final
+Referencia web · equipos;;2026-08-05;CS-MIC-TABLE-J;CISCO;TABLE MICROPHONE MINI JACK (V1);;equipo;MICRÓFONO;ud;microfono;;;;;;597;1;USD;Rango 597-653 USD. Oferta puntual 355, GPL 808
+Referencia web · equipos;;2026-08-05;;CISCO;SPARK ROOM KIT;;equipo;VIDEOCONFERENCIA;ud;;;;;;;13371;1;USD;Rango enorme 13.371-24.485 USD. Room Kit estándar 13.371, Plus 23.680-24.485 GPL
+Referencia web · equipos;;2026-08-05;;BACHMANN;TOPFRAME;;equipo;CAJA DE CONEXIONES;ud;;;;;;;585;1;USD;Rango 585-874 según modelo y tamaño. Las cifras altas venían en euros
+Referencia web · equipos;;2026-08-05;;CISCO;WEBEX ROOM BAR PRO;;equipo;VIDEOCONFERENCIA;ud;;;;;;;8295;1;USD;CSRP oficial 8.295. Con Navigator incluido 16.207-21.390
+Referencia web · equipos;;2026-08-05;;SAMSUNG;QB55R-B;;equipo;PANTALLA;ud;;;;;;;730;1;USD;Rango 730-1.292 USD. El bajo es eBay nuevo, el alto precio de lista
+Referencia web · equipos;;2026-08-05;;STEELCASE;ROOMWIZARD II;;equipo;PANTALLA ROOMWIZARD;ud;;;;;;;4275;1;USD;Lista oficial 204 de Steelcase
+Referencia web · equipos;;2026-08-05;;SAMSUNG;QM32R-B;;equipo;PANTALLA;ud;;;;;;;539;1;USD;Rango 539-845 USD entre tres distribuidores
+Referencia web · equipos;;2026-08-05;;TARGUS;DOCK182;;equipo;DOCK STATION;ud;;;;;;;166;1;USD;Rango 166-343 USD. El bajo es el mejor precio nuevo localizado
+Referencia web · equipos;;2026-08-05;;CISCO;QUAD CAMERA;;equipo;CÁMARA;ud;;;;;;;8995;1;USD;CSRP oficial 8.995. Recambio 16.238, en bundle 24.036
+Referencia web · cable;;2026-08-05;;;CAT6 U/UTP LSZH;;cable;CABLE RED;m;red;;;;305;;0.45;1;USD;Rango 0,45-0,80 USD/m. Bobina 305 m entre 140 y 250 USD. La fuente dice F/UTP y el catálogo es U/UTP
+Referencia web · cable;;2026-08-05;;;CAT6A F/UTP LSZH;;cable;CABLE RED;m;red;;;;305;;1.40;1;USD;Rango 1,40-2,80 USD/m. Bobina 305 m entre 425 y 560 USD
+Referencia web · cable;;2026-08-05;;;HDMI 2.0 4K60 4:4:4;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;;;;4;1;USD;Rango 4-15 USD por latiguillo según longitud comercial
+Referencia web · cable;;2026-08-05;;;HDMI 2.1 48G;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;;;;9;1;USD;Rango 9-52 USD. Certificado Ultra High Speed; varía mucho por longitud y marca
+Referencia web · cable;;2026-08-05;;;HDMI FIBRA OPTICA ACTIVA;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;;;;62;1;USD;Rango 62-125 USD en longitudes de 15 a 50 m
+Referencia web · cable;;2026-08-05;;;USB-C 3.2 GEN2 100W;;cable;CABLE USB;ud;usb;USB-C;USB-C;;;;6;1;USD;Rango 6-25 USD. Genérico 6-11, UGREEN 13-25
+Referencia web · cable;;2026-08-05;;;USB-A A USB-B ACTIVO;;cable;CABLE USB;ud;usb;USB-A;USB-B;;;;22;1;USD;Rango 22-120 USD. Estándar 22, plenum 103-120
+Referencia web · cable;;2026-08-05;;;ALTAVOZ 2X2,5 MM2 LSZH;;cable;CABLE AUDIO;m;audio_altavoz;;;;100;;4;1;USD;Rango 4-7 USD/m. Belden 4,16 EUR/m, Tasker 6,71 USD/m, Supra 6 EUR/m
+Referencia web · cable;;2026-08-05;;;ALTAVOZ 2X1,5 MM2 LSZH;;cable;CABLE AUDIO;m;audio_altavoz;;;;100;;2.50;1;USD;Rango 2,50-4,50 USD/m. Estimado 30-40 % menos que el 2x2,5, no medido
+Referencia web · cable;;2026-08-05;;;LATIGUILLO XLR 3 PINES;;cable;CABLE AUDIO;ud;microfono;XLR M;XLR H;;;;15;1;USD;Rango 15-50 USD en latiguillos de 1 a 3 m
+Referencia web · cable;;2026-08-05;;;RS-232 APANTALLADO;;cable;CABLE CONTROL;m;control;;;;100;;1.50;1;USD;Rango 1,50-4 USD/m a granel. Latiguillos terminados desde 6 USD
+Referencia web · cable;;2026-08-05;;;MANGUERA 3X1,5 MM2 LSZH;;cable;CABLE ALIMENTACION;m;alimentacion;;;;100;;0.50;1;USD;Rango 0,50-0,80 USD/m. H05VV-F o similar, 560 USD los 1.000 m
+Referencia web · cable;;2026-08-05;;;LATIGUILLO SCHUKO-IEC C13;;cable;CABLE ALIMENTACION;ud;alimentacion;Schuko;IEC C13;;;;4;1;USD;Rango 4-9 USD en 1,5 a 2,5 m
+Referencia web · cable;;2026-08-05;;;CANALETA 25X16 MM;;consumible;CANALIZACION;m;otro;;;;;;0.80;1;USD;Rango 0,80-2 USD/m. Muy variable por región; rollo de 20-25 m entre 15 y 40 USD
+Referencia web · cable;;2026-08-05;;;CANALETA 40X25 MM;;consumible;CANALIZACION;m;otro;;;;;;1.50;1;USD;Rango 1,50-3,50 USD/m. Estimado sobre la base del 25x16, no medido
+Referencia web · cable;;2026-08-05;;;CANALETA 60X40 MM;;consumible;CANALIZACION;m;otro;;;;;;2.50;1;USD;Rango 2,50-5 USD/m. Estimado, consultar distribuidor local por volumen
+Referencia web · cable;;2026-08-05;;;TUBO CORRUGADO 20 MM;;consumible;CANALIZACION;m;otro;;;;;;0.30;1;USD;Rango 0,30-0,80 USD/m. Rollo de 25-50 m entre 15 y 25 USD
+Referencia web · cable;;2026-08-05;;;TUBO CORRUGADO 25 MM;;consumible;CANALIZACION;m;otro;;;;;;0.70;1;USD;Rango 0,70-1,80 USD/m. Rollo de 10-25 m entre 18 y 35 USD
+Referencia web · cable;;2026-08-05;;;CONECTOR RJ45 CAT6 UTP;;consumible;CONECTOR;ud;red;;;;;;0.25;1;USD;Rango 0,25-0,60 USD. Pack de 50-100 uds entre 0,25 y 0,45
+Referencia web · cable;;2026-08-05;;;CONECTOR RJ45 CAT6A FTP;;consumible;CONECTOR;ud;red;;;;;;0.45;1;USD;Rango 0,45-0,60 USD apantallado, pack de 50-100 uds
+Referencia web · cable;;2026-08-05;;;CONECTOR XLR MACHO;;consumible;CONECTOR;ud;microfono;;;;;;2;1;USD;Rango 2-10 USD. Metal estándar 2-5, chasis 3. La fuente no separa macho y hembra
+Referencia web · cable;;2026-08-05;;;CONECTOR XLR HEMBRA;;consumible;CONECTOR;ud;microfono;;;;;;2;1;USD;Rango 2-10 USD. Metal estándar 2-5, chasis 3. La fuente no separa macho y hembra
+Referencia web · cable;;2026-08-05;;;BRIDA NYLON 200 MM;;consumible;FIJACION;ud;otro;;;;;;1;100;USD;Pack de 100 uds entre 1 y 6 USD. Cargado como el pack más barato
+Referencia web · cable;;2026-08-05;;;GRAPA SUJETACABLES;;consumible;FIJACION;ud;otro;;;;;;0.15;1;USD;Rango 0,15-0,50 USD por unidad. Packs de 20-50 uds entre 4 y 12 USD
+Referencia web · cable;;2026-08-05;;;SOPORTE PANTALLA VESA FIJO 400X400;;consumible;FIJACION;ud;otro;;;;;;17;1;USD;Rango 17-120 USD. Fijo básico 17-37, articulado 60-120
+Referencia web · cable;;2026-08-05;;;SOPORTE PANTALLA VESA INCLINABLE 600X400;;consumible;FIJACION;ud;otro;;;;;;40;1;USD;Rango 40-240 USD. Fijo 40-90, full-motion profesional 240-500
+Referencia web · cable;;2026-08-05;;;CAJA DE SUPERFICIE 2 MODULOS;;consumible;MECANISMO;ud;otro;;;;;;1.65;1;USD;Rango 1,65-4 USD. Plástico estándar 1,65-3,23, resistente al fuego 4
+Referencia web · cable;;2026-08-05;;;PLACA HDMI + RJ45 EMPOTRABLE;;consumible;MECANISMO;ud;otro;;;;;;8;1;USD;Rango 8-20 USD con keystone jacks

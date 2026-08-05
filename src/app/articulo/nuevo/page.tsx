@@ -63,10 +63,10 @@ export default async function NuevoArticulo() {
 
           <div className="mt-3 grid sm:grid-cols-2 gap-3">
             <Campo etiqueta="Coste (€)">
-              <input name="coste" type="number" step="0.01" min="0" className="w-full num" />
+              <input name="coste" type="number" step="any" min="0" className="w-full num" />
             </Campo>
             <Campo etiqueta="PVP (€)">
-              <input name="pvp" type="number" step="0.01" min="0" className="w-full num" />
+              <input name="pvp" type="number" step="any" min="0" className="w-full num" />
             </Campo>
           </div>
 

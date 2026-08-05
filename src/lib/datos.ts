@@ -2,14 +2,20 @@ import 'server-only';
 import { sql } from './db';
 import {
   Articulo,
+  ArticuloElegible,
   Conexion,
   EquipoEnSala,
   Extremo,
+  LineaPlantilla,
   ParametrosCable,
   PARAMETROS_POR_DEFECTO,
   PlantillaSala,
+  Puerto,
   Sala,
+  TomaRed,
 } from './tipos';
+
+export type { LineaPlantilla } from './tipos';
 
 type Fila = Record<string, unknown>;
 
@@ -29,6 +35,7 @@ function aArticulo(f: Fila): Articulo {
     observaciones: s(f.observaciones),
     unidad: (f.unidad as Articulo['unidad']) ?? 'ud',
     coste: n(f.coste),
+    coste_orientativo: f.coste_orientativo === true,
     pvp: n(f.pvp),
     proveedor: s(f.proveedor),
     plazo_dias: n(f.plazo_dias),
@@ -50,6 +57,7 @@ function aSala(f: Fila): Sala {
   return {
     id: String(f.id),
     sede_id: s(f.sede_id),
+    sede: s(f.sede),
     edificio: s(f.edificio),
     nivel: s(f.nivel),
     codigo: s(f.codigo),
@@ -83,6 +91,54 @@ export async function listarArticulos(tipo?: Articulo['tipo']): Promise<Articulo
         where a.activo
         order by a.unidades_instaladas desc nulls last, a.modelo`;
   return filas.map(aArticulo);
+}
+
+/** Cuántas referencias devuelve como mucho una búsqueda del catálogo. */
+export const MAXIMO_SUGERENCIAS = 20;
+
+/**
+ * Busca referencias del catálogo por marca, modelo, referencia o sección.
+ *
+ * Los términos se cruzan en `y`, no en `o`: "samsung 65" tiene que casar con
+ * los dos, que es como busca quien sabe lo que quiere. El orden es el mismo
+ * que en el resto de la aplicación —lo más instalado primero— para que teclear
+ * poco baste en los equipos habituales.
+ */
+export async function buscarArticulos(
+  consulta: string,
+  tipo?: Articulo['tipo'],
+): Promise<ArticuloElegible[]> {
+  // `%` y `_` son comodines de ILIKE: si el técnico los teclea son texto.
+  const terminos = consulta
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((t) => t.replace(/[\\%_]/g, (c) => `\\${c}`));
+
+  const filas = await sql<Fila[]>`
+    select a.id,
+           trim(concat_ws(' ', nullif(a.marca, ''), a.modelo)) as etiqueta,
+           a.categoria,
+           a.unidad
+    from articulos a
+    where a.activo
+      and (${tipo ?? null}::text is null or a.tipo::text = ${tipo ?? null})
+      and coalesce((
+        select bool_and(
+          concat_ws(' ', a.marca, a.modelo, a.referencia, a.categoria) ilike '%' || t || '%'
+        )
+        from unnest(${terminos}::text[]) as t
+      ), true)
+    order by a.unidades_instaladas desc nulls last, a.modelo
+    limit ${MAXIMO_SUGERENCIAS}`;
+
+  return filas.map((f) => ({
+    id: String(f.id),
+    etiqueta: String(f.etiqueta),
+    categoria: String(f.categoria),
+    unidad: (f.unidad as Articulo['unidad']) ?? 'ud',
+  }));
 }
 
 /** Etiqueta con la que se agrupan los artículos sin marca en el catálogo. */
@@ -171,6 +227,113 @@ export async function obtenerArticulo(id: string): Promise<Articulo | null> {
   return f ? aArticulo(f) : null;
 }
 
+export interface PrecioOfertado {
+  presupuesto: string;
+  /** 'final' es una oferta real de proveedor. 'orientativo' es una referencia. */
+  origen: 'final' | 'orientativo';
+  moneda: string;
+  proveedor: string | null;
+  fecha: string | null;
+  referencia: string | null;
+  /** Por unidad del catálogo, sin IVA, en la moneda de la oferta. */
+  precio: number;
+  /** El mismo precio en euros, al tipo de cambio de `parametros`. */
+  precio_eur: number;
+  /** Lo que figura en la oferta: una bobina de 100 m se compra entera. */
+  precio_compra: number | null;
+  unidades_por_compra: number;
+  cantidad: number | null;
+  notas: string | null;
+}
+
+/**
+ * Los precios de un artículo, del más barato al más caro.
+ *
+ * La misma referencia sale a precios distintos según el proveedor y la
+ * antigüedad del presupuesto, así que se guardan todos. Los que vienen en otra
+ * moneda se convierten aquí con el tipo de cambio de `parametros`, para que
+ * cambiarlo no obligue a volver a sembrar.
+ */
+export async function preciosDeArticulo(id: string): Promise<PrecioOfertado[]> {
+  const filas = await sql<Fila[]>`
+    with cambio as (
+      select coalesce(max(valor), 1) as usd_eur
+      from parametros where clave = 'tipo_cambio_usd_eur'
+    )
+    select pr.presupuesto, pr.origen, pr.moneda, pv.nombre as proveedor,
+           pr.fecha, pr.referencia, pr.precio, pr.precio_compra,
+           pr.unidades_por_compra, pr.cantidad, pr.notas,
+           pr.precio * case when pr.moneda = 'EUR' then 1 else c.usd_eur end
+             as precio_eur
+    from precios pr
+    cross join cambio c
+    left join proveedores pv on pv.id = pr.proveedor_id
+    where pr.articulo_id = ${id}
+    order by pr.origen, pr.precio`;
+  return filas.map((f) => ({
+    presupuesto: String(f.presupuesto),
+    origen: f.origen === 'orientativo' ? 'orientativo' : 'final',
+    moneda: String(f.moneda ?? 'EUR'),
+    proveedor: s(f.proveedor),
+    fecha: f.fecha instanceof Date ? f.fecha.toISOString().slice(0, 10) : s(f.fecha),
+    referencia: s(f.referencia),
+    precio: Number(f.precio),
+    precio_eur: Number(f.precio_eur),
+    precio_compra: n(f.precio_compra),
+    unidades_por_compra: Number(f.unidades_por_compra ?? 1),
+    cantidad: n(f.cantidad),
+    notas: s(f.notas),
+  }));
+}
+
+/**
+ * Los puertos de un artículo, en el orden en que los pinta el fabricante.
+ *
+ * `orden` es opcional, así que las filas sin él van detrás y ordenadas por
+ * nombre: es lo que hace que una lista a medio rellenar siga siendo legible.
+ */
+export async function puertosDeArticulo(id: string): Promise<Puerto[]> {
+  const filas = await sql<Fila[]>`
+    select * from puertos
+    where articulo_id = ${id}
+    order by orden nulls last, nombre`;
+  return filas.map(aPuerto);
+}
+
+const aPuerto = (f: Fila): Puerto => ({
+  id: String(f.id),
+  articulo_id: String(f.articulo_id),
+  nombre: String(f.nombre),
+  total: Number(f.total ?? 1),
+  sentido: f.sentido as Puerto['sentido'],
+  senal: f.senal as Puerto['senal'],
+  conector: s(f.conector),
+  orden: n(f.orden),
+  notas: s(f.notas),
+  fuente: f.fuente === 'csv' ? 'csv' : 'app',
+});
+
+/**
+ * Los puertos de varios artículos de golpe. Es lo que necesita la página de la
+ * sala: una consulta para todo el equipamiento en vez de una por equipo.
+ */
+export async function puertosDeArticulos(ids: string[]): Promise<Puerto[]> {
+  if (ids.length === 0) return [];
+  const filas = await sql<Fila[]>`
+    select * from puertos
+    where articulo_id in ${sql(ids)}
+    order by articulo_id, orden nulls last, nombre`;
+  return filas.map(aPuerto);
+}
+
+/** Qué artículos de una lista tienen ya puertos. Para marcarlo en el catálogo. */
+export async function articulosConPuertos(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const filas = await sql<Fila[]>`
+    select distinct articulo_id from puertos where articulo_id in ${sql(ids)}`;
+  return new Set(filas.map((f) => String(f.articulo_id)));
+}
+
 /** Dónde se usa un artículo: plantillas y salas. Evita borrar algo en uso. */
 export async function usosDeArticulo(id: string) {
   const [f] = await sql<Fila[]>`
@@ -189,15 +352,6 @@ export async function listarCategorias(): Promise<string[]> {
   const filas = await sql<Fila[]>`
     select distinct categoria from articulos where activo order by categoria`;
   return filas.map((f) => String(f.categoria));
-}
-
-export interface LineaPlantilla {
-  id: string;
-  articulo_id: string | null;
-  categoria: string;
-  cantidad: number;
-  opcional: boolean;
-  modelo_texto: string | null;
 }
 
 export async function listarPlantillas(): Promise<
@@ -249,41 +403,69 @@ export async function listarPlantillas(): Promise<
 }
 
 export async function listarSalas(): Promise<Sala[]> {
-  const filas = await sql<Fila[]>`select * from salas order by nombre`;
+  const filas = await sql<Fila[]>`
+    select s.*, sd.nombre as sede
+    from salas s
+    left join sedes sd on sd.id = s.sede_id
+    order by s.nombre`;
   return filas.map(aSala);
+}
+
+/**
+ * Las sedes que ya existen, para ofrecerlas al escribir una sala nueva. Es
+ * texto libre con sugerencias: si el departamento abre una sede, se escribe y
+ * se da de alta sola, sin pasar por una pantalla de mantenimiento.
+ */
+export async function listarSedes(): Promise<string[]> {
+  const filas = await sql<Fila[]>`select nombre from sedes order by nombre`;
+  return filas.map((f) => String(f.nombre));
 }
 
 export interface SalaCompleta {
   sala: Sala;
   equipos: EquipoEnSala[];
   conexiones: Conexion[];
+  /** Rosetas del edificio en esta sala. */
+  tomas: TomaRed[];
+  /** Puertos de los artículos que hay puestos en la sala, ya resueltos. */
+  puertos: Puerto[];
 }
 
 export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
-  const [fila] = await sql<Fila[]>`select * from salas where id = ${id}`;
+  const [fila] = await sql<Fila[]>`
+    select s.*, sd.nombre as sede
+    from salas s
+    left join sedes sd on sd.id = s.sede_id
+    where s.id = ${id}`;
   if (!fila) return null;
 
-  const equipos = await sql<Fila[]>`
-    select * from sala_equipos where sala_id = ${id} order by nombre`;
-  const conexiones = await sql<Fila[]>`
-    select * from conexiones where sala_id = ${id}`;
+  const [filasEquipos, filasConexiones, filasTomas] = await Promise.all([
+    sql<Fila[]>`select * from sala_equipos where sala_id = ${id} order by nombre`,
+    sql<Fila[]>`select * from conexiones where sala_id = ${id} order by creado_en, id`,
+    sql<Fila[]>`select * from tomas_red where sala_id = ${id} order by codigo`,
+  ]);
+
+  const equipos: EquipoEnSala[] = filasEquipos.map((f) => ({
+    id: String(f.id),
+    sala_id: String(f.sala_id),
+    articulo_id: s(f.articulo_id) ?? '',
+    nombre: String(f.nombre),
+    cantidad: Number(f.cantidad ?? 1),
+    extremo: (f.extremo as Extremo) ?? 'pared',
+    posicion: {
+      x_m: Number(f.x_m ?? 0),
+      y_m: Number(f.y_m ?? 0),
+      z_m: Number(f.z_m ?? 0),
+    },
+    toma_red_id: s(f.toma_red_id),
+  }));
+
+  const articulos = [...new Set(equipos.map((e) => e.articulo_id).filter(Boolean))];
 
   return {
     sala: aSala(fila),
-    equipos: equipos.map((f) => ({
-      id: String(f.id),
-      sala_id: String(f.sala_id),
-      articulo_id: s(f.articulo_id) ?? '',
-      nombre: String(f.nombre),
-      cantidad: Number(f.cantidad ?? 1),
-      extremo: (f.extremo as Extremo) ?? 'pared',
-      posicion: {
-        x_m: Number(f.x_m ?? 0),
-        y_m: Number(f.y_m ?? 0),
-        z_m: Number(f.z_m ?? 0),
-      },
-    })),
-    conexiones: conexiones.map((f) => ({
+    equipos,
+    conexiones: filasConexiones.map((f) => ({
       id: String(f.id),
       sala_id: String(f.sala_id),
       origen_id: String(f.origen_id),
@@ -293,7 +475,22 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
       notas: s(f.notas),
+      puerto_origen_id: s(f.puerto_origen_id),
+      puerto_destino_id: s(f.puerto_destino_id),
+      creado_en:
+        f.creado_en instanceof Date ? f.creado_en.toISOString() : s(f.creado_en),
     })),
+    tomas: filasTomas.map((f) => ({
+      id: String(f.id),
+      sala_id: String(f.sala_id),
+      codigo: String(f.codigo),
+      ubicacion: s(f.ubicacion),
+      x_m: n(f.x_m),
+      y_m: n(f.y_m),
+      z_m: n(f.z_m),
+      notas: s(f.notas),
+    })),
+    puertos: await puertosDeArticulos(articulos),
   };
 }
 
@@ -345,7 +542,8 @@ export async function contarPanel() {
       (select count(*) from plantillas_sala where largo_m is null) as plantillas_sin_medidas,
       (select count(*) from salas where largo_m = 0)              as salas_sin_medidas,
       (select count(*) from articulos where tipo = 'cable' and coste is null)
-                                                                  as cable_sin_precio`;
+                                                                  as cable_sin_precio,
+      (select count(*) from articulos where coste_orientativo)    as coste_orientativo`;
   return {
     equipos: Number(f.equipos),
     cables: Number(f.cables),
@@ -355,5 +553,6 @@ export async function contarPanel() {
     plantillasSinMedidas: Number(f.plantillas_sin_medidas),
     salasSinMedidas: Number(f.salas_sin_medidas),
     cableSinPrecio: Number(f.cable_sin_precio),
+    costeOrientativo: Number(f.coste_orientativo),
   };
 }

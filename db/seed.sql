@@ -1,5 +1,5 @@
 -- Generado por scripts/generar-seed.mjs. No editar a mano.
--- Fuente: data/catalogo-equipos.csv, data/catalogo-cable.csv, data/plantillas-salas.csv
+-- Fuente: data/catalogo-equipos.csv, data/catalogo-cable.csv, data/plantillas-salas.csv, data/puertos.csv
 begin;
 
 -- Parámetros de cálculo de cable (criterio del departamento AV)
@@ -13,7 +13,9 @@ insert into parametros (clave, valor, unidad, descripcion) values
   ('holgura_pared', 0.3, 'm', 'Holgura en toma o placa de pared'),
   ('margen', 0, 'tanto por uno', 'Margen de seguridad sobre el total. 0 = ninguno'),
   ('cables_por_canalizacion', 3, 'ud', 'El previsto más un RJ45 y un HDMI de reserva'),
-  ('ocupacion_maxima_canaleta', 0.4, 'tanto por uno', 'Ocupación máxima admitida en canaleta')
+  ('ocupacion_maxima_canaleta', 0.4, 'tanto por uno', 'Ocupación máxima admitida en canaleta'),
+  ('vigencia_precio_meses', 18, 'meses', 'Antigüedad máxima de un presupuesto para que su precio cuente como coste'),
+  ('tipo_cambio_usd_eur', 0.867, 'EUR por USD', 'Para convertir precios de referencia en dólares. Agosto de 2026')
 on conflict (clave) do update set valor = excluded.valor, descripcion = excluded.descripcion;
 
 -- Catálogo: 809 equipos del inventario real
@@ -862,6 +864,1025 @@ insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, sena
   ('consumible', 'MECANISMO', null, 'CAJA DE SUPERFICIE 2 MODULOS', null, 'ud', 'otro', null, null, null, null, null, null, null, null),
   ('consumible', 'MECANISMO', null, 'PLACA HDMI + RJ45 EMPOTRABLE', 'Placa de pared para toma de sala', 'ud', 'otro', null, null, null, null, null, null, null, null)
 on conflict (coalesce(marca, ''), modelo, categoria) do update set descripcion = excluded.descripcion, longitudes_comerciales_m = excluded.longitudes_comerciales_m, bobina_m = excluded.bobina_m, diametro_mm = excluded.diametro_mm;
+
+-- Precios: 88 líneas de 12 presupuestos, 31 referencias nuevas
+insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, senal, conector_a, conector_b, longitudes_comerciales_m, bobina_m, referencia_fabricante) values
+  ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/6', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 1,8 m (6 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[1.8]::numeric[], null, '26-663-06'),
+  ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/9', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 2,7 m (9 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[2.7]::numeric[], null, '26-663-09'),
+  ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/12', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 3,6 m (12 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[3.6]::numeric[], null, '26-663-12'),
+  ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/15', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 4,5 m (15 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[4.5]::numeric[], null, '26-663-15'),
+  ('consumible', 'ADAPTADOR', 'NANOCABLE', '10.15.1201', 'Transición HDMI A hembra - A hembra V1.4b 4K', 'ud', 'hdmi', 'HDMI A H', 'HDMI A H', null, null, '10.15.1201'),
+  ('cable', 'CABLE AUDIO', 'AUDIBAX', '10116238', 'Multicore 4 XLR macho a 12 XLR hembra, 15 m', 'ud', 'microfono', 'XLR M', 'XLR H', array[15]::numeric[], null, '10116238'),
+  ('cable', 'CABLE AUDIO', 'AUDIBAX', 'CAJETÍN ESCENARIO 12/4 15 M', 'Cajetín de escenario 12 entradas 4 salidas, 15 m', 'ud', 'microfono', 'XLR M', 'XLR H', array[15]::numeric[], null, null),
+  ('equipo', 'BATERÍA', 'SHURE', 'SB903', 'Batería de iones de litio para SLXD', 'ud', null, null, null, null, null, 'SB903'),
+  ('cable', 'CABLE HDMI', 'NANOCABLE', '10.15.3807', 'Latiguillo HDMI 7 m. EAN 8433281013001', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[7]::numeric[], null, '10.15.3807'),
+  ('cable', 'CABLE HDMI', 'NANOCABLE', '10.15.8005', 'Latiguillo HDMI 5 m. EAN 8433281014121', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[5]::numeric[], null, '10.15.8005'),
+  ('equipo', 'HUB USB', 'D-LINK', 'DUB-H4', 'Hub USB 2.0 de 4 puertos alimentado', 'ud', 'usb', null, null, null, null, 'DUB-H4/E'),
+  ('cable', 'CABLE AUDIO', 'GOTHAM', 'GAC-2', 'Cable de audio balanceado 2 conductores, bobina de 100 m', 'm', 'microfono', null, null, null, 100, '10401'),
+  ('equipo', 'INTERFAZ DE AUDIO', 'FOCUSRITE', 'SCARLETT 8I6 3RD GEN', 'Interfaz de audio USB', 'ud', 'audio_linea', null, null, null, null, null),
+  ('equipo', 'SWITCH POE', 'TP-LINK', 'TL-SG1005P', 'Switch 5 puertos con 4 PoE', 'ud', 'red', null, null, null, null, null),
+  ('consumible', 'CONECTOR', 'NEUTRIK', 'NP3 X-B', 'Conector jack 6,3 mm estéreo', 'ud', 'audio_linea', null, null, null, null, null),
+  ('equipo', 'SOPORTE DE MICRÓFONO', 'GRAVITY', 'MS 23 XLR B', 'Soporte de micrófono con conector XLR y cuello de cisne', 'ud', null, null, null, null, null, null),
+  ('equipo', 'SOPORTE DE MICRÓFONO', 'K&M', '210/8', 'Soporte de micrófono de pie con jirafa', 'ud', null, null, null, null, null, null),
+  ('equipo', 'TARJETA DE RED', 'ASUS', 'PCE-AX1800', 'Tarjeta de red PCIe Wi-Fi 6', 'ud', 'red', null, null, null, null, null),
+  ('equipo', 'AURICULARES', 'SENNHEISER', 'HD-25', 'Auriculares de monitorado', 'ud', 'audio_linea', null, null, null, null, null),
+  ('equipo', 'SOPORTE DE PANTALLA', 'GRIFEMA', 'GB2003-1', 'Soporte de monitor', 'ud', null, null, null, null, null, null),
+  ('equipo', 'BANDEJA DE RACK', 'ADAM HALL', '87556', 'Bandeja extraíble enracable 19"', 'ud', null, null, null, null, null, null),
+  ('cable', 'CABLE AUDIO', 'CORDIAL', 'CMK 222', 'Cable de micrófono apantallado, bobina de 100 m', 'm', 'microfono', null, null, null, 100, 'CMK 222 BK/100M'),
+  ('cable', 'CABLE HDMI', 'KRAMER', 'C-HM/HM-35', 'Latiguillo HDMI de 35 ft (10,7 m)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[10.7]::numeric[], null, 'C-HM/HM-35'),
+  ('equipo', 'ALTAVOZ', 'MACKIE', 'THUMP 212', 'Altavoz autoamplificado 12"', 'ud', 'audio_altavoz', null, null, null, null, null),
+  ('equipo', 'FUNDA DE TRANSPORTE', 'MACKIE', 'BAG THUMP212/XT', 'Funda de transporte para Thump 212', 'ud', null, null, null, null, null, null),
+  ('equipo', 'SOPORTE DE ALTAVOZ', 'GRAVITY', 'SS 5211 B', 'Soporte de altavoz con funda, set de 1', 'ud', null, null, null, null, null, null),
+  ('equipo', 'MEZCLADOR DE AUDIO', 'YAMAHA', 'MG10 XU', 'Mesa de mezclas 10 canales con USB', 'ud', 'audio_linea', null, null, null, null, null),
+  ('cable', 'CABLE AUDIO', 'CORDIAL', 'CTM 20 FM-BK', 'Latiguillo XLR macho-hembra', 'ud', 'microfono', 'XLR M', 'XLR H', array[20]::numeric[], null, 'CTM 20 FM-BK'),
+  ('cable', 'CABLE AUDIO', 'CORDIAL', 'CTM 1,5 FM-BK', 'Latiguillo XLR macho-hembra de 1,5 m', 'ud', 'microfono', 'XLR M', 'XLR H', array[1.5]::numeric[], null, 'CTM 1,5 FM-BK'),
+  ('equipo', 'RACK', 'TRITON-BLUE', 'FLIGHTCASE COMBINADO 19" 12U', 'Rack combinado 19" 12U, fondo 508 mm', 'ud', null, null, null, null, null, null),
+  ('equipo', 'PROYECTOR', 'EPSON', 'EB-1795F', 'Proyector portátil Full HD', 'ud', null, null, null, null, null, null)
+on conflict (coalesce(marca, ''), modelo, categoria) do update set descripcion = coalesce(articulos.descripcion, excluded.descripcion), referencia_fabricante = coalesce(articulos.referencia_fabricante, excluded.referencia_fabricante);
+
+-- Los CSV mandan sobre lo suyo. Lo escrito desde la app no se toca.
+delete from precios where fuente = 'csv';
+
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado Extron', 'final', 'csv', 'EUR', null, '26-663-06', 54.74, 54.74, 1, 10, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/6' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado Extron', 'final', 'csv', 'EUR', null, '26-663-09', 77.89, 77.89, 1, 20, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/9' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado Extron', 'final', 'csv', 'EUR', null, '26-663-12', 88.42, 88.42, 1, 15, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/12' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado Extron', 'final', 'csv', 'EUR', null, '26-663-15', 96.84, 96.84, 1, 10, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/15' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Equipamiento y servicios profesionales', 'final', 'csv', 'EUR', null, '26-663-09', 93, 93, 1, 30, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/9' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Equipamiento y servicios profesionales', 'final', 'csv', 'EUR', null, '26-663-12', 105, 105, 1, 30, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/12' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Equipamiento y servicios profesionales', 'final', 'csv', 'EUR', null, '26-663-15', 115, 115, 1, 20, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/15' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Equipamiento y servicios profesionales', 'final', 'csv', 'EUR', null, '10.15.1201', 7, 7, 1, 40, null
+from articulos a where coalesce(marca, '') = 'NANOCABLE' and modelo = '10.15.1201' and categoria = 'ADAPTADOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Equipamiento y servicios profesionales', 'final', 'csv', 'EUR', null, '10116238', 104, 104, 1, 1, null
+from articulos a where coalesce(marca, '') = 'AUDIBAX' and modelo = '10116238' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Presupuesto 1', 'final', 'csv', 'EUR', null, '26-663-09', 78.82, 78.82, 1, 30, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/9' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Presupuesto 1', 'final', 'csv', 'EUR', null, '26-663-12', 89.41, 89.41, 1, 30, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/12' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Presupuesto 1', 'final', 'csv', 'EUR', null, '26-663-15', 98.82, 98.82, 1, 20, null
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'HDMI ULTRA/15' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Presupuesto 1', 'final', 'csv', 'EUR', null, '10.15.1201', 9.53, 9.53, 1, 40, null
+from articulos a where coalesce(marca, '') = 'NANOCABLE' and modelo = '10.15.1201' and categoria = 'ADAPTADOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Presupuesto 1', 'final', 'csv', 'EUR', null, null, 158.81, 158.81, 1, 1, 'Posible duplicado de AUDIBAX 10116238'
+from articulos a where coalesce(marca, '') = 'AUDIBAX' and modelo = 'CAJETÍN ESCENARIO 12/4 15 M' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA switch Netgear', 'final', 'csv', 'EUR', null, 'GS305P-200PES', 68.81, 68.81, 1, 10, 'Referencia del presupuesto con sufijo -200PES'
+from articulos a where coalesce(marca, '') = 'NETGEAR' and modelo = 'GS305P' and categoria = 'SWITCH POE'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'SLXD4DE H56', 675.63, 675.63, 1, 4, 'Referencia del presupuesto SLXD4DE H56'
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'SLXD4D' and categoria = 'RECEPTOR MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'SLXD2/SM58 H56', 210.46, 210.46, 1, 4, 'Referencia del presupuesto con banda H56'
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'SLXD2/SM58' and categoria = 'TRANSMISOR MICROFONÍA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'SLXD1 H56', 202.01, 202.01, 1, 4, 'Referencia del presupuesto con banda H56'
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'SLXD1' and categoria = 'MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'WL185MB/C-TQG', 118.4, 118.4, 1, 4, 'Referencia del presupuesto WL185MB/C-TQG'
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'WL185' and categoria = 'MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'SB903', 43.26, 43.26, 1, 16, null
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'SB903' and categoria = 'BATERÍA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA material AV pedido enero', 'final', 'csv', 'EUR', null, 'SBC203-E', 105.72, 105.72, 1, 4, 'Referencia del presupuesto con sufijo -E'
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'SBC203' and categoria = 'BASE CARGA MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado y resto de material', 'final', 'csv', 'EUR', null, '10.15.1201', 14.12, 14.12, 1, 40, null
+from articulos a where coalesce(marca, '') = 'NANOCABLE' and modelo = '10.15.1201' and categoria = 'ADAPTADOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado y resto de material', 'final', 'csv', 'EUR', null, '10.15.3807', 12.36, 12.36, 1, 20, null
+from articulos a where coalesce(marca, '') = 'NANOCABLE' and modelo = '10.15.3807' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado y resto de material', 'final', 'csv', 'EUR', null, '10.15.8005', 15.53, 15.53, 1, 20, 'Más caro que el de 7 m: comprobar si es otra serie'
+from articulos a where coalesce(marca, '') = 'NANOCABLE' and modelo = '10.15.8005' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'BBVA cableado y resto de material', 'final', 'csv', 'EUR', null, 'DUB-H4/E', 29.97, 29.97, 1, 4, null
+from articulos a where coalesce(marca, '') = 'D-LINK' and modelo = 'DUB-H4' and categoria = 'HUB USB'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Bobina 100 metros Gotham', 'final', 'csv', 'EUR', null, '10401', 2.109, 210.9, 100, 1, null
+from articulos a where coalesce(marca, '') = 'GOTHAM' and modelo = 'GAC-2' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 221.78, 221.78, 1, 1, null
+from articulos a where coalesce(marca, '') = 'FOCUSRITE' and modelo = 'SCARLETT 8I6 3RD GEN' and categoria = 'INTERFAZ DE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 37.35, 37.35, 1, 2, null
+from articulos a where coalesce(marca, '') = 'TP-LINK' and modelo = 'TL-SG1005P' and categoria = 'SWITCH POE'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 5.11, 5.11, 1, 20, null
+from articulos a where coalesce(marca, '') = 'NEUTRIK' and modelo = 'NP3 X-B' and categoria = 'CONECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 98.99, 98.99, 1, 1, null
+from articulos a where coalesce(marca, '') = 'ELGATO' and modelo = 'CAM LINK 4K' and categoria = 'CAPTURADORA DE VÍDEO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 52.8, 52.8, 1, 2, null
+from articulos a where coalesce(marca, '') = 'GRAVITY' and modelo = 'MS 23 XLR B' and categoria = 'SOPORTE DE MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 48.15, 48.15, 1, 2, null
+from articulos a where coalesce(marca, '') = 'K&M' and modelo = '210/8' and categoria = 'SOPORTE DE MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 30.19, 30.19, 1, 1, null
+from articulos a where coalesce(marca, '') = 'ASUS' and modelo = 'PCE-AX1800' and categoria = 'TARJETA DE RED'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 159.3, 159.3, 1, 1, null
+from articulos a where coalesce(marca, '') = 'SENNHEISER' and modelo = 'HD-25' and categoria = 'AURICULARES'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 19.54, 19.54, 1, 1, null
+from articulos a where coalesce(marca, '') = 'GRIFEMA' and modelo = 'GB2003-1' and categoria = 'SOPORTE DE PANTALLA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 58.78, 58.78, 1, 1, null
+from articulos a where coalesce(marca, '') = 'ADAM HALL' and modelo = '87556' and categoria = 'BANDEJA DE RACK'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, null, 575.7, 575.7, 1, 1, null
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'BLX1288/W85 COMBO S8' and categoria = 'MICROFONÍA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, 'CMK 222 BK/100M', 0.8363, 83.63, 100, 1, null
+from articulos a where coalesce(marca, '') = 'CORDIAL' and modelo = 'CMK 222' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Madrid', 'final', 'csv', 'EUR', null, 'C-HM/HM-35', 30.65, 30.65, 1, 2, 'El presupuesto lo describe como 10 m: la referencia -35 son 35 ft'
+from articulos a where coalesce(marca, '') = 'KRAMER' and modelo = 'C-HM/HM-35' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 322.89, 322.89, 1, 2, null
+from articulos a where coalesce(marca, '') = 'MACKIE' and modelo = 'THUMP 212' and categoria = 'ALTAVOZ'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 55.94, 55.94, 1, 2, null
+from articulos a where coalesce(marca, '') = 'MACKIE' and modelo = 'BAG THUMP212/XT' and categoria = 'FUNDA DE TRANSPORTE'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 100.08, 100.08, 1, 1, null
+from articulos a where coalesce(marca, '') = 'GRAVITY' and modelo = 'SS 5211 B' and categoria = 'SOPORTE DE ALTAVOZ'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 246.16, 246.16, 1, 1, null
+from articulos a where coalesce(marca, '') = 'YAMAHA' and modelo = 'MG10 XU' and categoria = 'MEZCLADOR DE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, 'CTM 20 FM-BK', 25.1, 25.1, 1, 2, 'El presupuesto lo describe como 15 m: la referencia CTM 20 son 20 m'
+from articulos a where coalesce(marca, '') = 'CORDIAL' and modelo = 'CTM 20 FM-BK' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, 'CTM 1,5 FM-BK', 31.14, 31.14, 1, 2, 'Sale más caro que el de 20 m: comprobar'
+from articulos a where coalesce(marca, '') = 'CORDIAL' and modelo = 'CTM 1,5 FM-BK' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 292.47, 292.47, 1, 1, null
+from articulos a where coalesce(marca, '') = 'TRITON-BLUE' and modelo = 'FLIGHTCASE COMBINADO 19" 12U' and categoria = 'RACK'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 575.7, 575.7, 1, 1, null
+from articulos a where coalesce(marca, '') = 'SHURE' and modelo = 'BLX1288/W85 COMBO S8' and categoria = 'MICROFONÍA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · unidad móvil Noroeste', 'final', 'csv', 'EUR', null, null, 913.98, 913.98, 1, 1, null
+from articulos a where coalesce(marca, '') = 'EPSON' and modelo = 'EB-1795F' and categoria = 'PROYECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Videowall Castellón · suministro Ciudad BBVA', 'final', 'csv', 'EUR', null, '70BFL2214/12', 618.28, 618.28, 1, 20, null
+from articulos a where coalesce(marca, '') = 'PHILIPS' and modelo = '70BFL2214/12' and categoria = 'PANTALLA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1055, 1055, 1, null, 'Rango 1.055-2.265 USD. Table 1.055, Wall 1.195 CSRP'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM NAVIGATOR' and categoria = 'PANEL TÁCTIL'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1099, 1099, 1, null, 'Precio de lista. Varios distribuidores piden contactar para precio final'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, 'CS-MIC-TABLE-J', 597, 597, 1, null, 'Rango 597-653 USD. Oferta puntual 355, GPL 808'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V1)' and categoria = 'MICRÓFONO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 13371, 13371, 1, null, 'Rango enorme 13.371-24.485 USD. Room Kit estándar 13.371, Plus 23.680-24.485 GPL'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 585, 585, 1, null, 'Rango 585-874 según modelo y tamaño. Las cifras altas venían en euros'
+from articulos a where coalesce(marca, '') = 'BACHMANN' and modelo = 'TOPFRAME' and categoria = 'CAJA DE CONEXIONES'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 8295, 8295, 1, null, 'CSRP oficial 8.295. Con Navigator incluido 16.207-21.390'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 730, 730, 1, null, 'Rango 730-1.292 USD. El bajo es eBay nuevo, el alto precio de lista'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 4275, 4275, 1, null, 'Lista oficial 204 de Steelcase'
+from articulos a where coalesce(marca, '') = 'STEELCASE' and modelo = 'ROOMWIZARD II' and categoria = 'PANTALLA ROOMWIZARD'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 539, 539, 1, null, 'Rango 539-845 USD entre tres distribuidores'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 166, 166, 1, null, 'Rango 166-343 USD. El bajo es el mejor precio nuevo localizado'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · equipos', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 8995, 8995, 1, null, 'CSRP oficial 8.995. Recambio 16.238, en bundle 24.036'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'QUAD CAMERA' and categoria = 'CÁMARA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.45, 0.45, 1, null, 'Rango 0,45-0,80 USD/m. Bobina 305 m entre 140 y 250 USD. La fuente dice F/UTP y el catálogo es U/UTP'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CAT6 U/UTP LSZH' and categoria = 'CABLE RED'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1.4, 1.4, 1, null, 'Rango 1,40-2,80 USD/m. Bobina 305 m entre 425 y 560 USD'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CAT6A F/UTP LSZH' and categoria = 'CABLE RED'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 4, 4, 1, null, 'Rango 4-15 USD por latiguillo según longitud comercial'
+from articulos a where coalesce(marca, '') = '' and modelo = 'HDMI 2.0 4K60 4:4:4' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 9, 9, 1, null, 'Rango 9-52 USD. Certificado Ultra High Speed'
+from articulos a where coalesce(marca, '') = '' and modelo = 'HDMI 2.1 48G' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 62, 62, 1, null, 'Rango 62-125 USD en longitudes de 15 a 50 m'
+from articulos a where coalesce(marca, '') = '' and modelo = 'HDMI FIBRA OPTICA ACTIVA' and categoria = 'CABLE HDMI'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 6, 6, 1, null, 'Rango 6-25 USD. Genérico 6-11, UGREEN 13-25'
+from articulos a where coalesce(marca, '') = '' and modelo = 'USB-C 3.2 GEN2 100W' and categoria = 'CABLE USB'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 22, 22, 1, null, 'Rango 22-120 USD. Estándar 22, plenum 103-120'
+from articulos a where coalesce(marca, '') = '' and modelo = 'USB-A A USB-B ACTIVO' and categoria = 'CABLE USB'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 4, 4, 1, null, 'Rango 4-7 USD/m. Belden 4,16 EUR/m, Tasker 6,71 USD/m, Supra 6 EUR/m'
+from articulos a where coalesce(marca, '') = '' and modelo = 'ALTAVOZ 2X2,5 MM2 LSZH' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 2.5, 2.5, 1, null, 'Rango 2,50-4,50 USD/m. Estimado 30-40 % menos que el 2x2,5, no medido'
+from articulos a where coalesce(marca, '') = '' and modelo = 'ALTAVOZ 2X1,5 MM2 LSZH' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 15, 15, 1, null, 'Rango 15-50 USD en latiguillos de 1 a 3 m'
+from articulos a where coalesce(marca, '') = '' and modelo = 'LATIGUILLO XLR 3 PINES' and categoria = 'CABLE AUDIO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1.5, 1.5, 1, null, 'Rango 1,50-4 USD/m a granel. Latiguillos terminados desde 6 USD'
+from articulos a where coalesce(marca, '') = '' and modelo = 'RS-232 APANTALLADO' and categoria = 'CABLE CONTROL'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.5, 0.5, 1, null, 'Rango 0,50-0,80 USD/m. H05VV-F o similar, 560 USD los 1.000 m'
+from articulos a where coalesce(marca, '') = '' and modelo = 'MANGUERA 3X1,5 MM2 LSZH' and categoria = 'CABLE ALIMENTACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 4, 4, 1, null, 'Rango 4-9 USD en 1,5 a 2,5 m'
+from articulos a where coalesce(marca, '') = '' and modelo = 'LATIGUILLO SCHUKO-IEC C13' and categoria = 'CABLE ALIMENTACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.8, 0.8, 1, null, 'Rango 0,80-2 USD/m. Muy variable por región'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CANALETA 25X16 MM' and categoria = 'CANALIZACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1.5, 1.5, 1, null, 'Rango 1,50-3,50 USD/m. Estimado sobre la base del 25x16, no medido'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CANALETA 40X25 MM' and categoria = 'CANALIZACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 2.5, 2.5, 1, null, 'Rango 2,50-5 USD/m. Estimado, consultar distribuidor local por volumen'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CANALETA 60X40 MM' and categoria = 'CANALIZACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.3, 0.3, 1, null, 'Rango 0,30-0,80 USD/m. Rollo de 25-50 m entre 15 y 25 USD'
+from articulos a where coalesce(marca, '') = '' and modelo = 'TUBO CORRUGADO 20 MM' and categoria = 'CANALIZACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.7, 0.7, 1, null, 'Rango 0,70-1,80 USD/m. Rollo de 10-25 m entre 18 y 35 USD'
+from articulos a where coalesce(marca, '') = '' and modelo = 'TUBO CORRUGADO 25 MM' and categoria = 'CANALIZACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.25, 0.25, 1, null, 'Rango 0,25-0,60 USD. Pack de 50-100 uds entre 0,25 y 0,45'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CONECTOR RJ45 CAT6 UTP' and categoria = 'CONECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.45, 0.45, 1, null, 'Rango 0,45-0,60 USD apantallado, pack de 50-100 uds'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CONECTOR RJ45 CAT6A FTP' and categoria = 'CONECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 2, 2, 1, null, 'Rango 2-10 USD. Metal estándar 2-5, chasis 3. La fuente no separa macho y hembra'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CONECTOR XLR MACHO' and categoria = 'CONECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 2, 2, 1, null, 'Rango 2-10 USD. Metal estándar 2-5, chasis 3. La fuente no separa macho y hembra'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CONECTOR XLR HEMBRA' and categoria = 'CONECTOR'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.01, 1, 100, null, 'Pack de 100 uds entre 1 y 6 USD. Cargado como el pack más barato'
+from articulos a where coalesce(marca, '') = '' and modelo = 'BRIDA NYLON 200 MM' and categoria = 'FIJACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 0.15, 0.15, 1, null, 'Rango 0,15-0,50 USD por unidad. Packs de 20-50 uds entre 4 y 12 USD'
+from articulos a where coalesce(marca, '') = '' and modelo = 'GRAPA SUJETACABLES' and categoria = 'FIJACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 17, 17, 1, null, 'Rango 17-120 USD. Fijo básico 17-37, articulado 60-120'
+from articulos a where coalesce(marca, '') = '' and modelo = 'SOPORTE PANTALLA VESA FIJO 400X400' and categoria = 'FIJACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 40, 40, 1, null, 'Rango 40-240 USD. Fijo 40-90, full-motion profesional 240-500'
+from articulos a where coalesce(marca, '') = '' and modelo = 'SOPORTE PANTALLA VESA INCLINABLE 600X400' and categoria = 'FIJACION'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 1.65, 1.65, 1, null, 'Rango 1,65-4 USD. Plástico estándar 1,65-3,23, resistente al fuego 4'
+from articulos a where coalesce(marca, '') = '' and modelo = 'CAJA DE SUPERFICIE 2 MODULOS' and categoria = 'MECANISMO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 8, 8, 1, null, 'Rango 8-20 USD con keystone jacks'
+from articulos a where coalesce(marca, '') = '' and modelo = 'PLACA HDMI + RJ45 EMPOTRABLE' and categoria = 'MECANISMO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+
+-- Coste del catálogo: la mejor oferta vigente; si no hay, la mejor referencia
+with cambio as (
+  select coalesce(max(valor), 1) as usd_eur
+  from parametros where clave = 'tipo_cambio_usd_eur'
+),
+vigencia as (
+  select coalesce(max(valor), 18)::int as meses
+  from parametros where clave = 'vigencia_precio_meses'
+),
+en_euros as (
+  select p.articulo_id, p.origen,
+         p.precio * case when p.moneda = 'EUR' then 1 else c.usd_eur end as precio_eur
+  from precios p, cambio c, vigencia v
+  where p.fecha is null
+     or p.fecha >= current_date - make_interval(months => v.meses)
+),
+mejor as (
+  select articulo_id,
+         min(precio_eur) filter (where origen = 'final')       as final,
+         min(precio_eur) filter (where origen = 'orientativo')  as orientativo
+  from en_euros group by articulo_id
+)
+update articulos a
+set coste = round(coalesce(m.final, m.orientativo), 4),
+    coste_orientativo = (m.final is null)
+from mejor m
+where m.articulo_id = a.id
+  and coalesce(m.final, m.orientativo) is not null;
+
+-- Referencia del fabricante: la del presupuesto más reciente que la traiga
+update articulos a
+set referencia_fabricante = c.referencia
+from (
+  select distinct on (articulo_id) articulo_id, referencia
+  from precios where referencia is not null
+  order by articulo_id, fecha desc nulls last
+) c
+where c.articulo_id = a.id and a.referencia_fabricante is null;
+
+-- Puertos: 124 de 22 artículos (data/puertos.csv)
+-- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.
+delete from puertos where fuente = 'csv';
+
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'NETWORK', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Un solo cable para red y alimentación. Se alimenta por PoE. Emparejamiento directo a un puerto PoE del codec o remoto por LAN. Cat5e o Cat6 hasta 100 m', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM NAVIGATOR' and categoria = 'PANEL TÁCTIL'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'MICRO USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 2, 'Depuración y servicio. No se cablea en la instalación', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM NAVIGATOR' and categoria = 'PANEL TÁCTIL'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'NETWORK', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Un solo cable para red y alimentación PoE 802.3af. Emparejamiento directo al codec o por LAN con inyector PoE intermedio. El inyector debe estar en el mismo edificio', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TOUCH 10' and categoria = 'PANEL TÁCTIL'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUT 1', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'Pantalla principal. Hasta 3840x2160 a 60 fps', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUT 2', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 3, 'Segunda pantalla. Hasta 3840x2160 a 60 fps', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'MIC IN', 2, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 4, 'Dos entradas de micrófono en mini jack de 4 pines. Aquí van los Cisco Table Microphone', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LINE OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo. Preparado para subwoofer o bucle de inducción', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Ethernet 10/100/1000 a la red del edificio', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'TOUCH', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 7, 'Ethernet dedicada al emparejamiento directo del Touch 10 o del Room Navigator. Da PoE al panel', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0. La ficha dice USB 2.0 pero no el tipo de conector. USB-A sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 9, 'Fuente externa de 100-240 V CA con salida de 12 V CC al equipo. Tipo de conector del equipo sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUT', 3, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'Tres salidas hasta 3840x2160 a 60 fps. Admiten pantalla táctil usando además un USB-A para el retorno del táctil', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 3, 'Entrada de vídeo y audio y passthrough de cámara micrófono y altavoces con un solo cable para BYOD. Requiere DisplayPort alt mode en el portátil', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 4, 'Ethernet 10/100/1000 a la red del edificio', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'PoE NAVIGATOR', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 5, 'Ethernet PoE 802.3af con presupuesto de 15,4 W para el emparejamiento directo del Room Navigator', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'PoE AV', 2, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Dos puertos PoE 802.3af de 15,4 W cada uno para micrófonos IP y equipo de audio AES67. Más de tres micrófonos IP exigen licencia AV Integrator', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'MIC IN', 2, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 7, 'Dos entradas analógicas de micrófono. La ficha no da el conector. Mini jack de 4 pines sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LINE OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 8, 'Una salida de línea analógica. La ficha no da el conector. Sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB-A', 2, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 para pantalla táctil micrófonos teclados y periféricos de sala', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'MICRO USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 10, 'Puerto de servicio. No se cablea en la instalación', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable de red específico por país. Media de 20 W. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'SALIDA DE MICRÓFONO', 1, 'salida'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 1, 'Cable fijo de 7,5 m terminado en mini jack macho de 4 pines. Extensión CAB-MIC-EXT-J de 9 m. No lleva alimentación propia. Se alimenta del codec', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V1)' and categoria = 'MICRÓFONO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'SALIDA DE MICRÓFONO', 1, 'salida'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 1, 'Mismo conector que la V1. Longitud exacta del cable de la V2 sin confirmar en ficha técnica. No lleva alimentación propia', 'csv'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V2)' and categoria = 'MICRÓFONO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio. La ficha de serie menciona además RS232C OUT pero no está confirmado en este tamaño', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. 128 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. 108 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. También hace de entrada de daisy chain', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DP IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DisplayPort', 3, 'DisplayPort 1.2. Entrada de daisy chain. Este modelo no tiene DVI', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo común para HDMI y audio', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB', 2, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'Dos puertos USB 2.0. Corriente máxima constante de 1,0 A', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 9, '100-240 V CA a 50/60 Hz. 44 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'PC', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-B', 1, 'USB 3.0. Pasa cámara micrófono y altavoz por un solo cable. Cable A-B de 1,83 m incluido', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 2, 'Estéreo no balanceada TRS de 3,5 mm. Entra directa al amplificador sin control de volumen ni proceso', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 3, 'Nivel de línea para sistema de ayuda a la audición. Misma señal que los altavoces de la barra', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, '24V 2.5A', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 4, 'Alimentador externo de 24 V CC y 2,5 A con cable de red de 1,78 m. Tipo de conector del equipo sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI INPUT', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra con HDCP 2.2 EDID y CEC', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 2, '100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm. Solo funciona con señal de entrada estéreo de 2 canales', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'COM', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'RS-232 bidireccional hasta 115,2 kbaudios con control de flujo', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR 1-2', 1, 'salida'::sentido_puerto, 'control'::senal, 'PHX-4P', 5, 'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'CONSOLE', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 6, 'Consola USB 2.0 para configuración. No se cablea en la instalación', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, '24VDC', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'Jack DC 5.5', 7, 'Entrada de 24 V CC con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUTPUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 2, '100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'COM', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'RS-232 bidireccional', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'IR 1-2', 1, 'salida'::sentido_puerto, 'control'::senal, 'PHX-4P', 5, 'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'CONSOLE', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 6, 'Consola USB 2.0 para configuración. No se cablea en la instalación', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, '24VDC', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'Jack DC 5.5', 7, 'Entrada de 24 V CC y 1,25 A con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+', 'csv'
+from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra. Lleva bridas LockIt para fijar el conector', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 2, 'Mini jack estéreo de 3,5 mm no balanceado. El audio analógico viaja por el par trenzado sin embeberse en el vídeo', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS-232 IR', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 3, 'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx. Se conecta el equipo principal al Tx y el secundario al Rx', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DTP OUT', 1, 'salida'::sentido_puerto, 'otro'::senal, 'RJ45', 4, 'Enlace de par trenzado al receptor hasta 70 m. Cat6A apantallado de 24 AWG rígido terminado en T568B. NO conectar a la red de datos', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'PHX-2P', 5, '12 V CC por bloque de tornillo. Fuente externa con cable IEC a 100-240 V CA. Una sola fuente alimenta la pareja Tx y Rx a través del cable DTP', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DTP IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'RJ45', 1, 'Enlace de par trenzado desde el transmisor hasta 70 m. Cat6A apantallado de 24 AWG rígido. NO conectar a la red de datos', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI tipo A hembra a la pantalla. Lleva bridas LockIt para fijar el conector', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Bloque de tornillo. Admite salida estéreo balanceada o no balanceada y mono', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS-232 IR', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'POWER', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'PHX-2P', 5, '12 V CC por bloque de tornillo. Puede alimentarse en remoto desde el Tx por el cable DTP y entonces no necesita fuente local', 'csv'
+from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI OUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Salida a pantalla por DisplayLink con adaptador USB a HDMI integrado a 1080p. Ficha del VB342+. El inventario no distingue VB342 de VB342+', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 2, 'USB 3.1 Gen 1 al PC. Cable USB-C a USB-A de 1,8 m incluido. Ficha del VB342+. Sin confirmar para el VB342 base', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'PHONE IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 3, 'Line-in de 3,5 mm para usar la barra como manos libres de un móvil o un PC. Ficha del VB342+', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'MICROPHONE', 1, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 4, 'Entrada para micrófono de extensión de 10 m o 20 m. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RS232', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'Mini DIN 6', 5, 'Control VISCA o Pelco P o Pelco D. Necesita adaptador Mini DIN6 a RS-232 opcional. Ficha del VB342+', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DC 12V', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 6, 'Alimentador externo de 12 V y 5 A con cable de 3 m. Tipo de conector sin confirmar en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'ETHERNET', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Único cable. Red 10BaseT o 100BaseTX y alimentación PoE 802.3af por el mismo par. No necesita toma de corriente. Requiere switch PoE o inyector', 'csv'
+from articulos a where coalesce(marca, '') = 'STEELCASE' and modelo = 'ROOMWIZARD II' and categoria = 'PANTALLA ROOMWIZARD'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HOST USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 1, 'Cable de host desmontable de 1 m al portátil. Datos vídeo y hasta 100 W de carga con Power Delivery 3.0. Lleva adaptador de USB-C a USB-A', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI', 2, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0 hasta 4096x2160 a 60 Hz. Solo dos pantallas simultáneas contando HDMI y DisplayPort', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DISPLAYPORT', 2, 'salida'::sentido_puerto, 'otro'::senal, 'DisplayPort', 3, 'DisplayPort 1.2a. Solo dos pantallas simultáneas contando HDMI y DisplayPort', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB-A', 4, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 4, 'USB 3.2 Gen 1 a 5 Gb/s. Uno de ellos con carga rápida BC1.2', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 5, 'USB 3.2 Gen 2 a 10 Gb/s y 7,5 W. Es puerto de datos aguas abajo. No confundir con el USB-C de host', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Gigabit Ethernet con Wake-on-LAN PXE y clonado de MAC', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'AUDIO', 1, 'bidireccional'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 7, 'Combo de entrada y salida de audio de 3,5 mm', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'DC IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 8, 'Alimentador externo de 150 W cuya toma de red es IEC C5. El conector del alimentador al dock no está confirmado en ficha técnica', 'csv'
+from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'RECEPTOR UNIFYING', 1, 'control'::sentido_puerto, 'usb'::senal, 'USB-A', 1, 'Nano receptor de 2,4 GHz que se enchufa en el PC no en el teclado. El teclado es inalámbrico y funciona con dos pilas AA. No lleva ninguna tirada de cable', 'csv'
+from articulos a where coalesce(marca, '') = 'LOGITECH' and modelo = 'K400+' and categoria = 'TECLADO'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI', 1, 'bidireccional'::sentido_puerto, 'hdmi'::senal, 'HDMI A H', 1, 'Confirmado por Sergio: la caja lleva HDMI hembra-hembra. TopFrame es modular', 'csv'
+from articulos a where coalesce(marca, '') = 'BACHMANN' and modelo = 'TOPFRAME' and categoria = 'CAJA DE CONEXIONES'
+on conflict (articulo_id, nombre) do nothing;
+insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
+select a.id, 'HDMI', 1, 'bidireccional'::sentido_puerto, 'hdmi'::senal, 'HDMI A H', 1, 'Mismo criterio que la Bachmann segun Sergio. Sin confirmar modulo a modulo', 'csv'
+from articulos a where coalesce(marca, '') = 'AMX' and modelo = 'HPX 1200' and categoria = 'CAJA DE CONEXIONES'
+on conflict (articulo_id, nombre) do nothing;
 
 -- Plantillas de sala: 16 deducidas del inventario
 insert into plantillas_sala (nombre, tipologia, aforo, n_salas_reales, notas) values ('SALA TP · aforo 8', 'SALA TP', 8, 144, 'Deducida del inventario 2026. Faltan las medidas: rellenar largo, ancho y alto.') on conflict (nombre) do update set n_salas_reales = excluded.n_salas_reales;

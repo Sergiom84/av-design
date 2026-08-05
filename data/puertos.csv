@@ -1,0 +1,125 @@
+marca;modelo;categoria;nombre;total;sentido;senal;conector;orden;notas
+CISCO;ROOM NAVIGATOR;PANEL TÁCTIL;NETWORK;1;bidireccional;red;RJ45;1;Un solo cable para red y alimentación. Se alimenta por PoE. Emparejamiento directo a un puerto PoE del codec o remoto por LAN. Cat5e o Cat6 hasta 100 m
+CISCO;ROOM NAVIGATOR;PANEL TÁCTIL;MICRO USB;1;bidireccional;usb;Micro-USB;2;Depuración y servicio. No se cablea en la instalación
+CISCO;TOUCH 10;PANEL TÁCTIL;NETWORK;1;bidireccional;red;RJ45;1;Un solo cable para red y alimentación PoE 802.3af. Emparejamiento directo al codec o por LAN con inyector PoE intermedio. El inyector debe estar en el mismo edificio
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;HDMI IN;1;entrada;hdmi;HDMI A;1;Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;HDMI OUT 1;1;salida;hdmi;HDMI A;2;Pantalla principal. Hasta 3840x2160 a 60 fps
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;HDMI OUT 2;1;salida;hdmi;HDMI A;3;Segunda pantalla. Hasta 3840x2160 a 60 fps
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;MIC IN;2;entrada;microfono;Jack 3.5;4;Dos entradas de micrófono en mini jack de 4 pines. Aquí van los Cisco Table Microphone
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;LINE OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo. Preparado para subwoofer o bucle de inducción
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;LAN;1;bidireccional;red;RJ45;6;Ethernet 10/100/1000 a la red del edificio
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;TOUCH;1;bidireccional;red;RJ45;7;Ethernet dedicada al emparejamiento directo del Touch 10 o del Room Navigator. Da PoE al panel
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;USB;1;bidireccional;usb;USB-A;8;USB 2.0. La ficha dice USB 2.0 pero no el tipo de conector. USB-A sin confirmar en ficha técnica
+CISCO;SPARK ROOM KIT;VIDEOCONFERENCIA;POWER IN;1;entrada;alimentacion;;9;Fuente externa de 100-240 V CA con salida de 12 V CC al equipo. Tipo de conector del equipo sin confirmar en ficha técnica
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;HDMI IN;1;entrada;hdmi;HDMI A;1;Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;HDMI OUT;3;salida;hdmi;HDMI A;2;Tres salidas hasta 3840x2160 a 60 fps. Admiten pantalla táctil usando además un USB-A para el retorno del táctil
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;USB-C;1;bidireccional;usb;USB-C;3;Entrada de vídeo y audio y passthrough de cámara micrófono y altavoces con un solo cable para BYOD. Requiere DisplayPort alt mode en el portátil
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;LAN;1;bidireccional;red;RJ45;4;Ethernet 10/100/1000 a la red del edificio
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;PoE NAVIGATOR;1;bidireccional;red;RJ45;5;Ethernet PoE 802.3af con presupuesto de 15,4 W para el emparejamiento directo del Room Navigator
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;PoE AV;2;bidireccional;red;RJ45;6;Dos puertos PoE 802.3af de 15,4 W cada uno para micrófonos IP y equipo de audio AES67. Más de tres micrófonos IP exigen licencia AV Integrator
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;MIC IN;2;entrada;microfono;Jack 3.5;7;Dos entradas analógicas de micrófono. La ficha no da el conector. Mini jack de 4 pines sin confirmar en ficha técnica
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;LINE OUT;1;salida;audio_linea;Jack 3.5;8;Una salida de línea analógica. La ficha no da el conector. Sin confirmar en ficha técnica
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;USB-A;2;bidireccional;usb;USB-A;9;USB 2.0 para pantalla táctil micrófonos teclados y periféricos de sala
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;MICRO USB;1;bidireccional;usb;Micro-USB;10;Puerto de servicio. No se cablea en la instalación
+CISCO;WEBEX ROOM BAR PRO;VIDEOCONFERENCIA;POWER IN;1;entrada;alimentacion;;11;100-240 V CA a 50/60 Hz con cable de red específico por país. Media de 20 W. Tipo de conector sin confirmar en ficha técnica
+CISCO;TABLE MICROPHONE MINI JACK (V1);MICRÓFONO;SALIDA DE MICRÓFONO;1;salida;microfono;Jack 3.5;1;Cable fijo de 7,5 m terminado en mini jack macho de 4 pines. Extensión CAB-MIC-EXT-J de 9 m. No lleva alimentación propia. Se alimenta del codec
+CISCO;TABLE MICROPHONE MINI JACK (V2);MICRÓFONO;SALIDA DE MICRÓFONO;1;salida;microfono;Jack 3.5;1;Mismo conector que la V1. Longitud exacta del cable de la V2 sin confirmar en ficha técnica. No lleva alimentación propia
+SAMSUNG;QB65R-B;PANTALLA;HDMI IN 1;1;entrada;hdmi;HDMI A;1;HDMI 2.0 con ARC y HDCP 2.2. Entrada principal
+SAMSUNG;QB65R-B;PANTALLA;HDMI IN 2;1;entrada;hdmi;HDMI A;2;HDMI 2.0. Segunda fuente
+SAMSUNG;QB65R-B;PANTALLA;DVI IN;1;entrada;otro;DVI-D;3;DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN
+SAMSUNG;QB65R-B;PANTALLA;DVI/HDMI AUDIO IN;1;entrada;audio_linea;Jack 3.5;4;Mini jack estéreo. Audio analógico de la fuente DVI
+SAMSUNG;QB65R-B;PANTALLA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo a sistema de audio externo
+SAMSUNG;QB65R-B;PANTALLA;RJ45;1;bidireccional;red;RJ45;6;Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado
+SAMSUNG;QB65R-B;PANTALLA;RS232C IN;1;entrada;control;Jack 3.5;7;Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio. La ficha de serie menciona además RS232C OUT pero no está confirmado en este tamaño
+SAMSUNG;QB65R-B;PANTALLA;USB 1;1;bidireccional;usb;USB-A;8;USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB
+SAMSUNG;QB65R-B;PANTALLA;USB 2;1;bidireccional;usb;USB-A;9;USB 2.0 hasta 0,5 A
+SAMSUNG;QB65R-B;PANTALLA;IR IN;1;entrada;control;Jack 3.5;10;Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica
+SAMSUNG;QB65R-B;PANTALLA;POWER IN;1;entrada;alimentacion;;11;100-240 V CA a 50/60 Hz con cable desmontable. 128 W típicos. Tipo de conector IEC sin confirmar en ficha técnica
+SAMSUNG;QB65R;PANTALLA;HDMI IN 1;1;entrada;hdmi;HDMI A;1;HDMI 2.0 con ARC y HDCP 2.2. Entrada principal
+SAMSUNG;QB65R;PANTALLA;HDMI IN 2;1;entrada;hdmi;HDMI A;2;HDMI 2.0. Segunda fuente
+SAMSUNG;QB65R;PANTALLA;DVI IN;1;entrada;otro;DVI-D;3;DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN
+SAMSUNG;QB65R;PANTALLA;DVI/HDMI AUDIO IN;1;entrada;audio_linea;Jack 3.5;4;Mini jack estéreo. Audio analógico de la fuente DVI
+SAMSUNG;QB65R;PANTALLA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo a sistema de audio externo
+SAMSUNG;QB65R;PANTALLA;RJ45;1;bidireccional;red;RJ45;6;Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado
+SAMSUNG;QB65R;PANTALLA;RS232C IN;1;entrada;control;Jack 3.5;7;Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio
+SAMSUNG;QB65R;PANTALLA;USB 1;1;bidireccional;usb;USB-A;8;USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB
+SAMSUNG;QB65R;PANTALLA;USB 2;1;bidireccional;usb;USB-A;9;USB 2.0 hasta 0,5 A
+SAMSUNG;QB65R;PANTALLA;IR IN;1;entrada;control;Jack 3.5;10;Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica
+SAMSUNG;QB65R;PANTALLA;POWER IN;1;entrada;alimentacion;;11;100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica
+SAMSUNG;QB55R-B;PANTALLA;HDMI IN 1;1;entrada;hdmi;HDMI A;1;HDMI 2.0 con ARC y HDCP 2.2. Entrada principal
+SAMSUNG;QB55R-B;PANTALLA;HDMI IN 2;1;entrada;hdmi;HDMI A;2;HDMI 2.0. Segunda fuente
+SAMSUNG;QB55R-B;PANTALLA;DVI IN;1;entrada;otro;DVI-D;3;DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN
+SAMSUNG;QB55R-B;PANTALLA;DVI/HDMI AUDIO IN;1;entrada;audio_linea;Jack 3.5;4;Mini jack estéreo. Audio analógico de la fuente DVI
+SAMSUNG;QB55R-B;PANTALLA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo a sistema de audio externo
+SAMSUNG;QB55R-B;PANTALLA;RJ45;1;bidireccional;red;RJ45;6;Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado
+SAMSUNG;QB55R-B;PANTALLA;RS232C IN;1;entrada;control;Jack 3.5;7;Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio
+SAMSUNG;QB55R-B;PANTALLA;USB 1;1;bidireccional;usb;USB-A;8;USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB
+SAMSUNG;QB55R-B;PANTALLA;USB 2;1;bidireccional;usb;USB-A;9;USB 2.0 hasta 0,5 A
+SAMSUNG;QB55R-B;PANTALLA;IR IN;1;entrada;control;Jack 3.5;10;Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica
+SAMSUNG;QB55R-B;PANTALLA;POWER IN;1;entrada;alimentacion;;11;100-240 V CA a 50/60 Hz con cable desmontable. 108 W típicos. Tipo de conector IEC sin confirmar en ficha técnica
+SAMSUNG;QB55R;PANTALLA;HDMI IN 1;1;entrada;hdmi;HDMI A;1;HDMI 2.0 con ARC y HDCP 2.2. Entrada principal
+SAMSUNG;QB55R;PANTALLA;HDMI IN 2;1;entrada;hdmi;HDMI A;2;HDMI 2.0. Segunda fuente
+SAMSUNG;QB55R;PANTALLA;DVI IN;1;entrada;otro;DVI-D;3;DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN
+SAMSUNG;QB55R;PANTALLA;DVI/HDMI AUDIO IN;1;entrada;audio_linea;Jack 3.5;4;Mini jack estéreo. Audio analógico de la fuente DVI
+SAMSUNG;QB55R;PANTALLA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo a sistema de audio externo
+SAMSUNG;QB55R;PANTALLA;RJ45;1;bidireccional;red;RJ45;6;Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado
+SAMSUNG;QB55R;PANTALLA;RS232C IN;1;entrada;control;Jack 3.5;7;Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio
+SAMSUNG;QB55R;PANTALLA;USB 1;1;bidireccional;usb;USB-A;8;USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB
+SAMSUNG;QB55R;PANTALLA;USB 2;1;bidireccional;usb;USB-A;9;USB 2.0 hasta 0,5 A
+SAMSUNG;QB55R;PANTALLA;IR IN;1;entrada;control;Jack 3.5;10;Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica
+SAMSUNG;QB55R;PANTALLA;POWER IN;1;entrada;alimentacion;;11;100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica
+SAMSUNG;QM32R-B;PANTALLA;HDMI IN 1;1;entrada;hdmi;HDMI A;1;HDMI 2.0 con ARC y HDCP 2.2. Entrada principal
+SAMSUNG;QM32R-B;PANTALLA;HDMI IN 2;1;entrada;hdmi;HDMI A;2;HDMI 2.0. También hace de entrada de daisy chain
+SAMSUNG;QM32R-B;PANTALLA;DP IN;1;entrada;otro;DisplayPort;3;DisplayPort 1.2. Entrada de daisy chain. Este modelo no tiene DVI
+SAMSUNG;QM32R-B;PANTALLA;AUDIO IN;1;entrada;audio_linea;Jack 3.5;4;Mini jack estéreo común para HDMI y audio
+SAMSUNG;QM32R-B;PANTALLA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;5;Mini jack estéreo a sistema de audio externo
+SAMSUNG;QM32R-B;PANTALLA;RJ45;1;bidireccional;red;RJ45;6;Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado
+SAMSUNG;QM32R-B;PANTALLA;RS232C IN;1;entrada;control;Jack 3.5;7;Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio
+SAMSUNG;QM32R-B;PANTALLA;USB;2;bidireccional;usb;USB-A;8;Dos puertos USB 2.0. Corriente máxima constante de 1,0 A
+SAMSUNG;QM32R-B;PANTALLA;POWER IN;1;entrada;alimentacion;;9;100-240 V CA a 50/60 Hz. 44 W típicos. Tipo de conector IEC sin confirmar en ficha técnica
+CRESTRON;UC-SB1-CAM;BARRA DE VIDEOCONFERENCIA;PC;1;bidireccional;usb;USB-B;1;USB 3.0. Pasa cámara micrófono y altavoz por un solo cable. Cable A-B de 1,83 m incluido
+CRESTRON;UC-SB1-CAM;BARRA DE VIDEOCONFERENCIA;AUDIO IN;1;entrada;audio_linea;Jack 3.5;2;Estéreo no balanceada TRS de 3,5 mm. Entra directa al amplificador sin control de volumen ni proceso
+CRESTRON;UC-SB1-CAM;BARRA DE VIDEOCONFERENCIA;AUDIO OUT;1;salida;audio_linea;Jack 3.5;3;Nivel de línea para sistema de ayuda a la audición. Misma señal que los altavoces de la barra
+CRESTRON;UC-SB1-CAM;BARRA DE VIDEOCONFERENCIA;24V 2.5A;1;entrada;alimentacion;;4;Alimentador externo de 24 V CC y 2,5 A con cable de red de 1,78 m. Tipo de conector del equipo sin confirmar en ficha técnica
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;HDMI INPUT;1;entrada;hdmi;HDMI A;1;HDMI tipo A hembra con HDCP 2.2 EDID y CEC
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;LAN;1;bidireccional;red;RJ45;2;100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;AUDIO;1;salida;audio_linea;PHX-5P;3;Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm. Solo funciona con señal de entrada estéreo de 2 canales
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;COM;1;bidireccional;control;PHX-5P;4;RS-232 bidireccional hasta 115,2 kbaudios con control de flujo
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;IR 1-2;1;salida;control;PHX-4P;5;Bloque de tornillo de 4 pines con dos puertos IR o serie TTL
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;CONSOLE;1;bidireccional;usb;Micro-USB;6;Consola USB 2.0 para configuración. No se cablea en la instalación
+CRESTRON;DM-NVX-E30;TRANSMISOR DE VÍDEO;24VDC;1;entrada;alimentacion;Jack DC 5.5;7;Entrada de 24 V CC con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;HDMI OUTPUT;1;salida;hdmi;HDMI A;1;HDMI tipo A hembra
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;LAN;1;bidireccional;red;RJ45;2;100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;AUDIO;1;salida;audio_linea;PHX-5P;3;Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;COM;1;bidireccional;control;PHX-5P;4;RS-232 bidireccional
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;IR 1-2;1;salida;control;PHX-4P;5;Bloque de tornillo de 4 pines con dos puertos IR o serie TTL
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;CONSOLE;1;bidireccional;usb;Micro-USB;6;Consola USB 2.0 para configuración. No se cablea en la instalación
+CRESTRON;DM-NVX-D30;RECEPTOR DE VÍDEO;24VDC;1;entrada;alimentacion;Jack DC 5.5;7;Entrada de 24 V CC y 1,25 A con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+
+EXTRON;DTP HDMI 4K 230 TX;TRANSMISOR DE VÍDEO;HDMI IN;1;entrada;hdmi;HDMI A;1;HDMI tipo A hembra. Lleva bridas LockIt para fijar el conector
+EXTRON;DTP HDMI 4K 230 TX;TRANSMISOR DE VÍDEO;AUDIO IN;1;entrada;audio_linea;Jack 3.5;2;Mini jack estéreo de 3,5 mm no balanceado. El audio analógico viaja por el par trenzado sin embeberse en el vídeo
+EXTRON;DTP HDMI 4K 230 TX;TRANSMISOR DE VÍDEO;RS-232 IR;1;bidireccional;control;PHX-5P;3;Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx. Se conecta el equipo principal al Tx y el secundario al Rx
+EXTRON;DTP HDMI 4K 230 TX;TRANSMISOR DE VÍDEO;DTP OUT;1;salida;otro;RJ45;4;Enlace de par trenzado al receptor hasta 70 m. Cat6A apantallado de 24 AWG rígido terminado en T568B. NO conectar a la red de datos
+EXTRON;DTP HDMI 4K 230 TX;TRANSMISOR DE VÍDEO;POWER;1;entrada;alimentacion;PHX-2P;5;12 V CC por bloque de tornillo. Fuente externa con cable IEC a 100-240 V CA. Una sola fuente alimenta la pareja Tx y Rx a través del cable DTP
+EXTRON;DTP HDMI 4K 230 RX;RECEPTOR DE VÍDEO;DTP IN;1;entrada;otro;RJ45;1;Enlace de par trenzado desde el transmisor hasta 70 m. Cat6A apantallado de 24 AWG rígido. NO conectar a la red de datos
+EXTRON;DTP HDMI 4K 230 RX;RECEPTOR DE VÍDEO;HDMI OUT;1;salida;hdmi;HDMI A;2;HDMI tipo A hembra a la pantalla. Lleva bridas LockIt para fijar el conector
+EXTRON;DTP HDMI 4K 230 RX;RECEPTOR DE VÍDEO;AUDIO OUT;1;salida;audio_linea;PHX-5P;3;Bloque de tornillo. Admite salida estéreo balanceada o no balanceada y mono
+EXTRON;DTP HDMI 4K 230 RX;RECEPTOR DE VÍDEO;RS-232 IR;1;bidireccional;control;PHX-5P;4;Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx
+EXTRON;DTP HDMI 4K 230 RX;RECEPTOR DE VÍDEO;POWER;1;entrada;alimentacion;PHX-2P;5;12 V CC por bloque de tornillo. Puede alimentarse en remoto desde el Tx por el cable DTP y entonces no necesita fuente local
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;HDMI OUT;1;salida;hdmi;HDMI A;1;Salida a pantalla por DisplayLink con adaptador USB a HDMI integrado a 1080p. Ficha del VB342+. El inventario no distingue VB342 de VB342+
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;USB;1;bidireccional;usb;USB-C;2;USB 3.1 Gen 1 al PC. Cable USB-C a USB-A de 1,8 m incluido. Ficha del VB342+. Sin confirmar para el VB342 base
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;PHONE IN;1;entrada;audio_linea;Jack 3.5;3;Line-in de 3,5 mm para usar la barra como manos libres de un móvil o un PC. Ficha del VB342+
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;MICROPHONE;1;entrada;microfono;Jack 3.5;4;Entrada para micrófono de extensión de 10 m o 20 m. Tipo de conector sin confirmar en ficha técnica
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;RS232;1;bidireccional;control;Mini DIN 6;5;Control VISCA o Pelco P o Pelco D. Necesita adaptador Mini DIN6 a RS-232 opcional. Ficha del VB342+
+AVER;VB342;BARRA DE VIDEOCONFERENCIA;DC 12V;1;entrada;alimentacion;;6;Alimentador externo de 12 V y 5 A con cable de 3 m. Tipo de conector sin confirmar en ficha técnica
+STEELCASE;ROOMWIZARD II;PANTALLA ROOMWIZARD;ETHERNET;1;bidireccional;red;RJ45;1;Único cable. Red 10BaseT o 100BaseTX y alimentación PoE 802.3af por el mismo par. No necesita toma de corriente. Requiere switch PoE o inyector
+TARGUS;DOCK182;DOCK STATION;HOST USB-C;1;bidireccional;usb;USB-C;1;Cable de host desmontable de 1 m al portátil. Datos vídeo y hasta 100 W de carga con Power Delivery 3.0. Lleva adaptador de USB-C a USB-A
+TARGUS;DOCK182;DOCK STATION;HDMI;2;salida;hdmi;HDMI A;2;HDMI 2.0 hasta 4096x2160 a 60 Hz. Solo dos pantallas simultáneas contando HDMI y DisplayPort
+TARGUS;DOCK182;DOCK STATION;DISPLAYPORT;2;salida;otro;DisplayPort;3;DisplayPort 1.2a. Solo dos pantallas simultáneas contando HDMI y DisplayPort
+TARGUS;DOCK182;DOCK STATION;USB-A;4;bidireccional;usb;USB-A;4;USB 3.2 Gen 1 a 5 Gb/s. Uno de ellos con carga rápida BC1.2
+TARGUS;DOCK182;DOCK STATION;USB-C;1;bidireccional;usb;USB-C;5;USB 3.2 Gen 2 a 10 Gb/s y 7,5 W. Es puerto de datos aguas abajo. No confundir con el USB-C de host
+TARGUS;DOCK182;DOCK STATION;RJ45;1;bidireccional;red;RJ45;6;Gigabit Ethernet con Wake-on-LAN PXE y clonado de MAC
+TARGUS;DOCK182;DOCK STATION;AUDIO;1;bidireccional;audio_linea;Jack 3.5;7;Combo de entrada y salida de audio de 3,5 mm
+TARGUS;DOCK182;DOCK STATION;DC IN;1;entrada;alimentacion;;8;Alimentador externo de 150 W cuya toma de red es IEC C5. El conector del alimentador al dock no está confirmado en ficha técnica
+LOGITECH;K400+;TECLADO;RECEPTOR UNIFYING;1;control;usb;USB-A;1;Nano receptor de 2,4 GHz que se enchufa en el PC no en el teclado. El teclado es inalámbrico y funciona con dos pilas AA. No lleva ninguna tirada de cable
+BACHMANN;TOPFRAME;CAJA CONEXIONES;HDMI;1;bidireccional;hdmi;HDMI A H;1;Confirmado por Sergio: la caja lleva HDMI hembra-hembra. TopFrame es modular; los demas modulos dependen de la compra y no estan confirmados
+AMX;HPX 1200;CAJA CONEXIONES;HDMI;1;bidireccional;hdmi;HDMI A H;1;Mismo criterio que la Bachmann segun Sergio. Sin confirmar modulo a modulo

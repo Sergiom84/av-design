@@ -1,0 +1,50 @@
+presupuesto;proveedor;fecha;referencia;marca;modelo;descripcion;tipo;categoria;unidad;senal;conector_a;conector_b;longitud_m;bobina_m;cantidad;precio_compra;unidades_por_compra;revisar
+BBVA cableado Extron;;;26-663-06;EXTRON;HDMI ULTRA/6;Latiguillo HDMI premium alta velocidad ultraflexible 4K, 1,8 m (6 ft);cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;1.8;;10;54.74;1;
+BBVA cableado Extron;;;26-663-09;EXTRON;HDMI ULTRA/9;Latiguillo HDMI premium alta velocidad ultraflexible 4K, 2,7 m (9 ft);cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;2.7;;20;77.89;1;
+BBVA cableado Extron;;;26-663-12;EXTRON;HDMI ULTRA/12;Latiguillo HDMI premium alta velocidad ultraflexible 4K, 3,6 m (12 ft);cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;3.6;;15;88.42;1;
+BBVA cableado Extron;;;26-663-15;EXTRON;HDMI ULTRA/15;Latiguillo HDMI premium alta velocidad ultraflexible 4K, 4,5 m (15 ft);cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;4.5;;10;96.84;1;
+Equipamiento y servicios profesionales;;;26-663-09;EXTRON;HDMI ULTRA/9;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;2.7;;30;93.00;1;
+Equipamiento y servicios profesionales;;;26-663-12;EXTRON;HDMI ULTRA/12;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;3.6;;30;105.00;1;
+Equipamiento y servicios profesionales;;;26-663-15;EXTRON;HDMI ULTRA/15;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;4.5;;20;115.00;1;
+Equipamiento y servicios profesionales;;;10.15.1201;NANOCABLE;10.15.1201;Transición HDMI A hembra - A hembra V1.4b 4K;consumible;ADAPTADOR;ud;hdmi;HDMI A H;HDMI A H;;;40;7.00;1;
+Equipamiento y servicios profesionales;;;10116238;AUDIBAX;10116238;Multicore 4 XLR macho a 12 XLR hembra, 15 m;cable;CABLE AUDIO;ud;microfono;XLR M;XLR H;15;;1;104.00;1;
+Presupuesto 1;;;26-663-09;EXTRON;HDMI ULTRA/9;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;2.7;;30;78.82;1;
+Presupuesto 1;;;26-663-12;EXTRON;HDMI ULTRA/12;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;3.6;;30;89.41;1;
+Presupuesto 1;;;26-663-15;EXTRON;HDMI ULTRA/15;;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;4.5;;20;98.82;1;
+Presupuesto 1;;;10.15.1201;NANOCABLE;10.15.1201;;consumible;ADAPTADOR;ud;hdmi;HDMI A H;HDMI A H;;;40;9.53;1;
+Presupuesto 1;;;;AUDIBAX;CAJETÍN ESCENARIO 12/4 15 M;Cajetín de escenario 12 entradas 4 salidas, 15 m;cable;CABLE AUDIO;ud;microfono;XLR M;XLR H;15;;1;158.81;1;Posible duplicado de AUDIBAX 10116238
+BBVA switch Netgear;;;GS305P-200PES;NETGEAR;GS305P;Switch no gestionable 5 puertos 10/100/1000 con 4 puertos PoE;equipo;SWITCH POE;ud;red;;;;;10;68.81;1;Referencia del presupuesto con sufijo -200PES
+BBVA material AV pedido enero;;;SLXD4DE H56;SHURE;SLXD4D;Receptor dual inalámbrico, banda H56;equipo;RECEPTOR DE MICRÓFONO;ud;microfono;;;;;4;675.63;1;Referencia del presupuesto SLXD4DE H56
+BBVA material AV pedido enero;;;SLXD2/SM58 H56;SHURE;SLXD2/SM58;Emisor de mano con cápsula SM58, banda H56;equipo;TRANSMISOR DE MICROFONÍA;ud;microfono;;;;;4;210.46;1;Referencia del presupuesto con banda H56
+BBVA material AV pedido enero;;;SLXD1 H56;SHURE;SLXD1;Emisor de petaca, banda H56;equipo;MICRÓFONO;ud;microfono;;;;;4;202.01;1;Referencia del presupuesto con banda H56
+BBVA material AV pedido enero;;;WL185MB/C-TQG;SHURE;WL185;Cápsula cardioide de solapa con conector TQG;equipo;MICRÓFONO;ud;microfono;;;;;4;118.40;1;Referencia del presupuesto WL185MB/C-TQG
+BBVA material AV pedido enero;;;SB903;SHURE;SB903;Batería de iones de litio para SLXD;equipo;BATERÍA;ud;;;;;;16;43.26;1;
+BBVA material AV pedido enero;;;SBC203-E;SHURE;SBC203;Cargador dock para dos baterías SB903;equipo;BASE DE CARGA DE MICRÓFONO;ud;;;;;;4;105.72;1;Referencia del presupuesto con sufijo -E
+BBVA cableado y resto de material;;;10.15.1201;NANOCABLE;10.15.1201;EAN 8433281008038;consumible;ADAPTADOR;ud;hdmi;HDMI A H;HDMI A H;;;40;14.12;1;
+BBVA cableado y resto de material;;;10.15.3807;NANOCABLE;10.15.3807;Latiguillo HDMI 7 m. EAN 8433281013001;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;7;;20;12.36;1;
+BBVA cableado y resto de material;;;10.15.8005;NANOCABLE;10.15.8005;Latiguillo HDMI 5 m. EAN 8433281014121;cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;5;;20;15.53;1;Más caro que el de 7 m: comprobar si es otra serie
+BBVA cableado y resto de material;;;DUB-H4/E;D-LINK;DUB-H4;Hub USB 2.0 de 4 puertos alimentado;equipo;HUB USB;ud;usb;;;;;4;29.97;1;
+Bobina 100 metros Gotham;;;10401;GOTHAM;GAC-2;Cable de audio balanceado 2 conductores, bobina de 100 m;cable;CABLE AUDIO;m;microfono;;;;100;1;210.90;100;
+Videowall Castellón · unidad móvil Madrid;;;;FOCUSRITE;SCARLETT 8I6 3RD GEN;Interfaz de audio USB;equipo;INTERFAZ DE AUDIO;ud;audio_linea;;;;;1;221.78;1;
+Videowall Castellón · unidad móvil Madrid;;;;TP-LINK;TL-SG1005P;Switch 5 puertos con 4 PoE;equipo;SWITCH POE;ud;red;;;;;2;37.35;1;
+Videowall Castellón · unidad móvil Madrid;;;;NEUTRIK;NP3 X-B;Conector jack 6,3 mm estéreo;consumible;CONECTOR;ud;audio_linea;;;;;20;5.11;1;
+Videowall Castellón · unidad móvil Madrid;;;;ELGATO;CAM LINK 4K;Capturadora HDMI a USB;equipo;CAPTURADORA DE VÍDEO;ud;hdmi;;;;;1;98.99;1;
+Videowall Castellón · unidad móvil Madrid;;;;GRAVITY;MS 23 XLR B;Soporte de micrófono con conector XLR y cuello de cisne;equipo;SOPORTE DE MICRÓFONO;ud;;;;;;2;52.80;1;
+Videowall Castellón · unidad móvil Madrid;;;;K&M;210/8;Soporte de micrófono de pie con jirafa;equipo;SOPORTE DE MICRÓFONO;ud;;;;;;2;48.15;1;
+Videowall Castellón · unidad móvil Madrid;;;;ASUS;PCE-AX1800;Tarjeta de red PCIe Wi-Fi 6;equipo;TARJETA DE RED;ud;red;;;;;1;30.19;1;
+Videowall Castellón · unidad móvil Madrid;;;;SENNHEISER;HD-25;Auriculares de monitorado;equipo;AURICULARES;ud;audio_linea;;;;;1;159.30;1;
+Videowall Castellón · unidad móvil Madrid;;;;GRIFEMA;GB2003-1;Soporte de monitor;equipo;SOPORTE DE PANTALLA;ud;;;;;;1;19.54;1;
+Videowall Castellón · unidad móvil Madrid;;;;ADAM HALL;87556;Bandeja extraíble enracable 19";equipo;BANDEJA DE RACK;ud;;;;;;1;58.78;1;
+Videowall Castellón · unidad móvil Madrid;;;;SHURE;BLX1288/W85 COMBO S8;Sistema inalámbrico combo con micrófono de solapa;equipo;MICROFONÍA;ud;microfono;;;;;1;575.70;1;
+Videowall Castellón · unidad móvil Madrid;;;CMK 222 BK/100M;CORDIAL;CMK 222;Cable de micrófono apantallado, bobina de 100 m;cable;CABLE AUDIO;m;microfono;;;;100;1;83.63;100;
+Videowall Castellón · unidad móvil Madrid;;;C-HM/HM-35;KRAMER;C-HM/HM-35;Latiguillo HDMI de 35 ft (10,7 m);cable;CABLE HDMI;ud;hdmi;HDMI A;HDMI A;10.7;;2;30.65;1;El presupuesto lo describe como 10 m: la referencia -35 son 35 ft
+Videowall Castellón · unidad móvil Noroeste;;;;MACKIE;THUMP 212;Altavoz autoamplificado 12";equipo;ALTAVOZ;ud;audio_altavoz;;;;;2;322.89;1;
+Videowall Castellón · unidad móvil Noroeste;;;;MACKIE;BAG THUMP212/XT;Funda de transporte para Thump 212;equipo;FUNDA DE TRANSPORTE;ud;;;;;;2;55.94;1;
+Videowall Castellón · unidad móvil Noroeste;;;;GRAVITY;SS 5211 B;Soporte de altavoz con funda, set de 1;equipo;SOPORTE DE ALTAVOZ;ud;;;;;;1;100.08;1;
+Videowall Castellón · unidad móvil Noroeste;;;;YAMAHA;MG10 XU;Mesa de mezclas 10 canales con USB;equipo;MEZCLADOR DE AUDIO;ud;audio_linea;;;;;1;246.16;1;
+Videowall Castellón · unidad móvil Noroeste;;;CTM 20 FM-BK;CORDIAL;CTM 20 FM-BK;Latiguillo XLR macho-hembra;cable;CABLE AUDIO;ud;microfono;XLR M;XLR H;20;;2;25.10;1;El presupuesto lo describe como 15 m: la referencia CTM 20 son 20 m
+Videowall Castellón · unidad móvil Noroeste;;;CTM 1,5 FM-BK;CORDIAL;CTM 1,5 FM-BK;Latiguillo XLR macho-hembra de 1,5 m;cable;CABLE AUDIO;ud;microfono;XLR M;XLR H;1.5;;2;31.14;1;Sale más caro que el de 20 m: comprobar
+Videowall Castellón · unidad móvil Noroeste;;;;TRITON-BLUE;FLIGHTCASE COMBINADO 19" 12U;Rack combinado 19" 12U, fondo 508 mm;equipo;RACK;ud;;;;;;1;292.47;1;
+Videowall Castellón · unidad móvil Noroeste;;;;SHURE;BLX1288/W85 COMBO S8;;equipo;MICROFONÍA;ud;microfono;;;;;1;575.70;1;
+Videowall Castellón · unidad móvil Noroeste;;;;EPSON;EB-1795F;Proyector portátil Full HD;equipo;PROYECTOR;ud;;;;;;1;913.98;1;
+Videowall Castellón · suministro Ciudad BBVA;;;70BFL2214/12;PHILIPS;70BFL2214/12;Pantalla profesional de 70";equipo;PANTALLA;ud;;;;;;20;618.28;1;

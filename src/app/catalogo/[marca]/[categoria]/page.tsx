@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
-import { listarArticulosDeMarca } from '@/lib/datos';
+import { articulosConPuertos, listarArticulosDeMarca } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Cabecera, Enlace, Tarjeta } from '@/components/ui';
 import { ETIQUETA_SENAL, Senal } from '@/lib/tipos';
@@ -22,6 +22,10 @@ export default async function Seccion({
 
   const hayCable = articulos.some((a) => a.tipo !== 'equipo');
 
+  // Saber qué está listo para conectar antes de ponerse a diseñar: sin puertos
+  // no hay esquema de conexiones ni tabla de cables.
+  const conPuertos = await articulosConPuertos(articulos.map((a) => a.id));
+
   return (
     <>
       <div className="text-tinta-tenue mb-2">
@@ -31,7 +35,11 @@ export default async function Seccion({
       </div>
       <Cabecera
         titulo={nombreCategoria}
-        descripcion={`${nombreMarca} · ${articulos.length} referencias`}
+        descripcion={[
+          nombreMarca,
+          `${articulos.length} referencias`,
+          `${conPuertos.size} con puertos`,
+        ].join(' · ')}
       />
 
       <Tarjeta>
@@ -41,6 +49,7 @@ export default async function Seccion({
               <th>Modelo</th>
               <th>Descripción</th>
               {hayCable && <th>Señal</th>}
+              <th>Puertos</th>
               <th className="num">Coste</th>
               <th className="num">PVP</th>
               <th>Proveedor</th>
@@ -53,7 +62,7 @@ export default async function Seccion({
                 <td>
                   <Link
                     href={`/articulo/${a.id}`}
-                    className="text-acento underline underline-offset-2"
+                    className="enlace"
                   >
                     {a.modelo}
                   </Link>
@@ -64,8 +73,14 @@ export default async function Seccion({
                     {a.senal ? ETIQUETA_SENAL[a.senal as Senal] : '—'}
                   </td>
                 )}
+                <td className={conPuertos.has(a.id) ? undefined : 'text-tinta-tenue'}>
+                  {conPuertos.has(a.id) ? 'Definidos' : 'Sin definir'}
+                </td>
                 <td className="num">
                   {a.coste != null ? `${a.coste.toFixed(2)} €` : '—'}
+                  {a.coste != null && a.coste_orientativo && (
+                    <span className="text-tinta-tenue"> orient.</span>
+                  )}
                 </td>
                 <td className="num">{a.pvp != null ? `${a.pvp.toFixed(2)} €` : '—'}</td>
                 <td className="text-tinta-tenue">{a.proveedor ?? '—'}</td>

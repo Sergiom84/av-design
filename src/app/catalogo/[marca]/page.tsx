@@ -51,7 +51,7 @@ export default async function Marca({ params }: PageProps<'/catalogo/[marca]'>) 
                   <li key={a.id} className="flex justify-between gap-4">
                     <Link
                       href={`/articulo/${a.id}`}
-                      className="text-acento underline underline-offset-2"
+                      className="enlace"
                     >
                       {a.modelo}
                     </Link>

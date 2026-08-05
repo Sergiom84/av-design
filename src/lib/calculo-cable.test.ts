@@ -69,6 +69,7 @@ const HDMI: Articulo = {
   observaciones: null,
   unidad: 'ud',
   coste: 12,
+  coste_orientativo: false,
   pvp: null,
   proveedor: null,
   plazo_dias: null,

@@ -24,10 +24,22 @@ deja vacíos exactamente esos tres puntos.
 
 ## Estado
 
-**Fase 1 implementada:** catálogo, plantillas de sala, salas con medidas,
-cálculo de cable y lista de material.
-Fases pendientes en `docs/02-propuesta-app.md`: stock y compras (2), esquema de
-conexiones con React Flow (3), documentos para cliente (4).
+**Fase 1 completa:** catálogo, plantillas de sala, salas con medidas, cálculo de
+cable y lista de material. Más precios por artículo, que no estaba previsto.
+
+**Fase 3 a medias:** el modelo ya sostiene el esquema de conexiones. Hay puertos
+por artículo, conexiones de puerto a puerto y tabla de cables con los metros
+calculados, que es lo que XTEN-AV deja vacío. Falta el lienzo: nodos =
+`sala_equipos`, anclajes = `puertos`, aristas = `conexiones`. El dibujo es
+presentación de datos que ya existen, no un rediseño.
+
+**Fase 2 implementada:** almacén con existencias por ubicación y movimientos,
+reservas de material para una obra, qué falta contra el almacén, pedidos por
+proveedor con recepción que entra sola en el almacén, lista de carga marcable
+desde el móvil y cierre de obra con bajas.
+
+El detalle de las fases está en `docs/02-propuesta-app.md`. El análisis del flujo
+real de XTEN-AV, con qué copiar y qué no, en `docs/06-xtenav-flujo-creacion.md`.
 
 ## Stack
 
@@ -51,7 +63,68 @@ además `db/politicas-supabase.sql`. El acceso a datos usa `postgres.js`
 - **Los CSV de `data/` son la fuente editable del catálogo.** Se corrigen en
   Excel y se regenera con `npm run seed`. Nunca se edita `db/seed.sql` a mano.
 - **El criterio de holguras y márgenes no se cablea en el código.** Vive en la
-  tabla `parametros` y se edita desde `/parametros`.
+  tabla `parametros` y se edita desde `/parametros`. Lo mismo vale para la
+  vigencia de un precio.
+- **Un artículo tiene tantos precios como ofertas.** La misma referencia sale a
+  precios distintos según el proveedor y la antigüedad del presupuesto, así que
+  se guardan todos en `precios`. Cada precio es `final` (oferta escrita de un
+  proveedor, en `data/precios.csv`) u `orientativo` (referencia de mercado, en
+  `data/precios-orientativos.csv`). `articulos.coste` se queda con la mejor
+  oferta final vigente; si no hay ninguna, usa la mejor orientativa convertida a
+  euros y marca `coste_orientativo`. Se puede cambiar desde la ficha del
+  artículo. El informe está en `docs/05-precios.md`.
+- **Un puerto es el conector físico del equipo, y se escribe como lo serigrafía
+  el fabricante.** `HDMI IN 1`, `LAN PoE`, `MIC IN 1`: no se traducen ni se
+  normalizan, porque el técnico busca en el aparato lo que lee en la pantalla.
+  Viven en `puertos`, con sentido, señal y conector. La fuente editable es
+  `data/puertos.csv`. Sin puertos no hay esquema ni tabla de cables.
+- **Lo que se escribe desde la aplicación no lo pisa la siembra.** Las tablas
+  que se alimentan de CSV (`precios`, `puertos`) llevan una columna `fuente`:
+  `csv` se regenera entera en cada `npm run seed`, `app` no se toca nunca.
+- **Un cable sale de un puerto y entra en otro.** Los puertos son del catálogo
+  (`puertos`, por artículo) y una conexión guarda cuál usa en cada extremo. De
+  ahí sale la tabla de cables (`src/components/cable-schedule/`), que es el
+  entregable de obra. Su identificador (`HD-1000`, `RED-1000`) es correlativo
+  por señal, se numera por orden de alta de la conexión y **no puede cambiar**:
+  puede estar ya escrito en una brida. Los prefijos viven solo en
+  `PREFIJO_CABLE` (`src/lib/tipos.ts`).
+- **La toma de red es la roseta del edificio, no un puerto.** Vive en
+  `tomas_red`, es de la sala concreta, y hoy **no es extremo de tirada**: dice
+  dónde pincha un equipo. Hacerla extremo obligaría a cambiar
+  `calculo-cable.ts`, y eso pasa antes por sus pruebas.
+- **La validación de conexiones avisa, no bloquea.** Señales que no casan,
+  salida contra salida, cable que no corresponde: se enseña el aviso y se deja
+  seguir. El técnico puede tener un adaptador por medio.
+- **La existencia del almacén no se escribe: se deriva.** Solo se insertan
+  movimientos (`entrada`, `salida`, `devolucion`, `baja`, `ajuste`) y la vista
+  `existencias` los suma. El signo lo pone el tipo, no quien teclea, y la tabla
+  vive en `SIGNO_MOVIMIENTO` (`src/lib/almacen.ts`); la vista SQL la repite y
+  una prueba obliga a que cambiarla sea deliberado. Un stock que se puede
+  sobrescribir sin rastro vuelve a ser un Excel.
+- **Disponible = existencias − reservado, y se enseñan los tres.** Reservado no
+  es salido: sigue en el estante, comprometido para una obra. "Quedan cuatro
+  pero cuatro están reservados" y "no queda ninguno" son problemas distintos.
+- **Cargar la furgoneta es sacar del almacén.** La salida se apunta contra la
+  ubicación donde estaba el material, no contra la furgoneta. Lo cargado ya no
+  es existencia.
+- **El material roto vuelve y luego se da de baja.** Neto cero sobre el stock
+  —ya había salido— y la avería queda registrada, que es lo único que el
+  departamento tenía apuntado antes de esta aplicación.
+- **Un precio orientativo presupuesta, no pide.** Las líneas de pedido
+  congelan el precio del catálogo al crearse y arrastran la marca.
+- **El catálogo no viaja al navegador.** Elegir una referencia se hace
+  escribiendo, con `src/components/catalogo/buscador-articulo.tsx`, que
+  pregunta a `/api/catalogo` y trae como mucho veinte. Es el único selector de
+  artículo: lo usan plantillas, sala y almacén. Un `<select>` con las 948
+  referencias servía 5,4 MB en `/plantillas`, porque la página lo repetía una
+  vez por plantilla. Lo que se envía es el identificador, nunca el texto.
+- **Lo que se despliega va en la dirección, no en un acordeón.** En
+  `/plantillas` las medidas de las diecisiete se editan siempre, pero el
+  equipamiento solo se abre en la que dice `?abierta=<id>`. Con enlaces
+  normales: se puede enlazar, volver con el botón del navegador y funciona sin
+  JavaScript. Cien filas editables a la vez pesaban más que el resto junto.
+- **Cada bloque de la interfaz vive en su propia carpeta de componente.** Nada
+  de páginas monolíticas: `src/components/<bloque>/`.
 - **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
   `SinConfigurar` en vez de lanzar un error.
 - **Aspecto:** `design-system/MASTER.md` manda. Cormorant Garamond + JetBrains
@@ -63,7 +136,7 @@ además `db/politicas-supabase.sql`. El acceso a datos usa `postgres.js`
 |---|---|
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Compilación de producción (también valida tipos) |
-| `npm test` | Pruebas del cálculo de cable |
+| `npm test` | Pruebas de la lógica pura: cable, tabla de cables, almacén, compras y carga |
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |

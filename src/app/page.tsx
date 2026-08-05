@@ -1,5 +1,6 @@
 import { hayConfiguracion } from '@/lib/db';
 import { contarPanel } from '@/lib/datos';
+import { contarAlmacen } from '@/lib/datos-almacen';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera, Dato, Enlace, Tarjeta } from '@/components/ui';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export default async function Panel() {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
-  const c = await contarPanel();
+  const [c, alm] = await Promise.all([contarPanel(), contarAlmacen()]);
 
   return (
     <>
@@ -33,9 +34,37 @@ export default async function Panel() {
         ))}
       </div>
 
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-linea border border-linea mb-8">
+        {(
+          [
+            ['Referencias en almacén', alm.referenciasEnAlmacen, '/almacen'],
+            ['Reservas activas', alm.reservasActivas, '/almacen'],
+            ['Pedidos en curso', alm.pedidosEnCurso, '/compras'],
+            ['Cargas abiertas', alm.cargasAbiertas, '/carga'],
+          ] as const
+        ).map(([etiqueta, valor, href]) => (
+          <div key={etiqueta} className="bg-papel p-4">
+            <Dato etiqueta={etiqueta} valor={<Enlace href={href}>{valor}</Enlace>} />
+          </div>
+        ))}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6">
         <Tarjeta titulo="Pendiente de completar">
           <div className="space-y-3">
+            {alm.bajoMinimo > 0 && (
+              <Aviso tono="alerta">
+                <strong>{alm.bajoMinimo}</strong> referencias por debajo del stock
+                mínimo. El mínimo se mide contra el disponible, no contra lo que hay en
+                el estante. <Enlace href="/almacen">Ver almacén</Enlace>
+              </Aviso>
+            )}
+            {alm.pedidosBorrador > 0 && (
+              <Aviso>
+                <strong>{alm.pedidosBorrador}</strong> pedidos en borrador sin mandar.{' '}
+                <Enlace href="/compras">Ver compras</Enlace>
+              </Aviso>
+            )}
             {c.plantillasSinMedidas > 0 && (
               <Aviso>
                 <strong>{c.plantillasSinMedidas}</strong> plantillas sin medidas. Sin
@@ -56,9 +85,20 @@ export default async function Panel() {
                 <Enlace href="/catalogo">Ver catálogo</Enlace>
               </Aviso>
             )}
+            {c.costeOrientativo > 0 && (
+              <Aviso tono="neutro">
+                <strong>{c.costeOrientativo}</strong> referencias con coste
+                orientativo. Sirven para dimensionar, pero no para pedir: hace falta
+                oferta de proveedor.{' '}
+                <Enlace href="/catalogo">Ver catálogo</Enlace>
+              </Aviso>
+            )}
             {c.plantillasSinMedidas === 0 &&
               c.salasSinMedidas === 0 &&
-              c.cableSinPrecio === 0 && (
+              c.cableSinPrecio === 0 &&
+              c.costeOrientativo === 0 &&
+              alm.bajoMinimo === 0 &&
+              alm.pedidosBorrador === 0 && (
                 <p className="text-tinta-tenue">Todo completo.</p>
               )}
           </div>
@@ -79,6 +119,16 @@ export default async function Panel() {
             <li>
               La app calcula los metros de cada tirada por su ruta real y devuelve la lista
               de material a comprar.
+            </li>
+            <li>
+              Contra el <Enlace href="/almacen">almacén</Enlace> sale qué falta de verdad.
+              Lo que hay se reserva; lo que no, se pide por proveedor en{' '}
+              <Enlace href="/compras">compras</Enlace>.
+            </li>
+            <li>
+              La <Enlace href="/carga">lista de carga</Enlace> se marca en el almacén
+              desde el móvil. Al volver se cierra la obra: qué se instaló, qué sobra y
+              qué se rompió.
             </li>
           </ol>
         </Tarjeta>

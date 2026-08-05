@@ -35,6 +35,35 @@ export type Senal =
   | 'control'
   | 'otro';
 
+/**
+ * Por dónde entra o sale la señal en un puerto del equipo.
+ * `bidireccional` es el USB-C o el Dante; `control`, el RS-232 y el IR.
+ */
+export type SentidoPuerto = 'entrada' | 'salida' | 'bidireccional' | 'control';
+
+/**
+ * Un conector físico de un artículo del catálogo: el `LAN PoE` del Room
+ * Navigator, los `HDMI IN 1..4` de una matriz. Es lo que permite decir de qué
+ * salida a qué entrada va un cable, y sin eso no hay tabla de cables.
+ */
+export interface Puerto {
+  id: string;
+  articulo_id: string;
+  /** El literal del fabricante: `HDMI IN 1`, `LAN PoE`, `MIC IN 1`. */
+  nombre: string;
+  /** Cuántos puertos iguales hay. Cuatro entradas sin numerar son una fila con total 4. */
+  total: number;
+  sentido: SentidoPuerto;
+  senal: Senal;
+  /** `RJ45`, `HDMI A`, `USB-C`, `Euroblock 5`, `Jack 3.5`, `XLR M`… */
+  conector: string | null;
+  /** Para listarlos como los pinta el fabricante en la trasera del equipo. */
+  orden: number | null;
+  notas: string | null;
+  /** `csv` lo regenera la siembra. `app` se escribió aquí y es intocable. */
+  fuente: 'csv' | 'app';
+}
+
 export interface Punto {
   x_m: number;
   y_m: number;
@@ -44,6 +73,12 @@ export interface Punto {
 export interface Sala {
   id: string;
   sede_id: string | null;
+  /**
+   * Nombre de la sede, ya resuelto por la consulta. Es el `Location` de
+   * XTEN-AV. Opcional a propósito: es un dato de presentación, no entra en
+   * ningún cálculo, y obligarlo rompería a quien construye una sala a mano.
+   */
+  sede?: string | null;
   edificio: string | null;
   nivel: string | null;
   codigo: string | null;
@@ -75,6 +110,23 @@ export interface PlantillaSala {
   notas: string | null;
 }
 
+/**
+ * Una línea del equipamiento estándar de una plantilla. Es lo que hereda la
+ * sala al crearse: se copia a `sala_equipos` tal cual.
+ *
+ * Vive aquí y no en `datos.ts` porque el formulario de alta —que corre en el
+ * navegador— necesita el tipo para enseñar qué se va a heredar.
+ */
+export interface LineaPlantilla {
+  id: string;
+  articulo_id: string | null;
+  categoria: string;
+  cantidad: number;
+  /** `no en todas`: la sala nueva no la hereda. */
+  opcional: boolean;
+  modelo_texto: string | null;
+}
+
 export interface Articulo {
   id: string;
   referencia: string | null;
@@ -89,6 +141,8 @@ export interface Articulo {
   observaciones: string | null;
   unidad: UnidadMedida;
   coste: number | null;
+  /** El coste es una referencia, no una oferta cerrada. */
+  coste_orientativo: boolean;
   pvp: number | null;
   proveedor: string | null;
   plazo_dias: number | null;
@@ -107,6 +161,59 @@ export interface Articulo {
   activo: boolean;
 }
 
+/**
+ * Una referencia del catálogo reducida a lo justo para poder elegirla: el
+ * identificador que va al formulario y el texto que lee el técnico.
+ *
+ * Existe porque el catálogo tiene casi mil referencias y mandarlas enteras al
+ * navegador —una vez por cada desplegable de la página— era lo que hacía que
+ * `/plantillas` pesara megas. El buscador pide como mucho una veintena.
+ */
+export interface ArticuloElegible {
+  id: string;
+  /** Marca y modelo, ya unidos: `Samsung QB65R`. */
+  etiqueta: string;
+  categoria: string;
+  unidad: UnidadMedida;
+}
+
+/**
+ * Una roseta de red del edificio: el número que hay escrito en la placa del
+ * suelo, de la pared o de la mesa. "Este Room Navigator pincha en la toma 12".
+ *
+ * No confundir con `Puerto`: el puerto es del artículo del catálogo y es igual
+ * en todas las salas; la toma es de esta sala y de ninguna otra.
+ *
+ * En esta iteración la toma **no es extremo de tirada**: es dónde pincha un
+ * equipo y una columna informativa de la tabla de cables. Hacerla extremo
+ * obligaría a cambiar `calculo-cable.ts`, que está congelado.
+ */
+export interface TomaRed {
+  id: string;
+  sala_id: string;
+  /** El número o la etiqueta de la roseta, tal cual está serigrafiada. */
+  codigo: string;
+  ubicacion: string | null;
+  /** Posición de la roseta, si se conoce. Hoy es documental. */
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+  notas: string | null;
+}
+
+/**
+ * Las ubicaciones que ofrece la interfaz. En la base es texto libre, no un
+ * enum: nada se bifurca por este valor y cada edificio añade sitios nuevos.
+ * Ampliar la lista es esta línea, no una migración.
+ */
+export const UBICACIONES_TOMA = [
+  'suelo',
+  'pared',
+  'mesa',
+  'techo',
+  'rack',
+] as const;
+
 export interface EquipoEnSala {
   id: string;
   sala_id: string;
@@ -115,6 +222,8 @@ export interface EquipoEnSala {
   cantidad: number;
   extremo: Extremo;
   posicion: Punto;
+  /** En qué roseta de la sala pincha este equipo, si pincha en alguna. */
+  toma_red_id?: string | null;
 }
 
 export interface Conexion {
@@ -128,6 +237,14 @@ export interface Conexion {
   /** Si se rellena, manda sobre el cálculo. */
   longitud_manual_m: number | null;
   notas: string | null;
+  /**
+   * De qué puerto sale y a qué puerto entra. Opcionales: hay conexiones dadas
+   * de alta antes de que existiera el catálogo de puertos, y siguen valiendo.
+   */
+  puerto_origen_id?: string | null;
+  puerto_destino_id?: string | null;
+  /** Orden de alta. Es lo que fija el correlativo del identificador de cable. */
+  creado_en?: string | null;
 }
 
 /** Holguras y márgenes configurables. Se guardan en la tabla `parametros`. */
@@ -174,6 +291,13 @@ export const ETIQUETA_EXTREMO: Record<Extremo, string> = {
   pared: 'Pared',
 };
 
+export const ETIQUETA_SENTIDO: Record<SentidoPuerto, string> = {
+  entrada: 'Entrada',
+  salida: 'Salida',
+  bidireccional: 'Bidireccional',
+  control: 'Control',
+};
+
 export const ETIQUETA_SENAL: Record<Senal, string> = {
   hdmi: 'HDMI',
   red: 'Red',
@@ -185,3 +309,175 @@ export const ETIQUETA_SENAL: Record<Senal, string> = {
   control: 'Control',
   otro: 'Otro',
 };
+
+/**
+ * Prefijo del identificador de cable, por señal. Es el único sitio donde se
+ * define: `HD-1000`, `HD-1001`, `RED-1000`…
+ *
+ * Sirve para etiquetar físicamente en obra, así que se escribe corto, en
+ * mayúsculas y sin acentos: es lo que cabe en una brida y lo que el técnico
+ * copia a mano. El correlativo arranca en 1000 —como XTEN-AV— para que todos
+ * los identificadores tengan el mismo ancho hasta la tirada 999.
+ */
+export const PREFIJO_CABLE: Record<Senal, string> = {
+  hdmi: 'HD',
+  red: 'RED',
+  usb: 'USB',
+  audio_linea: 'AUD',
+  audio_altavoz: 'ALT',
+  microfono: 'MIC',
+  alimentacion: 'PWR',
+  control: 'RS',
+  otro: 'CBL',
+};
+
+/** Primer número de cada serie de identificadores. */
+export const PRIMER_CORRELATIVO_CABLE = 1000;
+
+// ---------------------------------------------------------------------
+// Fase 2 · Almacén, reservas, compras y carga
+// ---------------------------------------------------------------------
+
+/**
+ * Un sitio del almacén: una estantería, un armario, la furgoneta. El mismo
+ * artículo puede estar en varios, y por eso la existencia se cuenta por
+ * artículo *y* ubicación, no solo por artículo.
+ */
+export interface Ubicacion {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  /**
+   * Una furgoneta con material fijo también es una ubicación. Se marca para
+   * no ofrecerla por defecto al sacar material a obra: cargar la furgoneta es
+   * sacar del almacén, no mover de un estante a otro.
+   */
+  es_furgoneta: boolean;
+  activa: boolean;
+}
+
+/**
+ * `ajuste` es el recuento de inventario y el único que admite cantidad
+ * negativa: contar corrige en los dos sentidos.
+ */
+export type TipoMovimiento = 'entrada' | 'salida' | 'devolucion' | 'baja' | 'ajuste';
+
+export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
+  entrada: 'Entrada',
+  salida: 'Salida',
+  devolucion: 'Devolución',
+  baja: 'Baja',
+  ajuste: 'Ajuste',
+};
+
+/**
+ * Un apunte del almacén. Los movimientos son la verdad: la existencia se
+ * deriva de ellos y no se edita a mano, porque un stock que se sobrescribe
+ * sin dejar rastro vuelve a ser el Excel del que se viene.
+ */
+export interface Movimiento {
+  id: string;
+  articulo_id: string;
+  ubicacion_id: string | null;
+  tipo: TipoMovimiento;
+  /** Siempre positiva salvo en `ajuste`. El signo lo pone el tipo. */
+  cantidad: number;
+  /** Para qué obra. Nulo en una compra de reposición. */
+  sala_id: string | null;
+  motivo: string | null;
+  quien: string | null;
+  fecha: string;
+}
+
+export type EstadoReserva = 'activa' | 'liberada' | 'servida';
+
+export const ETIQUETA_RESERVA: Record<EstadoReserva, string> = {
+  activa: 'Activa',
+  liberada: 'Liberada',
+  servida: 'Servida',
+};
+
+/**
+ * Material comprometido para una sala. Sigue contando como existencia —está
+ * en el estante— pero no está disponible para otra obra.
+ */
+export interface Reserva {
+  id: string;
+  sala_id: string;
+  articulo_id: string;
+  cantidad: number;
+  estado: EstadoReserva;
+  notas: string | null;
+  quien: string | null;
+}
+
+export type EstadoPedido = 'borrador' | 'pedido' | 'recibido_parcial' | 'recibido';
+
+export const ETIQUETA_PEDIDO: Record<EstadoPedido, string> = {
+  borrador: 'Borrador',
+  pedido: 'Pedido',
+  recibido_parcial: 'Recibido parcial',
+  recibido: 'Recibido',
+};
+
+export interface Pedido {
+  id: string;
+  proveedor_id: string | null;
+  proveedor: string | null;
+  sala_id: string | null;
+  sala: string | null;
+  referencia: string | null;
+  estado: EstadoPedido;
+  fecha: string | null;
+  notas: string | null;
+}
+
+export interface LineaPedido {
+  id: string;
+  pedido_id: string;
+  articulo_id: string;
+  descripcion: string;
+  unidad: UnidadMedida;
+  cantidad: number;
+  cantidad_recibida: number;
+  /** Congelado al generar la línea: el catálogo cambia y el pedido no. */
+  precio_unitario: number | null;
+  /** Se puede presupuestar con él; no se puede pedir. */
+  precio_orientativo: boolean;
+  notas: string | null;
+}
+
+export type EstadoCarga = 'preparacion' | 'cargada' | 'cerrada';
+
+export const ETIQUETA_CARGA: Record<EstadoCarga, string> = {
+  preparacion: 'En preparación',
+  cargada: 'Cargada',
+  cerrada: 'Cerrada',
+};
+
+export interface Carga {
+  id: string;
+  sala_id: string;
+  sala: string | null;
+  nombre: string;
+  estado: EstadoCarga;
+  quien: string | null;
+  notas: string | null;
+  cerrado_en: string | null;
+}
+
+export interface LineaCarga {
+  id: string;
+  carga_id: string;
+  articulo_id: string;
+  descripcion: string;
+  unidad: UnidadMedida;
+  reserva_id: string | null;
+  cantidad: number;
+  cargado: boolean;
+  /** Cierre de obra. Entre los tres no pueden pasar de `cantidad`. */
+  instalado: number;
+  devuelto: number;
+  roto: number;
+  notas: string | null;
+}

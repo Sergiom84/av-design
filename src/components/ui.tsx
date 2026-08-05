@@ -88,18 +88,14 @@ export function Boton({
   tipo?: 'submit' | 'button';
   variante?: 'principal' | 'secundario' | 'peligro';
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const estilo =
-    variante === 'principal'
-      ? 'bg-acento text-papel border-acento hover:opacity-90'
-      : variante === 'peligro'
-        ? 'bg-papel text-alerta border-linea-fuerte hover:border-alerta'
-        : 'bg-papel text-tinta border-linea-fuerte hover:border-tinta';
+  // Las clases están en globals.css: el secundario es la base y las otras dos
+  // son modificadores. Ver el comentario de `.boton`.
+  const clases = ['boton'];
+  if (variante !== 'secundario') clases.push(`boton-${variante}`);
+  if (resto.className) clases.push(resto.className);
+
   return (
-    <button
-      {...resto}
-      type={tipo}
-      className={`border rounded-[2px] px-3 py-1.5 transition-colors ${estilo} ${resto.className ?? ''}`}
-    >
+    <button {...resto} type={tipo} className={clases.join(' ')}>
       {children}
     </button>
   );
@@ -107,7 +103,7 @@ export function Boton({
 
 export function Enlace({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="text-acento underline underline-offset-2 hover:opacity-80">
+    <Link href={href} className="enlace">
       {children}
     </Link>
   );

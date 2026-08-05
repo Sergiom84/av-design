@@ -110,6 +110,52 @@ table.datos tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Botones.
+   El estilo vive aquí y no en una ristra de utilidades repetida en cada
+   botón: /plantillas pinta cientos y cada uno costaba 110 bytes de HTML —y
+   otros tantos en la carga que acompaña a la página. */
+.boton {
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 2px;
+  padding: 0.375rem 0.75rem;
+  background: var(--papel);
+  color: var(--tinta);
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.boton:hover {
+  border-color: var(--tinta);
+}
+
+.boton-principal {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--papel);
+}
+
+.boton-principal:hover {
+  border-color: var(--acento);
+  opacity: 0.9;
+}
+
+.boton-peligro {
+  color: var(--alerta);
+}
+
+.boton-peligro:hover {
+  border-color: var(--alerta);
+}
+
+.enlace {
+  color: var(--acento);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.enlace:hover {
+  opacity: 0.8;
+}
+
 /* Controles */
 input,
 select,

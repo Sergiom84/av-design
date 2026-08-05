@@ -43,17 +43,23 @@ de romperse.
 npm run dev
 ```
 
-### Migrar a Supabase más adelante
+### Cambiar de base de datos
 
-Supabase también es Postgres, así que basta con:
+La aplicación solo necesita una cadena de conexión a Postgres. En producción usa
+Neon; para cambiar de proveedor:
 
-1. Cambiar `DATABASE_URL` por la cadena de conexión del proyecto.
-2. Aplicar `db/schema.sql` y `db/seed.sql` en su SQL Editor.
-3. Aplicar `db/politicas-supabase.sql`, que añade la tabla de perfiles, el alta
-   automática de usuarios y las políticas RLS por rol (TEI, AV, técnico).
+1. Cambiar `DATABASE_URL` por la cadena de conexión del nuevo Postgres.
+2. Aplicar `db/schema.sql` y `db/seed.sql`. Desde Windows, sin cliente `psql`
+   instalado, vale el contenedor:
 
-Ese fichero no se aplica en local porque depende del esquema `auth`, que solo
-existe en Supabase.
+```bash
+docker run --rm -e PGURL="<cadena>" -v "$PWD/db:/db:ro" postgres:17-alpine sh -c 'psql "$PGURL" -v ON_ERROR_STOP=1 -f /db/schema.sql -f /db/seed.sql'
+```
+
+Si el destino es Supabase, se aplica además `db/politicas-supabase.sql`, que
+añade la tabla de perfiles, el alta automática de usuarios y las políticas RLS
+por rol (TEI, AV, técnico). Ese fichero no se aplica en local ni en Neon porque
+depende del esquema `auth`, que solo existe en Supabase.
 
 ---
 

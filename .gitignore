@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# La plantilla sí se publica: el README manda copiarla, y sin ella un clon
+# limpio no arranca. No lleva ningún valor real.
+!.env.example
 
 # vercel
 .vercel

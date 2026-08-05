@@ -47,10 +47,18 @@ Next.js 16 (App Router) · TypeScript · Tailwind 4 · Postgres · despliegue en
 Render desde GitHub.
 
 La base de datos es **Postgres en Docker** durante el desarrollo
-(`docker-compose.yml`). Se migrará a Supabase cuando el proyecto esté maduro:
-como Supabase también es Postgres, basta con cambiar `DATABASE_URL` y aplicar
-además `db/politicas-supabase.sql`. El acceso a datos usa `postgres.js`
-(`src/lib/db.ts`), sin SDK de Supabase.
+(`docker-compose.yml`) y **Postgres en Neon** en producción. El acceso a datos
+usa `postgres.js` (`src/lib/db.ts`), así que el proveedor da igual mientras sea
+Postgres: cambiar de uno a otro es cambiar `DATABASE_URL` y aplicar
+`db/schema.sql` y `db/seed.sql`. Si algún día se va a Supabase, se aplica
+además `db/politicas-supabase.sql`; nunca se usa su SDK.
+
+La conexión se abre en la primera consulta, no al cargar el módulo: `next build`
+importa todas las páginas para recoger su configuración, y compilar no puede
+exigir una base de datos.
+
+En producción está en <https://av-design.onrender.com>, en el workspace
+**Av Weekly** de Render, con despliegue automático desde `main`.
 
 ## Reglas del proyecto
 

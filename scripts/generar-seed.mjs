@@ -10,6 +10,13 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  claveModelo,
+  normalizarMarca,
+  normalizarModelo,
+  normalizarSeccion,
+  normalizarTexto,
+} from './normalizacion.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const data = (f) => join(raiz, 'data', f);
@@ -39,16 +46,6 @@ const arr = (v) => {
   return partes.length ? `array[${partes.join(',')}]::numeric[]` : 'null';
 };
 
-/** Normaliza acentos y espacios para agrupar categorías escritas de varias formas. */
-function normalizarCategoria(s) {
-  return String(s || 'SIN CATEGORIA')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-}
-
 const SENALES = new Set([
   'hdmi', 'red', 'usb', 'audio_linea', 'audio_altavoz',
   'microfono', 'alimentacion', 'control', 'otro',
@@ -61,20 +58,36 @@ const equipos = leerCsv(data('catalogo-equipos.csv'))
   .filter((r) => r.modelo && r.modelo !== 'N/A')
   .map((r) => ({
     tipo: 'equipo',
-    categoria: normalizarCategoria(r.categoria),
-    marca: r.marca || null,
-    modelo: r.modelo,
+    categoria: normalizarSeccion(r.categoria),
+    marca: normalizarMarca(r.marca),
+    modelo: normalizarModelo(r.marca, r.modelo),
+    clave: claveModelo(r.marca, r.modelo),
     unidad: 'ud',
-    unidades_instaladas: Number(r.unidades_instaladas) || null,
+    unidades_instaladas: Number(r.unidades_instaladas) || 0,
   }));
 
-// La misma marca+modelo puede venir con la categoría escrita de dos formas.
-const equiposUnicos = new Map();
+// El inventario escribe la misma cosa de varias formas. Se funden por marca y
+// modelo (ver scripts/normalizacion.mjs) y se queda la sección del que más
+// unidades tiene, sumando el total.
+const porClave = new Map();
 for (const e of equipos) {
-  const clave = `${e.marca ?? ''}|${e.modelo}|${e.categoria}`;
-  const previo = equiposUnicos.get(clave);
-  if (previo) previo.unidades_instaladas += e.unidades_instaladas ?? 0;
-  else equiposUnicos.set(clave, { ...e });
+  const clave = `${e.marca ?? ''}|${e.clave}`;
+  const lista = porClave.get(clave) ?? [];
+  lista.push(e);
+  porClave.set(clave, lista);
+}
+
+const equiposUnicos = new Map();
+for (const [clave, lista] of porClave) {
+  const orden = [...lista].sort(
+    (a, b) => b.unidades_instaladas - a.unidades_instaladas ||
+      a.modelo.localeCompare(b.modelo),
+  );
+  equiposUnicos.set(clave, {
+    ...orden[0],
+    unidades_instaladas:
+      orden.reduce((s, e) => s + e.unidades_instaladas, 0) || null,
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -82,9 +95,9 @@ for (const e of equipos) {
 // --------------------------------------------------------------------------
 const cables = leerCsv(data('catalogo-cable.csv')).map((r) => ({
   tipo: r.tipo,
-  categoria: normalizarCategoria(r.categoria),
-  marca: r.marca || null,
-  modelo: r.modelo,
+  categoria: normalizarSeccion(r.categoria),
+  marca: normalizarMarca(r.marca),
+  modelo: normalizarTexto(r.modelo),
   descripcion: r.descripcion || null,
   unidad: r.unidad === 'm' ? 'm' : 'ud',
   senal: SENALES.has(r.senal) ? r.senal : null,
@@ -116,12 +129,25 @@ for (const r of filasPlantilla) {
       lineas: [],
     });
   }
+  // "CISCO CISCO ROOM NAVIGATOR" del inventario -> "CISCO ROOM NAVIGATOR",
+  // que es como queda el artículo en el catálogo ya limpio.
+  const dominante = r.modelo_dominante || '';
+  const corte = dominante.indexOf(' ');
+  const marcaDom = corte > 0 ? dominante.slice(0, corte) : '';
+  const modeloDom = corte > 0 ? dominante.slice(corte + 1) : dominante;
+  const textoDominante = dominante
+    ? [normalizarMarca(marcaDom), normalizarModelo(marcaDom, modeloDom)]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+    : null;
+
   plantillas.get(nombre).lineas.push({
-    categoria: normalizarCategoria(r.categoria_equipo),
+    categoria: normalizarSeccion(r.categoria_equipo),
     cantidad: Math.max(1, Math.round(Number(String(r.cantidad_media).replace(',', '.')) || 1)),
     // por debajo de 0,8 de media el equipo no está en todas las salas
     opcional: Number(String(r.cantidad_media).replace(',', '.')) < 0.8,
-    modelo_texto: r.modelo_dominante || null,
+    modelo_texto: textoDominante,
   });
 }
 
@@ -200,14 +226,30 @@ for (const p of plantillas.values()) {
       `${txt('Deducida del inventario 2026. Faltan las medidas: rellenar largo, ancho y alto.')}) ` +
       `on conflict (nombre) do update set n_salas_reales = excluded.n_salas_reales;`,
   );
-  for (const l of p.lineas) {
+  // Todas las líneas en una sola sentencia: si fueran una por una, la primera
+  // dejaría de cumplirse la condición de "plantilla vacía" y el resto no
+  // entraría. Así se siembra entera o no se siembra.
+  if (p.lineas.length) {
+    const valores = p.lineas
+      .map(
+        (l) =>
+          `(${txt(l.categoria)}, ${txt(l.modelo_texto)}, ${l.cantidad}::numeric, ${l.opcional})`,
+      )
+      .join(', ');
     sql.push(
-      `insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional) ` +
-        `select id, ${txt(l.categoria)}, ${txt(l.modelo_texto)}, ${l.cantidad}, ${l.opcional} ` +
-        `from plantillas_sala where nombre = ${txt(p.nombre)} ` +
+      `insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional)
+` +
+        `select ps.id, v.categoria, v.modelo_texto, v.cantidad, v.opcional
+` +
+        `from plantillas_sala ps
+` +
+        `cross join (values ${valores}) as v(categoria, modelo_texto, cantidad, opcional)
+` +
+        `where ps.nombre = ${txt(p.nombre)}
+` +
         // Solo siembra si la plantilla está vacía: así no se pisan las
         // ediciones que haya hecho el departamento desde la aplicación.
-        `and not exists (select 1 from plantilla_articulos pa where pa.plantilla_id = plantillas_sala.id);`,
+        `  and not exists (select 1 from plantilla_articulos pa where pa.plantilla_id = ps.id);`,
     );
   }
   sql.push('');

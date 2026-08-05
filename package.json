@@ -14,7 +14,8 @@
     "db:down": "docker compose down",
     "db:migrate": "node scripts/db.mjs db/schema.sql",
     "db:seed": "node scripts/db.mjs db/seed.sql",
-    "db:reset": "npm run db:up && npm run db:migrate && npm run db:seed"
+    "db:reset": "npm run db:up && npm run db:migrate && npm run db:seed",
+    "catalogo:normalizar": "node scripts/normalizar-catalogo.mjs"
   },
   "dependencies": {
     "next": "16.3.0",

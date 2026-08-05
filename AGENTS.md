@@ -77,3 +77,18 @@ está en `docs/03-datos-reales.md`.
 
 `Inicio/` es un volcado local de la web de XTEN-AV que sirvió de referencia. No
 se publica en el repositorio.
+
+## Limpieza del catálogo
+
+El inventario de partida trae la misma cosa escrita de varias formas. Las reglas
+que lo unifican están en `scripts/normalizacion.mjs` y las usan tanto la siembra
+(`npm run seed`) como la limpieza de una base ya sembrada
+(`npm run catalogo:normalizar -- --aplicar`).
+
+- Solo se unifica lo inequívoco. Las variantes reales de producto (QB65R y
+  QB65R-B, TCM-X y TCM-XEX, K400 y K400+) no se tocan.
+- Las erratas se corrigen una a una en `ERRATAS` y `MARCAS`, nunca por parecido.
+- Cuando un modelo aparece en varias secciones se queda con la que más unidades
+  tiene, y el informe marca los casos ajustados para revisarlos a mano.
+
+El informe de la primera pasada está en `docs/04-limpieza-catalogo.md`.

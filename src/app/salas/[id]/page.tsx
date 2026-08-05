@@ -4,6 +4,7 @@ import { listarArticulos, obtenerParametros, obtenerSala } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Cabecera, Campo, Dato, Tarjeta, Vacio } from '@/components/ui';
 import {
+  ajustarCantidadEquipo,
   anadirConexion,
   anadirEquipo,
   borrarConexion,
@@ -22,7 +23,6 @@ import {
   ETIQUETA_EXTREMO,
   ETIQUETA_RUTA,
   ETIQUETA_SENAL,
-  Extremo,
   Ruta,
   Senal,
 } from '@/lib/tipos';
@@ -45,6 +45,15 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
   const porId = new Map(articulos.map((a) => [a.id, a]));
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
   const cables = articulos.filter((a) => a.tipo === 'cable');
+
+  // El desplegable de equipos se agrupa por sección: con más de mil referencias
+  // una lista plana es inmanejable.
+  const porSeccion = new Map<string, typeof articulos>();
+  for (const a of articulos.filter((x) => x.tipo === 'equipo')) {
+    const lista = porSeccion.get(a.categoria) ?? [];
+    lista.push(a);
+    porSeccion.set(a.categoria, lista);
+  }
 
   const sinMedidas = !sala.largo_m || !sala.ancho_m || !sala.alto_m;
 
@@ -325,6 +334,7 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
               <table className="datos">
                 <thead>
                   <tr>
+                    <th className="num">Cantidad</th>
                     <th>Equipo</th>
                     <th>Extremo</th>
                     <th className="num">X</th>
@@ -336,13 +346,35 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
                 <tbody>
                   {equipos.map((e) => (
                     <tr key={e.id}>
-                      <td colSpan={6} className="p-0">
+                      <td className="num whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <form action={ajustarCantidadEquipo} className="inline">
+                            <input type="hidden" name="id" value={e.id} />
+                            <input type="hidden" name="sala_id" value={sala.id} />
+                            <input type="hidden" name="paso" value="-1" />
+                            <Boton variante="secundario" aria-label="Quitar una unidad">
+                              −
+                            </Boton>
+                          </form>
+                          <span className="w-8 text-center tabular-nums">{e.cantidad}</span>
+                          <form action={ajustarCantidadEquipo} className="inline">
+                            <input type="hidden" name="id" value={e.id} />
+                            <input type="hidden" name="sala_id" value={sala.id} />
+                            <input type="hidden" name="paso" value="1" />
+                            <Boton variante="secundario" aria-label="Añadir una unidad">
+                              +
+                            </Boton>
+                          </form>
+                        </span>
+                      </td>
+                      <td colSpan={5} className="p-0">
                         <form
                           action={guardarEquipo}
                           className="flex flex-wrap items-end gap-2 px-3 py-2"
                         >
                           <input type="hidden" name="id" value={e.id} />
                           <input type="hidden" name="sala_id" value={sala.id} />
+                          <input type="hidden" name="cantidad" value={e.cantidad} />
                           <input
                             name="nombre"
                             defaultValue={e.nombre}
@@ -374,6 +406,13 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
                           <Boton variante="secundario">Guardar</Boton>
                         </form>
                       </td>
+                      <td>
+                        <form action={borrarEquipo}>
+                          <input type="hidden" name="id" value={e.id} />
+                          <input type="hidden" name="sala_id" value={sala.id} />
+                          <Boton variante="peligro">Quitar</Boton>
+                        </form>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -386,16 +425,17 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
             >
               <input type="hidden" name="sala_id" value={sala.id} />
               <Campo etiqueta="Del catálogo">
-                <select name="articulo_id" className="min-w-[16rem]" defaultValue="">
+                <select name="articulo_id" className="min-w-[20rem]" defaultValue="">
                   <option value="">— elegir equipo —</option>
-                  {articulos
-                    .filter((a) => a.tipo === 'equipo')
-                    .slice(0, 300)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {[a.marca, a.modelo].filter(Boolean).join(' ')} · {a.categoria}
-                      </option>
-                    ))}
+                  {[...porSeccion.entries()].map(([seccion, lista]) => (
+                    <optgroup key={seccion} label={seccion}>
+                      {lista.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {[a.marca, a.modelo].filter(Boolean).join(' ')}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </Campo>
               <Campo etiqueta="Extremo">
@@ -528,21 +568,7 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
             </form>
           </Tarjeta>
 
-          {equipos.length > 0 && (
-            <Tarjeta titulo="Quitar equipos">
-              <div className="flex flex-wrap gap-2">
-                {equipos.map((e) => (
-                  <form key={e.id} action={borrarEquipo}>
-                    <input type="hidden" name="id" value={e.id} />
-                    <input type="hidden" name="sala_id" value={sala.id} />
-                    <Boton variante="peligro">
-                      {e.nombre} · {ETIQUETA_EXTREMO[e.extremo as Extremo]}
-                    </Boton>
-                  </form>
-                ))}
-              </div>
-            </Tarjeta>
-          )}
+          
         </div>
       </div>
     </>

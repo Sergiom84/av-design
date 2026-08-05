@@ -65,6 +65,8 @@ const HDMI: Articulo = {
   marca: null,
   modelo: 'HDMI 2.0 4K60 4:4:4',
   descripcion: null,
+  caracteristicas: null,
+  observaciones: null,
   unidad: 'ud',
   coste: 12,
   pvp: null,

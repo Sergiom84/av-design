@@ -207,3 +207,17 @@ end $$;
 drop trigger if exists salas_actualizado on salas;
 create trigger salas_actualizado before update on salas
   for each row execute function tocar_actualizado_en();
+
+-- ---------------------------------------------------------------------
+-- Ampliaciones posteriores (idempotentes)
+-- ---------------------------------------------------------------------
+
+-- Ficha de catálogo: lo que Sergio quiere poder rellenar por artículo.
+alter table articulos add column if not exists caracteristicas text;
+alter table articulos add column if not exists observaciones  text;
+
+-- Una plantilla puede llevar dos artículos de la misma categoría
+-- (por ejemplo dos pantallas distintas), así que la clave única sobra.
+alter table plantilla_articulos drop constraint if exists plantilla_articulos_plantilla_id_categoria_key;
+create index if not exists plantilla_articulos_plantilla_idx
+  on plantilla_articulos (plantilla_id);

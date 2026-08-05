@@ -25,6 +25,8 @@ function aArticulo(f: Fila): Articulo {
     marca: s(f.marca),
     modelo: String(f.modelo),
     descripcion: s(f.descripcion),
+    caracteristicas: s(f.caracteristicas),
+    observaciones: s(f.observaciones),
     unidad: (f.unidad as Articulo['unidad']) ?? 'ud',
     coste: n(f.coste),
     pvp: n(f.pvp),
@@ -83,7 +85,115 @@ export async function listarArticulos(tipo?: Articulo['tipo']): Promise<Articulo
   return filas.map(aArticulo);
 }
 
+/** Etiqueta con la que se agrupan los artículos sin marca en el catálogo. */
+export const SIN_MARCA = 'Genérico';
+
+export interface Marca {
+  marca: string;
+  referencias: number;
+  categorias: number;
+  unidades_instaladas: number;
+  tipos: string[];
+}
+
+export async function listarMarcas(): Promise<Marca[]> {
+  const filas = await sql<Fila[]>`
+    select coalesce(nullif(marca, ''), ${SIN_MARCA}) as marca,
+           count(*)                                  as referencias,
+           count(distinct categoria)                 as categorias,
+           coalesce(sum(unidades_instaladas), 0)     as unidades_instaladas,
+           array_agg(distinct tipo::text)            as tipos
+    from articulos
+    where activo
+    group by 1
+    order by unidades_instaladas desc, referencias desc, marca`;
+  return filas.map((f) => ({
+    marca: String(f.marca),
+    referencias: Number(f.referencias),
+    categorias: Number(f.categorias),
+    unidades_instaladas: Number(f.unidades_instaladas),
+    tipos: (f.tipos as string[]) ?? [],
+  }));
+}
+
+export interface CategoriaDeMarca {
+  categoria: string;
+  referencias: number;
+  unidades_instaladas: number;
+}
+
+export async function listarCategoriasDeMarca(
+  marca: string,
+): Promise<CategoriaDeMarca[]> {
+  const filas = await sql<Fila[]>`
+    select categoria,
+           count(*)                              as referencias,
+           coalesce(sum(unidades_instaladas), 0) as unidades_instaladas
+    from articulos
+    where activo and coalesce(nullif(marca, ''), ${SIN_MARCA}) = ${marca}
+    group by categoria
+    order by unidades_instaladas desc, categoria`;
+  return filas.map((f) => ({
+    categoria: String(f.categoria),
+    referencias: Number(f.referencias),
+    unidades_instaladas: Number(f.unidades_instaladas),
+  }));
+}
+
+export async function listarArticulosDeMarca(
+  marca: string,
+  categoria?: string,
+): Promise<Articulo[]> {
+  const filas = categoria
+    ? await sql<Fila[]>`
+        select a.*, p.nombre as proveedor
+        from articulos a
+        left join proveedores p on p.id = a.proveedor_id
+        where a.activo
+          and coalesce(nullif(a.marca, ''), ${SIN_MARCA}) = ${marca}
+          and a.categoria = ${categoria}
+        order by a.unidades_instaladas desc nulls last, a.modelo`
+    : await sql<Fila[]>`
+        select a.*, p.nombre as proveedor
+        from articulos a
+        left join proveedores p on p.id = a.proveedor_id
+        where a.activo and coalesce(nullif(a.marca, ''), ${SIN_MARCA}) = ${marca}
+        order by a.categoria, a.unidades_instaladas desc nulls last, a.modelo`;
+  return filas.map(aArticulo);
+}
+
+export async function obtenerArticulo(id: string): Promise<Articulo | null> {
+  const [f] = await sql<Fila[]>`
+    select a.*, p.nombre as proveedor
+    from articulos a
+    left join proveedores p on p.id = a.proveedor_id
+    where a.id = ${id}`;
+  return f ? aArticulo(f) : null;
+}
+
+/** Dónde se usa un artículo: plantillas y salas. Evita borrar algo en uso. */
+export async function usosDeArticulo(id: string) {
+  const [f] = await sql<Fila[]>`
+    select
+      (select count(*) from plantilla_articulos where articulo_id = ${id}) as plantillas,
+      (select count(*) from sala_equipos        where articulo_id = ${id}) as salas,
+      (select count(*) from conexiones          where articulo_cable_id = ${id}) as conexiones`;
+  return {
+    plantillas: Number(f.plantillas),
+    salas: Number(f.salas),
+    conexiones: Number(f.conexiones),
+  };
+}
+
+export async function listarCategorias(): Promise<string[]> {
+  const filas = await sql<Fila[]>`
+    select distinct categoria from articulos where activo order by categoria`;
+  return filas.map((f) => String(f.categoria));
+}
+
 export interface LineaPlantilla {
+  id: string;
+  articulo_id: string | null;
   categoria: string;
   cantidad: number;
   opcional: boolean;
@@ -98,6 +208,8 @@ export async function listarPlantillas(): Promise<
            coalesce(
              json_agg(
                json_build_object(
+                 'id', pa.id,
+                 'articulo_id', pa.articulo_id,
                  'categoria', pa.categoria,
                  'cantidad', pa.cantidad,
                  'opcional', pa.opcional,
@@ -126,6 +238,8 @@ export async function listarPlantillas(): Promise<
       (f.ruta_por_defecto as PlantillaSala['ruta_por_defecto']) ?? 'falso_techo',
     notas: s(f.notas),
     lineas: (f.lineas as LineaPlantilla[]).map((l) => ({
+      id: String(l.id),
+      articulo_id: l.articulo_id ?? null,
       categoria: String(l.categoria),
       cantidad: Number(l.cantidad),
       opcional: Boolean(l.opcional),

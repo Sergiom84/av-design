@@ -205,8 +205,9 @@ for (const p of plantillas.values()) {
       `insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional) ` +
         `select id, ${txt(l.categoria)}, ${txt(l.modelo_texto)}, ${l.cantidad}, ${l.opcional} ` +
         `from plantillas_sala where nombre = ${txt(p.nombre)} ` +
-        `on conflict (plantilla_id, categoria) do update set ` +
-        `modelo_texto = excluded.modelo_texto, cantidad = excluded.cantidad, opcional = excluded.opcional;`,
+        // Solo siembra si la plantilla está vacía: así no se pisan las
+        // ediciones que haya hecho el departamento desde la aplicación.
+        `and not exists (select 1 from plantilla_articulos pa where pa.plantilla_id = plantillas_sala.id);`,
     );
   }
   sql.push('');

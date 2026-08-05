@@ -59,12 +59,31 @@ existe en Supabase.
 
 ## Cómo se usa
 
+### Catálogo
+
+Navegable por marca, como una base de datos de equipamiento:
+
+```
+Catálogo → CISCO → PANEL TACTIL   → Room Navigator, Touch 10…
+                 → MICROFONO      → Table Microphone mini jack v1, v2…
+                 → VIDEOCONFERENCIA → Spark Room Kit, Webex Room Bar Pro…
+```
+
+Cada modelo tiene su ficha con **precio de coste y PVP, proveedor, plazo,
+características (ficha técnica) y observaciones** del departamento. Cable y
+consumibles llevan además señal, conectores, diámetro, longitudes comerciales y
+metros por bobina.
+
+### Diseño de sala
+
 1. **Plantillas** — rellenas una sola vez las medidas de cada tipología
    (`SALA TP · aforo 8`, `ULTRALIGERA QR · aforo 4`…). Las plantillas y su
    equipamiento salen de vuestro inventario: la primera representa 144 salas
-   reales.
-2. **Salas** — creas una sala desde su plantilla. Hereda medidas y equipamiento;
-   corriges solo lo que cambie.
+   reales. El equipamiento se edita: sumar, restar, añadir del catálogo y
+   quitar.
+2. **Salas** — creas una sala desde su plantilla, o desde cero sin plantilla.
+   Si viene de plantilla hereda medidas y equipamiento, y corriges solo lo que
+   cambie. En ambos casos puedes sumar, restar, añadir y quitar equipos.
 3. **Equipos y conexiones** — colocas cada equipo con su posición en la sala y
    defines qué conecta con qué.
 4. **Resultado** — metros por tirada, desglosados en subida, recorrido

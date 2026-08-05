@@ -83,6 +83,10 @@ export interface Articulo {
   marca: string | null;
   modelo: string;
   descripcion: string | null;
+  /** Ficha técnica en texto libre: potencia, resolución, puertos, montaje… */
+  caracteristicas: string | null;
+  /** Notas del departamento: incidencias, compatibilidades, qué vigilar. */
+  observaciones: string | null;
   unidad: UnidadMedida;
   coste: number | null;
   pvp: number | null;

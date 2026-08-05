@@ -160,11 +160,23 @@ export async function guardarEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   await sql`
     update sala_equipos set
-      nombre  = ${texto(datos.get('nombre')) ?? 'Equipo'},
-      extremo = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
-      x_m     = ${numero(datos.get('x_m')) ?? 0},
-      y_m     = ${numero(datos.get('y_m')) ?? 0},
-      z_m     = ${numero(datos.get('z_m')) ?? 0}
+      nombre   = ${texto(datos.get('nombre')) ?? 'Equipo'},
+      cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
+      extremo  = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
+      x_m      = ${numero(datos.get('x_m')) ?? 0},
+      y_m      = ${numero(datos.get('y_m')) ?? 0},
+      z_m      = ${numero(datos.get('z_m')) ?? 0}
+    where id = ${String(datos.get('id'))}`;
+  revalidatePath(`/salas/${salaId}`);
+}
+
+/** Suma o resta unidades de un equipo sin abrir el formulario completo. */
+export async function ajustarCantidadEquipo(datos: FormData) {
+  const salaId = String(datos.get('sala_id'));
+  const paso = Number(datos.get('paso')) || 1;
+  await sql`
+    update sala_equipos
+    set cantidad = greatest(1, cantidad + ${paso})
     where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
@@ -221,4 +233,128 @@ export async function guardarPrecioArticulo(datos: FormData) {
     where id = ${String(datos.get('id'))}`;
   revalidatePath('/catalogo');
   revalidatePath('/');
+}
+
+
+// ------------------------------------------- equipamiento de las plantillas
+export async function anadirLineaPlantilla(datos: FormData) {
+  const plantillaId = String(datos.get('plantilla_id'));
+  const articuloId = texto(datos.get('articulo_id'));
+  if (!articuloId) return;
+
+  const [a] = await sql<Array<{ marca: string | null; modelo: string; categoria: string }>>`
+    select marca, modelo, categoria from articulos where id = ${articuloId}`;
+  if (!a) return;
+
+  await sql`
+    insert into plantilla_articulos (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional)
+    values (${plantillaId}, ${articuloId}, ${a.categoria},
+            ${`${a.marca ?? ''} ${a.modelo}`.trim()},
+            ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
+            ${datos.get('opcional') === 'on'})`;
+  revalidatePath('/plantillas');
+}
+
+export async function guardarLineaPlantilla(datos: FormData) {
+  await sql`
+    update plantilla_articulos set
+      cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
+      opcional = ${datos.get('opcional') === 'on'}
+    where id = ${String(datos.get('id'))}`;
+  revalidatePath('/plantillas');
+}
+
+/** Suma o resta unidades de una línea de plantilla. */
+export async function ajustarLineaPlantilla(datos: FormData) {
+  const paso = Number(datos.get('paso')) || 1;
+  await sql`
+    update plantilla_articulos
+    set cantidad = greatest(1, cantidad + ${paso})
+    where id = ${String(datos.get('id'))}`;
+  revalidatePath('/plantillas');
+}
+
+export async function borrarLineaPlantilla(datos: FormData) {
+  await sql`delete from plantilla_articulos where id = ${String(datos.get('id'))}`;
+  revalidatePath('/plantillas');
+}
+
+// ------------------------------------------------------- ficha de catálogo
+function longitudes(v: FormDataEntryValue | null): number[] | null {
+  const s = texto(v);
+  if (!s) return null;
+  const partes = s
+    .split(/[,;/|\s]+/)
+    .map((x) => Number(x.replace(',', '.')))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return partes.length ? partes : null;
+}
+
+async function proveedorId(nombre: string | null): Promise<string | null> {
+  if (!nombre) return null;
+  const [p] = await sql<Array<{ id: string }>>`
+    insert into proveedores (nombre) values (${nombre})
+    on conflict (nombre) do update set nombre = excluded.nombre
+    returning id`;
+  return p.id;
+}
+
+export async function guardarArticulo(datos: FormData) {
+  const id = String(datos.get('id'));
+  const idProveedor = await proveedorId(texto(datos.get('proveedor')));
+
+  await sql`
+    update articulos set
+      marca                    = ${texto(datos.get('marca'))},
+      modelo                   = ${texto(datos.get('modelo')) ?? 'Sin modelo'},
+      categoria                = ${(texto(datos.get('categoria')) ?? 'SIN CATEGORIA').toUpperCase()},
+      descripcion              = ${texto(datos.get('descripcion'))},
+      caracteristicas          = ${texto(datos.get('caracteristicas'))},
+      observaciones            = ${texto(datos.get('observaciones'))},
+      coste                    = ${numero(datos.get('coste'))},
+      pvp                      = ${numero(datos.get('pvp'))},
+      proveedor_id             = ${idProveedor},
+      plazo_dias               = ${numero(datos.get('plazo_dias'))},
+      stock_minimo             = ${numero(datos.get('stock_minimo'))},
+      unidad                   = ${texto(datos.get('unidad')) ?? 'ud'}::unidad_medida,
+      senal                    = ${texto(datos.get('senal'))}::senal,
+      conector_a               = ${texto(datos.get('conector_a'))},
+      conector_b               = ${texto(datos.get('conector_b'))},
+      longitudes_comerciales_m = ${longitudes(datos.get('longitudes_comerciales_m'))},
+      bobina_m                 = ${numero(datos.get('bobina_m'))},
+      diametro_mm              = ${numero(datos.get('diametro_mm'))}
+    where id = ${id}`;
+
+  revalidatePath(`/articulo/${id}`);
+  revalidatePath('/catalogo');
+  revalidatePath('/');
+}
+
+export async function crearArticulo(datos: FormData) {
+  const idProveedor = await proveedorId(texto(datos.get('proveedor')));
+  const [a] = await sql<Array<{ id: string }>>`
+    insert into articulos ${sql({
+      tipo: texto(datos.get('tipo')) ?? 'equipo',
+      marca: texto(datos.get('marca')),
+      modelo: texto(datos.get('modelo')) ?? 'Sin modelo',
+      categoria: (texto(datos.get('categoria')) ?? 'SIN CATEGORIA').toUpperCase(),
+      descripcion: texto(datos.get('descripcion')),
+      caracteristicas: texto(datos.get('caracteristicas')),
+      observaciones: texto(datos.get('observaciones')),
+      unidad: texto(datos.get('unidad')) ?? 'ud',
+      coste: numero(datos.get('coste')),
+      pvp: numero(datos.get('pvp')),
+      proveedor_id: idProveedor,
+    })}
+    returning id`;
+
+  revalidatePath('/catalogo');
+  redirect(`/articulo/${a.id}`);
+}
+
+/** No se borra: se desactiva, para no romper las salas que ya lo usan. */
+export async function desactivarArticulo(datos: FormData) {
+  await sql`update articulos set activo = false where id = ${String(datos.get('id'))}`;
+  revalidatePath('/catalogo');
+  redirect('/catalogo');
 }

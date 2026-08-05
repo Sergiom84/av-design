@@ -46,3 +46,6 @@ next-env.d.ts
 # Inventarios reales: contienen IPs, MAC y numeros de serie de la red corporativa.
 # Se quedan en local; lo que se publica son los CSV derivados, ya sin esos datos.
 /docs/*.xlsx
+
+# ficheros de trabajo: volcados, informes intermedios, copias de la base
+/.tmp/

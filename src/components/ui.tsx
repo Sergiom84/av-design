@@ -35,7 +35,8 @@ export function Tarjeta({
       {titulo && (
         <h2 className="t-subtitulo px-4 py-3 border-b border-linea">{titulo}</h2>
       )}
-      <div className="p-4">{children}</div>
+      {/* overflow-x-auto: en móvil las tablas de datos son más anchas que la pantalla */}
+      <div className="p-4 overflow-x-auto">{children}</div>
       {pie && <div className="px-4 py-3 border-t border-linea text-tinta-tenue">{pie}</div>}
     </section>
   );

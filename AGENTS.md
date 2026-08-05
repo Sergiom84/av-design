@@ -31,8 +31,14 @@ conexiones con React Flow (3), documentos para cliente (4).
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind 4 · Supabase (Postgres, Auth,
-RLS) · despliegue en Render desde GitHub.
+Next.js 16 (App Router) · TypeScript · Tailwind 4 · Postgres · despliegue en
+Render desde GitHub.
+
+La base de datos es **Postgres en Docker** durante el desarrollo
+(`docker-compose.yml`). Se migrará a Supabase cuando el proyecto esté maduro:
+como Supabase también es Postgres, basta con cambiar `DATABASE_URL` y aplicar
+además `db/politicas-supabase.sql`. El acceso a datos usa `postgres.js`
+(`src/lib/db.ts`), sin SDK de Supabase.
 
 ## Reglas del proyecto
 
@@ -43,12 +49,11 @@ RLS) · despliegue en Render desde GitHub.
   `src/lib/calculo-cable.ts` y no toca la base de datos. Cualquier cambio en la
   fórmula pasa antes por `src/lib/calculo-cable.test.ts`.
 - **Los CSV de `data/` son la fuente editable del catálogo.** Se corrigen en
-  Excel y se regenera con `npm run seed`. Nunca se edita `supabase/seed.sql` a
-  mano.
+  Excel y se regenera con `npm run seed`. Nunca se edita `db/seed.sql` a mano.
 - **El criterio de holguras y márgenes no se cablea en el código.** Vive en la
   tabla `parametros` y se edita desde `/parametros`.
-- **La app no revienta sin base de datos.** Si faltan las variables de Supabase
-  muestra `SinConfigurar` en vez de lanzar un error.
+- **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
+  `SinConfigurar` en vez de lanzar un error.
 - **Aspecto:** `design-system/MASTER.md` manda. Cormorant Garamond + JetBrains
   Mono, sin emojis en la interfaz.
 
@@ -59,7 +64,8 @@ RLS) · despliegue en Render desde GitHub.
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Compilación de producción (también valida tipos) |
 | `npm test` | Pruebas del cálculo de cable |
-| `npm run seed` | Regenera `supabase/seed.sql` desde los CSV de `data/` |
+| `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
+| `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |
 
 ## Datos de partida

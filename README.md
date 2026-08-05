@@ -15,12 +15,17 @@ no hay un stock actualizado.
 npm install
 ```
 
-### 1 · Crear el proyecto de Supabase
+### 1 · Base de datos
 
-En el SQL Editor del proyecto, en este orden:
+Postgres en Docker. Un solo comando levanta el contenedor, crea las tablas y
+carga el catálogo y las plantillas:
 
-1. `supabase/schema.sql` — tablas, tipos, RLS y roles.
-2. `supabase/seed.sql` — catálogo y plantillas sacados del inventario real.
+```bash
+npm run db:reset
+```
+
+Por separado: `db:up` (contenedor) · `db:migrate` (`db/schema.sql`) ·
+`db:seed` (`db/seed.sql`) · `db:down` (parar).
 
 ### 2 · Variables de entorno
 
@@ -28,17 +33,27 @@ En el SQL Editor del proyecto, en este orden:
 cp .env.example .env.local
 ```
 
-Rellenar `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` con los
-valores de *Project Settings → API*.
-
-Sin estas variables la aplicación arranca igual y muestra una pantalla con los
-pasos pendientes, en vez de romperse.
+`DATABASE_URL` ya viene apuntando al contenedor local. Sin esa variable la
+aplicación arranca igual y muestra una pantalla con los pasos pendientes, en vez
+de romperse.
 
 ### 3 · Arrancar
 
 ```bash
 npm run dev
 ```
+
+### Migrar a Supabase más adelante
+
+Supabase también es Postgres, así que basta con:
+
+1. Cambiar `DATABASE_URL` por la cadena de conexión del proyecto.
+2. Aplicar `db/schema.sql` y `db/seed.sql` en su SQL Editor.
+3. Aplicar `db/politicas-supabase.sql`, que añade la tabla de perfiles, el alta
+   automática de usuarios y las políticas RLS por rol (TEI, AV, técnico).
+
+Ese fichero no se aplica en local porque depende del esquema `auth`, que solo
+existe en Supabase.
 
 ---
 
@@ -99,8 +114,8 @@ npm run seed
 
 ## Despliegue
 
-Render, desde GitHub. La configuración está en `render.yaml`. Las dos variables
-de Supabase se cargan como variables de entorno del servicio.
+Render, desde GitHub. La configuración está en `render.yaml`. `DATABASE_URL` se
+carga como variable de entorno del servicio, nunca en el repositorio.
 
 El plan gratuito de Render duerme el servicio tras 15 minutos y el primer acceso
 tarda unos segundos. Si la app se va a abrir desde obra, conviene plan de pago.

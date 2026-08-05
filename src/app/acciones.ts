@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { clienteServidor } from '@/lib/supabase/servidor';
+import { sql } from '@/lib/db';
 
 const numero = (v: FormDataEntryValue | null): number | null => {
   if (v == null || String(v).trim() === '') return null;
@@ -16,87 +16,19 @@ const texto = (v: FormDataEntryValue | null): string | null => {
 
 // ---------------------------------------------------------------- plantillas
 export async function guardarMedidasPlantilla(datos: FormData) {
-  const sb = await clienteServidor();
-  const id = String(datos.get('id'));
-  const { error } = await sb
-    .from('plantillas_sala')
-    .update({
-      largo_m: numero(datos.get('largo_m')),
-      ancho_m: numero(datos.get('ancho_m')),
-      alto_m: numero(datos.get('alto_m')),
-      alto_falso_techo_m: numero(datos.get('alto_falso_techo_m')),
-      ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
-    })
-    .eq('id', id);
-  if (error) throw error;
+  await sql`
+    update plantillas_sala set
+      largo_m            = ${numero(datos.get('largo_m'))},
+      ancho_m            = ${numero(datos.get('ancho_m'))},
+      alto_m             = ${numero(datos.get('alto_m'))},
+      alto_falso_techo_m = ${numero(datos.get('alto_falso_techo_m'))},
+      ruta_por_defecto   = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable
+    where id = ${String(datos.get('id'))}`;
   revalidatePath('/plantillas');
   revalidatePath('/');
 }
 
 // --------------------------------------------------------------------- salas
-export async function crearSala(datos: FormData) {
-  const sb = await clienteServidor();
-  const plantillaId = texto(datos.get('plantilla_id'));
-
-  let base: Record<string, unknown> = {};
-  if (plantillaId) {
-    const { data: p } = await sb
-      .from('plantillas_sala')
-      .select('*')
-      .eq('id', plantillaId)
-      .maybeSingle();
-    if (p) {
-      base = {
-        tipologia: p.tipologia,
-        aforo: p.aforo,
-        largo_m: p.largo_m ?? 0,
-        ancho_m: p.ancho_m ?? 0,
-        alto_m: p.alto_m ?? 0,
-        alto_falso_techo_m: p.alto_falso_techo_m,
-        ruta_por_defecto: p.ruta_por_defecto,
-      };
-    }
-  }
-
-  const { data: sala, error } = await sb
-    .from('salas')
-    .insert({
-      ...base,
-      nombre: texto(datos.get('nombre')) ?? 'Sala sin nombre',
-      edificio: texto(datos.get('edificio')),
-      nivel: texto(datos.get('nivel')),
-      codigo: texto(datos.get('codigo')),
-      plantilla_id: plantillaId,
-    })
-    .select('id')
-    .single();
-  if (error) throw error;
-
-  // Arrastra el equipamiento de la plantilla que esté enlazado al catálogo.
-  if (plantillaId) {
-    const { data: lineas } = await sb
-      .from('plantilla_articulos')
-      .select('articulo_id, categoria, cantidad, opcional, modelo_texto')
-      .eq('plantilla_id', plantillaId)
-      .eq('opcional', false);
-
-    if (lineas?.length) {
-      await sb.from('sala_equipos').insert(
-        lineas.map((l) => ({
-          sala_id: sala.id,
-          articulo_id: l.articulo_id,
-          nombre: l.modelo_texto ?? l.categoria,
-          cantidad: Math.max(1, Math.round(Number(l.cantidad) || 1)),
-          extremo: extremoPorCategoria(String(l.categoria)),
-        })),
-      );
-    }
-  }
-
-  revalidatePath('/salas');
-  redirect(`/salas/${sala.id}`);
-}
-
 /** Traduce la categoría del inventario al tipo de extremo, para la holgura. */
 function extremoPorCategoria(categoria: string): string {
   const c = categoria.toUpperCase();
@@ -120,147 +52,173 @@ function extremoPorCategoria(categoria: string): string {
   return 'pared';
 }
 
+export async function crearSala(datos: FormData) {
+  const plantillaId = texto(datos.get('plantilla_id'));
+
+  const id = await sql.begin(async (tx) => {
+    // Si hay plantilla, la sala hereda sus medidas y su tipología.
+    const plantilla = plantillaId
+      ? (
+          await tx<Array<Record<string, unknown>>>`
+            select * from plantillas_sala where id = ${plantillaId}`
+        )[0]
+      : undefined;
+
+    const [sala] = await tx<Array<{ id: string }>>`
+      insert into salas ${tx({
+        nombre: texto(datos.get('nombre')) ?? 'Sala sin nombre',
+        edificio: texto(datos.get('edificio')),
+        nivel: texto(datos.get('nivel')),
+        codigo: texto(datos.get('codigo')),
+        plantilla_id: plantilla ? plantillaId : null,
+        tipologia: (plantilla?.tipologia as string) ?? null,
+        aforo: (plantilla?.aforo as number) ?? null,
+        largo_m: Number(plantilla?.largo_m ?? 0),
+        ancho_m: Number(plantilla?.ancho_m ?? 0),
+        alto_m: Number(plantilla?.alto_m ?? 0),
+        alto_falso_techo_m: (plantilla?.alto_falso_techo_m as number) ?? null,
+        ruta_por_defecto: (plantilla?.ruta_por_defecto as string) ?? 'falso_techo',
+      })}
+      returning id`;
+
+    // Arrastra el equipamiento estándar de la plantilla.
+    if (plantillaId) {
+      const lineas = await tx<
+        Array<{ articulo_id: string | null; categoria: string; cantidad: string; modelo_texto: string | null }>
+      >`select articulo_id, categoria, cantidad, modelo_texto
+        from plantilla_articulos
+        where plantilla_id = ${plantillaId} and not opcional`;
+
+      for (const l of lineas) {
+        await tx`
+          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo)
+          values (${sala.id}, ${l.articulo_id}, ${l.modelo_texto ?? l.categoria},
+                  ${Math.max(1, Math.round(Number(l.cantidad) || 1))},
+                  ${extremoPorCategoria(l.categoria)}::extremo_cable)`;
+      }
+    }
+
+    return sala.id;
+  });
+
+  revalidatePath('/salas');
+  redirect(`/salas/${id}`);
+}
+
 export async function guardarSala(datos: FormData) {
-  const sb = await clienteServidor();
   const id = String(datos.get('id'));
-  const { error } = await sb
-    .from('salas')
-    .update({
-      nombre: texto(datos.get('nombre')) ?? 'Sala sin nombre',
-      edificio: texto(datos.get('edificio')),
-      nivel: texto(datos.get('nivel')),
-      codigo: texto(datos.get('codigo')),
-      aforo: numero(datos.get('aforo')),
-      largo_m: numero(datos.get('largo_m')) ?? 0,
-      ancho_m: numero(datos.get('ancho_m')) ?? 0,
-      alto_m: numero(datos.get('alto_m')) ?? 0,
-      alto_falso_techo_m: numero(datos.get('alto_falso_techo_m')),
-      alto_canaleta_m: numero(datos.get('alto_canaleta_m')),
-      alto_suelo_tecnico_m: numero(datos.get('alto_suelo_tecnico_m')),
-      ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
-      notas: texto(datos.get('notas')),
-    })
-    .eq('id', id);
-  if (error) throw error;
+  await sql`
+    update salas set
+      nombre               = ${texto(datos.get('nombre')) ?? 'Sala sin nombre'},
+      edificio             = ${texto(datos.get('edificio'))},
+      nivel                = ${texto(datos.get('nivel'))},
+      codigo               = ${texto(datos.get('codigo'))},
+      aforo                = ${numero(datos.get('aforo'))},
+      largo_m              = ${numero(datos.get('largo_m')) ?? 0},
+      ancho_m              = ${numero(datos.get('ancho_m')) ?? 0},
+      alto_m               = ${numero(datos.get('alto_m')) ?? 0},
+      alto_falso_techo_m   = ${numero(datos.get('alto_falso_techo_m'))},
+      alto_canaleta_m      = ${numero(datos.get('alto_canaleta_m'))},
+      alto_suelo_tecnico_m = ${numero(datos.get('alto_suelo_tecnico_m'))},
+      ruta_por_defecto     = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable,
+      notas                = ${texto(datos.get('notas'))}
+    where id = ${id}`;
   revalidatePath(`/salas/${id}`);
   revalidatePath('/salas');
 }
 
 export async function borrarSala(datos: FormData) {
-  const sb = await clienteServidor();
-  await sb.from('salas').delete().eq('id', String(datos.get('id')));
+  await sql`delete from salas where id = ${String(datos.get('id'))}`;
   revalidatePath('/salas');
   redirect('/salas');
 }
 
 // ------------------------------------------------------------------ equipos
 export async function anadirEquipo(datos: FormData) {
-  const sb = await clienteServidor();
   const salaId = String(datos.get('sala_id'));
   const articuloId = texto(datos.get('articulo_id'));
 
   let nombre = texto(datos.get('nombre'));
   if (!nombre && articuloId) {
-    const { data: a } = await sb
-      .from('articulos')
-      .select('marca, modelo')
-      .eq('id', articuloId)
-      .maybeSingle();
+    const [a] = await sql<Array<{ marca: string | null; modelo: string }>>`
+      select marca, modelo from articulos where id = ${articuloId}`;
     if (a) nombre = `${a.marca ?? ''} ${a.modelo}`.trim();
   }
 
-  const { error } = await sb.from('sala_equipos').insert({
-    sala_id: salaId,
-    articulo_id: articuloId,
-    nombre: nombre ?? 'Equipo',
-    cantidad: numero(datos.get('cantidad')) ?? 1,
-    extremo: texto(datos.get('extremo')) ?? 'pared',
-    x_m: numero(datos.get('x_m')) ?? 0,
-    y_m: numero(datos.get('y_m')) ?? 0,
-    z_m: numero(datos.get('z_m')) ?? 0,
-  });
-  if (error) throw error;
+  await sql`
+    insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m)
+    values (${salaId}, ${articuloId}, ${nombre ?? 'Equipo'},
+            ${numero(datos.get('cantidad')) ?? 1},
+            ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
+            ${numero(datos.get('x_m')) ?? 0},
+            ${numero(datos.get('y_m')) ?? 0},
+            ${numero(datos.get('z_m')) ?? 0})`;
   revalidatePath(`/salas/${salaId}`);
 }
 
 export async function guardarEquipo(datos: FormData) {
-  const sb = await clienteServidor();
   const salaId = String(datos.get('sala_id'));
-  const { error } = await sb
-    .from('sala_equipos')
-    .update({
-      nombre: texto(datos.get('nombre')) ?? 'Equipo',
-      extremo: texto(datos.get('extremo')) ?? 'pared',
-      x_m: numero(datos.get('x_m')) ?? 0,
-      y_m: numero(datos.get('y_m')) ?? 0,
-      z_m: numero(datos.get('z_m')) ?? 0,
-    })
-    .eq('id', String(datos.get('id')));
-  if (error) throw error;
+  await sql`
+    update sala_equipos set
+      nombre  = ${texto(datos.get('nombre')) ?? 'Equipo'},
+      extremo = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
+      x_m     = ${numero(datos.get('x_m')) ?? 0},
+      y_m     = ${numero(datos.get('y_m')) ?? 0},
+      z_m     = ${numero(datos.get('z_m')) ?? 0}
+    where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
 
 export async function borrarEquipo(datos: FormData) {
-  const sb = await clienteServidor();
   const salaId = String(datos.get('sala_id'));
-  await sb.from('sala_equipos').delete().eq('id', String(datos.get('id')));
+  await sql`delete from sala_equipos where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
 
 // ---------------------------------------------------------------- conexiones
 export async function anadirConexion(datos: FormData) {
-  const sb = await clienteServidor();
   const salaId = String(datos.get('sala_id'));
   const origen = String(datos.get('origen_id'));
   const destino = String(datos.get('destino_id'));
-  if (origen === destino) return;
+  if (!origen || !destino || origen === destino) return;
 
-  const { error } = await sb.from('conexiones').insert({
-    sala_id: salaId,
-    origen_id: origen,
-    destino_id: destino,
-    articulo_cable_id: texto(datos.get('articulo_cable_id')),
-    senal: texto(datos.get('senal')) ?? 'otro',
-    ruta: texto(datos.get('ruta')),
-    longitud_manual_m: numero(datos.get('longitud_manual_m')),
-  });
-  if (error) throw error;
+  const ruta = texto(datos.get('ruta'));
+  await sql`
+    insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id,
+                            senal, ruta, longitud_manual_m)
+    values (${salaId}, ${origen}, ${destino},
+            ${texto(datos.get('articulo_cable_id'))},
+            ${texto(datos.get('senal')) ?? 'otro'}::senal,
+            ${ruta}::ruta_cable,
+            ${numero(datos.get('longitud_manual_m'))})`;
   revalidatePath(`/salas/${salaId}`);
 }
 
 export async function borrarConexion(datos: FormData) {
-  const sb = await clienteServidor();
   const salaId = String(datos.get('sala_id'));
-  await sb.from('conexiones').delete().eq('id', String(datos.get('id')));
+  await sql`delete from conexiones where id = ${String(datos.get('id'))}`;
   revalidatePath(`/salas/${salaId}`);
 }
 
 // ---------------------------------------------------------------- parámetros
 export async function guardarParametros(datos: FormData) {
-  const sb = await clienteServidor();
-  const cambios: Array<{ clave: string; valor: number }> = [];
   for (const [clave, valor] of datos.entries()) {
-    const n = numero(valor);
-    if (n != null) cambios.push({ clave, valor: n });
-  }
-  for (const c of cambios) {
-    await sb.from('parametros').update({ valor: c.valor }).eq('clave', c.clave);
+    const v = numero(valor);
+    if (v == null) continue;
+    await sql`update parametros set valor = ${v} where clave = ${clave}`;
   }
   revalidatePath('/parametros');
+  revalidatePath('/');
 }
 
 // ------------------------------------------------------------------ catálogo
 export async function guardarPrecioArticulo(datos: FormData) {
-  const sb = await clienteServidor();
-  const { error } = await sb
-    .from('articulos')
-    .update({
-      coste: numero(datos.get('coste')),
-      bobina_m: numero(datos.get('bobina_m')),
-      diametro_mm: numero(datos.get('diametro_mm')),
-    })
-    .eq('id', String(datos.get('id')));
-  if (error) throw error;
+  await sql`
+    update articulos set
+      coste       = ${numero(datos.get('coste'))},
+      bobina_m    = ${numero(datos.get('bobina_m'))},
+      diametro_mm = ${numero(datos.get('diametro_mm'))}
+    where id = ${String(datos.get('id'))}`;
   revalidatePath('/catalogo');
   revalidatePath('/');
 }

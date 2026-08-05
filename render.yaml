@@ -12,7 +12,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24"
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+      - key: DATABASE_URL
         sync: false

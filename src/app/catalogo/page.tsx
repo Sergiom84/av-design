@@ -1,4 +1,4 @@
-import { hayConfiguracion } from '@/lib/supabase/servidor';
+import { hayConfiguracion } from '@/lib/db';
 import { listarArticulos } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Boton, Cabecera, Tarjeta, Vacio } from '@/components/ui';

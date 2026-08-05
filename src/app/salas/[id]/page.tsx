@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { hayConfiguracion } from '@/lib/supabase/servidor';
+import { hayConfiguracion } from '@/lib/db';
 import { listarArticulos, obtenerParametros, obtenerSala } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Cabecera, Campo, Dato, Tarjeta, Vacio } from '@/components/ui';

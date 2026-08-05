@@ -1,43 +1,45 @@
 import 'server-only';
-import { clienteServidor } from './supabase/servidor';
+import { sql } from './db';
 import {
   Articulo,
   Conexion,
   EquipoEnSala,
+  Extremo,
   ParametrosCable,
   PARAMETROS_POR_DEFECTO,
   PlantillaSala,
   Sala,
-  Extremo,
 } from './tipos';
 
 type Fila = Record<string, unknown>;
 
+const n = (v: unknown): number | null => (v == null ? null : Number(v));
+const s = (v: unknown): string | null => (v == null ? null : String(v));
+
 function aArticulo(f: Fila): Articulo {
   return {
     id: String(f.id),
-    referencia: (f.referencia as string) ?? null,
+    referencia: s(f.referencia),
     tipo: f.tipo as Articulo['tipo'],
     categoria: String(f.categoria),
-    marca: (f.marca as string) ?? null,
+    marca: s(f.marca),
     modelo: String(f.modelo),
-    descripcion: (f.descripcion as string) ?? null,
+    descripcion: s(f.descripcion),
     unidad: (f.unidad as Articulo['unidad']) ?? 'ud',
-    coste: f.coste != null ? Number(f.coste) : null,
-    pvp: f.pvp != null ? Number(f.pvp) : null,
-    proveedor: (f.proveedor as string) ?? null,
-    plazo_dias: f.plazo_dias != null ? Number(f.plazo_dias) : null,
-    stock_minimo: f.stock_minimo != null ? Number(f.stock_minimo) : null,
+    coste: n(f.coste),
+    pvp: n(f.pvp),
+    proveedor: s(f.proveedor),
+    plazo_dias: n(f.plazo_dias),
+    stock_minimo: n(f.stock_minimo),
     senal: (f.senal as Articulo['senal']) ?? null,
-    conector_a: (f.conector_a as string) ?? null,
-    conector_b: (f.conector_b as string) ?? null,
+    conector_a: s(f.conector_a),
+    conector_b: s(f.conector_b),
     longitudes_comerciales_m: Array.isArray(f.longitudes_comerciales_m)
       ? (f.longitudes_comerciales_m as unknown[]).map(Number)
       : null,
-    bobina_m: f.bobina_m != null ? Number(f.bobina_m) : null,
-    diametro_mm: f.diametro_mm != null ? Number(f.diametro_mm) : null,
-    unidades_instaladas:
-      f.unidades_instaladas != null ? Number(f.unidades_instaladas) : null,
+    bobina_m: n(f.bobina_m),
+    diametro_mm: n(f.diametro_mm),
+    unidades_instaladas: n(f.unidades_instaladas),
     activo: f.activo !== false,
   };
 }
@@ -45,75 +47,96 @@ function aArticulo(f: Fila): Articulo {
 function aSala(f: Fila): Sala {
   return {
     id: String(f.id),
-    sede_id: (f.sede_id as string) ?? null,
-    edificio: (f.edificio as string) ?? null,
-    nivel: (f.nivel as string) ?? null,
-    codigo: (f.codigo as string) ?? null,
+    sede_id: s(f.sede_id),
+    edificio: s(f.edificio),
+    nivel: s(f.nivel),
+    codigo: s(f.codigo),
     nombre: String(f.nombre),
-    tipologia: (f.tipologia as string) ?? null,
-    aforo: f.aforo != null ? Number(f.aforo) : null,
-    plantilla_id: (f.plantilla_id as string) ?? null,
+    tipologia: s(f.tipologia),
+    aforo: n(f.aforo),
+    plantilla_id: s(f.plantilla_id),
     largo_m: Number(f.largo_m ?? 0),
     ancho_m: Number(f.ancho_m ?? 0),
     alto_m: Number(f.alto_m ?? 0),
-    alto_falso_techo_m: f.alto_falso_techo_m != null ? Number(f.alto_falso_techo_m) : null,
-    alto_canaleta_m: f.alto_canaleta_m != null ? Number(f.alto_canaleta_m) : null,
-    alto_suelo_tecnico_m:
-      f.alto_suelo_tecnico_m != null ? Number(f.alto_suelo_tecnico_m) : null,
+    alto_falso_techo_m: n(f.alto_falso_techo_m),
+    alto_canaleta_m: n(f.alto_canaleta_m),
+    alto_suelo_tecnico_m: n(f.alto_suelo_tecnico_m),
     ruta_por_defecto: (f.ruta_por_defecto as Sala['ruta_por_defecto']) ?? 'falso_techo',
-    notas: (f.notas as string) ?? null,
+    notas: s(f.notas),
   };
 }
 
 export async function listarArticulos(tipo?: Articulo['tipo']): Promise<Articulo[]> {
-  const sb = await clienteServidor();
-  let q = sb
-    .from('articulos')
-    .select('*')
-    .eq('activo', true)
-    .order('unidades_instaladas', { ascending: false, nullsFirst: false })
-    .order('modelo');
-  if (tipo) q = q.eq('tipo', tipo);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map(aArticulo);
+  const filas = tipo
+    ? await sql<Fila[]>`
+        select a.*, p.nombre as proveedor
+        from articulos a
+        left join proveedores p on p.id = a.proveedor_id
+        where a.activo and a.tipo = ${tipo}
+        order by a.unidades_instaladas desc nulls last, a.modelo`
+    : await sql<Fila[]>`
+        select a.*, p.nombre as proveedor
+        from articulos a
+        left join proveedores p on p.id = a.proveedor_id
+        where a.activo
+        order by a.unidades_instaladas desc nulls last, a.modelo`;
+  return filas.map(aArticulo);
+}
+
+export interface LineaPlantilla {
+  categoria: string;
+  cantidad: number;
+  opcional: boolean;
+  modelo_texto: string | null;
 }
 
 export async function listarPlantillas(): Promise<
-  Array<PlantillaSala & { lineas: Array<{ categoria: string; cantidad: number; opcional: boolean; modelo_texto: string | null }> }>
+  Array<PlantillaSala & { lineas: LineaPlantilla[] }>
 > {
-  const sb = await clienteServidor();
-  const { data, error } = await sb
-    .from('plantillas_sala')
-    .select('*, plantilla_articulos(categoria, cantidad, opcional, modelo_texto)')
-    .order('n_salas_reales', { ascending: false, nullsFirst: false });
-  if (error) throw error;
-  return (data ?? []).map((f: Fila) => ({
+  const filas = await sql<Fila[]>`
+    select p.*,
+           coalesce(
+             json_agg(
+               json_build_object(
+                 'categoria', pa.categoria,
+                 'cantidad', pa.cantidad,
+                 'opcional', pa.opcional,
+                 'modelo_texto', pa.modelo_texto
+               )
+               order by pa.opcional, pa.categoria
+             ) filter (where pa.id is not null),
+             '[]'
+           ) as lineas
+    from plantillas_sala p
+    left join plantilla_articulos pa on pa.plantilla_id = p.id
+    group by p.id
+    order by p.n_salas_reales desc nulls last, p.nombre`;
+
+  return filas.map((f) => ({
     id: String(f.id),
     nombre: String(f.nombre),
     tipologia: String(f.tipologia),
-    aforo: f.aforo != null ? Number(f.aforo) : null,
-    n_salas_reales: f.n_salas_reales != null ? Number(f.n_salas_reales) : null,
-    largo_m: f.largo_m != null ? Number(f.largo_m) : null,
-    ancho_m: f.ancho_m != null ? Number(f.ancho_m) : null,
-    alto_m: f.alto_m != null ? Number(f.alto_m) : null,
-    alto_falso_techo_m: f.alto_falso_techo_m != null ? Number(f.alto_falso_techo_m) : null,
-    ruta_por_defecto: (f.ruta_por_defecto as PlantillaSala['ruta_por_defecto']) ?? 'falso_techo',
-    notas: (f.notas as string) ?? null,
-    lineas: ((f.plantilla_articulos as Fila[]) ?? []).map((l) => ({
+    aforo: n(f.aforo),
+    n_salas_reales: n(f.n_salas_reales),
+    largo_m: n(f.largo_m),
+    ancho_m: n(f.ancho_m),
+    alto_m: n(f.alto_m),
+    alto_falso_techo_m: n(f.alto_falso_techo_m),
+    ruta_por_defecto:
+      (f.ruta_por_defecto as PlantillaSala['ruta_por_defecto']) ?? 'falso_techo',
+    notas: s(f.notas),
+    lineas: (f.lineas as LineaPlantilla[]).map((l) => ({
       categoria: String(l.categoria),
       cantidad: Number(l.cantidad),
       opcional: Boolean(l.opcional),
-      modelo_texto: (l.modelo_texto as string) ?? null,
+      modelo_texto: l.modelo_texto ?? null,
     })),
   }));
 }
 
 export async function listarSalas(): Promise<Sala[]> {
-  const sb = await clienteServidor();
-  const { data, error } = await sb.from('salas').select('*').order('nombre');
-  if (error) throw error;
-  return (data ?? []).map(aSala);
+  const filas = await sql<Fila[]>`select * from salas order by nombre`;
+  return filas.map(aSala);
 }
 
 export interface SalaCompleta {
@@ -123,24 +146,20 @@ export interface SalaCompleta {
 }
 
 export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
-  const sb = await clienteServidor();
-  const { data: sala } = await sb.from('salas').select('*').eq('id', id).maybeSingle();
-  if (!sala) return null;
+  const [fila] = await sql<Fila[]>`select * from salas where id = ${id}`;
+  if (!fila) return null;
 
-  const { data: equipos } = await sb
-    .from('sala_equipos')
-    .select('*')
-    .eq('sala_id', id)
-    .order('nombre');
-
-  const { data: conexiones } = await sb.from('conexiones').select('*').eq('sala_id', id);
+  const equipos = await sql<Fila[]>`
+    select * from sala_equipos where sala_id = ${id} order by nombre`;
+  const conexiones = await sql<Fila[]>`
+    select * from conexiones where sala_id = ${id}`;
 
   return {
-    sala: aSala(sala),
-    equipos: (equipos ?? []).map((f: Fila) => ({
+    sala: aSala(fila),
+    equipos: equipos.map((f) => ({
       id: String(f.id),
       sala_id: String(f.sala_id),
-      articulo_id: (f.articulo_id as string) ?? '',
+      articulo_id: s(f.articulo_id) ?? '',
       nombre: String(f.nombre),
       cantidad: Number(f.cantidad ?? 1),
       extremo: (f.extremo as Extremo) ?? 'pared',
@@ -150,35 +169,51 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
         z_m: Number(f.z_m ?? 0),
       },
     })),
-    conexiones: (conexiones ?? []).map((f: Fila) => ({
+    conexiones: conexiones.map((f) => ({
       id: String(f.id),
       sala_id: String(f.sala_id),
       origen_id: String(f.origen_id),
       destino_id: String(f.destino_id),
-      articulo_cable_id: (f.articulo_cable_id as string) ?? null,
+      articulo_cable_id: s(f.articulo_cable_id),
       senal: (f.senal as Conexion['senal']) ?? 'otro',
       ruta: (f.ruta as Conexion['ruta']) ?? null,
-      longitud_manual_m:
-        f.longitud_manual_m != null ? Number(f.longitud_manual_m) : null,
-      notas: (f.notas as string) ?? null,
+      longitud_manual_m: n(f.longitud_manual_m),
+      notas: s(f.notas),
     })),
   };
 }
 
+export interface FilaParametro {
+  clave: string;
+  valor: number;
+  unidad: string | null;
+  descripcion: string | null;
+}
+
+export async function listarParametros(): Promise<FilaParametro[]> {
+  const filas = await sql<Fila[]>`select * from parametros order by clave`;
+  return filas.map((f) => ({
+    clave: String(f.clave),
+    valor: Number(f.valor),
+    unidad: s(f.unidad),
+    descripcion: s(f.descripcion),
+  }));
+}
+
 export async function obtenerParametros(): Promise<ParametrosCable> {
-  const sb = await clienteServidor();
-  const { data } = await sb.from('parametros').select('clave, valor');
-  const mapa = new Map((data ?? []).map((f: Fila) => [String(f.clave), Number(f.valor)]));
-  const h = { ...PARAMETROS_POR_DEFECTO.holguras };
-  (Object.keys(h) as Array<keyof typeof h>).forEach((k) => {
+  const filas = await listarParametros();
+  const mapa = new Map(filas.map((f) => [f.clave, f.valor]));
+  const holguras = { ...PARAMETROS_POR_DEFECTO.holguras };
+  (Object.keys(holguras) as Array<keyof typeof holguras>).forEach((k) => {
     const v = mapa.get(`holgura_${k}`);
-    if (v != null && Number.isFinite(v)) h[k] = v;
+    if (v != null && Number.isFinite(v)) holguras[k] = v;
   });
   return {
-    holguras: h,
+    holguras,
     margen: mapa.get('margen') ?? PARAMETROS_POR_DEFECTO.margen,
     cables_por_canalizacion:
-      mapa.get('cables_por_canalizacion') ?? PARAMETROS_POR_DEFECTO.cables_por_canalizacion,
+      mapa.get('cables_por_canalizacion') ??
+      PARAMETROS_POR_DEFECTO.cables_por_canalizacion,
     ocupacion_maxima_canaleta:
       mapa.get('ocupacion_maxima_canaleta') ??
       PARAMETROS_POR_DEFECTO.ocupacion_maxima_canaleta,
@@ -186,52 +221,25 @@ export async function obtenerParametros(): Promise<ParametrosCable> {
 }
 
 export async function contarPanel() {
-  const sb = await clienteServidor();
-
-  const porTipo = async (tipo: Articulo['tipo']) => {
-    const { count } = await sb
-      .from('articulos')
-      .select('*', { count: 'exact', head: true })
-      .eq('tipo', tipo);
-    return count ?? 0;
-  };
-  const total = async (tabla: string) => {
-    const { count } = await sb.from(tabla).select('*', { count: 'exact', head: true });
-    return count ?? 0;
-  };
-
-  const [equipos, cables, consumibles, plantillas, salas] = await Promise.all([
-    porTipo('equipo'),
-    porTipo('cable'),
-    porTipo('consumible'),
-    total('plantillas_sala'),
-    total('salas'),
-  ]);
-
-  const { count: plantillasSinMedidas } = await sb
-    .from('plantillas_sala')
-    .select('*', { count: 'exact', head: true })
-    .is('largo_m', null);
-
-  const { count: salasSinMedidas } = await sb
-    .from('salas')
-    .select('*', { count: 'exact', head: true })
-    .eq('largo_m', 0);
-
-  const { count: cableSinPrecio } = await sb
-    .from('articulos')
-    .select('*', { count: 'exact', head: true })
-    .eq('tipo', 'cable')
-    .is('coste', null);
-
+  const [f] = await sql<Fila[]>`
+    select
+      (select count(*) from articulos where tipo = 'equipo')      as equipos,
+      (select count(*) from articulos where tipo = 'cable')       as cables,
+      (select count(*) from articulos where tipo = 'consumible')  as consumibles,
+      (select count(*) from plantillas_sala)                      as plantillas,
+      (select count(*) from salas)                                as salas,
+      (select count(*) from plantillas_sala where largo_m is null) as plantillas_sin_medidas,
+      (select count(*) from salas where largo_m = 0)              as salas_sin_medidas,
+      (select count(*) from articulos where tipo = 'cable' and coste is null)
+                                                                  as cable_sin_precio`;
   return {
-    equipos,
-    cables,
-    consumibles,
-    plantillas,
-    salas,
-    plantillasSinMedidas: plantillasSinMedidas ?? 0,
-    salasSinMedidas: salasSinMedidas ?? 0,
-    cableSinPrecio: cableSinPrecio ?? 0,
+    equipos: Number(f.equipos),
+    cables: Number(f.cables),
+    consumibles: Number(f.consumibles),
+    plantillas: Number(f.plantillas),
+    salas: Number(f.salas),
+    plantillasSinMedidas: Number(f.plantillas_sin_medidas),
+    salasSinMedidas: Number(f.salas_sin_medidas),
+    cableSinPrecio: Number(f.cable_sin_precio),
   };
 }

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: av_design_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: av_design
+      POSTGRES_USER: av_design
+      POSTGRES_PASSWORD: av_design_local
+    ports:
+      - '5433:5432'
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U av_design -d av_design']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  datos_db:
+# El puerto local es el 5433 para no chocar con otro Postgres que ya esté en el 5432.
+# La contraseña es de desarrollo local: cuando se migre a Supabase no se reutiliza.

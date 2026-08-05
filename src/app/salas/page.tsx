@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { hayConfiguracion } from '@/lib/supabase/servidor';
+import { hayConfiguracion } from '@/lib/db';
 import { listarPlantillas, listarSalas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Boton, Cabecera, Campo, Tarjeta, Vacio } from '@/components/ui';

@@ -1,4 +1,4 @@
-import { hayConfiguracion } from '@/lib/supabase/servidor';
+import { hayConfiguracion } from '@/lib/db';
 import { contarPanel } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera, Dato, Enlace, Tarjeta } from '@/components/ui';

@@ -1,5 +1,5 @@
 /**
- * Genera supabase/seed.sql a partir de los CSV de data/.
+ * Genera db/seed.sql a partir de los CSV de data/.
  *
  *   node scripts/generar-seed.mjs
  *
@@ -167,7 +167,7 @@ sql.push(
         `  ('equipo', ${txt(e.categoria)}, ${txt(e.marca)}, ${txt(e.modelo)}, 'ud', ${num(e.unidades_instaladas)})`,
     )
     .join(',\n') +
-    '\non conflict (marca, modelo, categoria) do update set unidades_instaladas = excluded.unidades_instaladas;',
+    "\non conflict (coalesce(marca, ''), modelo, categoria) do update set unidades_instaladas = excluded.unidades_instaladas;",
 );
 sql.push('');
 
@@ -186,7 +186,7 @@ sql.push(
         `${num(c.plazo_dias)}, ${num(c.stock_minimo)})`,
     )
     .join(',\n') +
-    '\non conflict (marca, modelo, categoria) do update set ' +
+    "\non conflict (coalesce(marca, ''), modelo, categoria) do update set " +
     'descripcion = excluded.descripcion, longitudes_comerciales_m = excluded.longitudes_comerciales_m, ' +
     'bobina_m = excluded.bobina_m, diametro_mm = excluded.diametro_mm;',
 );
@@ -205,9 +205,8 @@ for (const p of plantillas.values()) {
       `insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional) ` +
         `select id, ${txt(l.categoria)}, ${txt(l.modelo_texto)}, ${l.cantidad}, ${l.opcional} ` +
         `from plantillas_sala where nombre = ${txt(p.nombre)} ` +
-        `and not exists (select 1 from plantilla_articulos pa ` +
-        `join plantillas_sala ps on ps.id = pa.plantilla_id ` +
-        `where ps.nombre = ${txt(p.nombre)} and pa.categoria = ${txt(l.categoria)});`,
+        `on conflict (plantilla_id, categoria) do update set ` +
+        `modelo_texto = excluded.modelo_texto, cantidad = excluded.cantidad, opcional = excluded.opcional;`,
     );
   }
   sql.push('');
@@ -223,9 +222,9 @@ where pa.articulo_id is null
 sql.push('');
 sql.push('commit;');
 
-const salida = join(raiz, 'supabase', 'seed.sql');
-if (!existsSync(join(raiz, 'supabase'))) {
-  throw new Error('Falta la carpeta supabase/');
+const salida = join(raiz, 'db', 'seed.sql');
+if (!existsSync(join(raiz, 'db'))) {
+  throw new Error('Falta la carpeta db/');
 }
 writeFileSync(salida, sql.join('\n') + '\n', 'utf8');
 

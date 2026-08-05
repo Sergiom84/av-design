@@ -194,7 +194,12 @@ const aMovimiento = (f: Fila): FilaMovimiento => ({
   sala: s(f.sala),
 });
 
-const SELECT_MOVIMIENTOS = sql`
+/**
+ * El tronco común de las tres consultas de movimientos. Es una función y no una
+ * constante porque un fragmento construido al cargar el módulo abriría la
+ * conexión durante `next build`, cuando todavía no hay DATABASE_URL.
+ */
+const selectMovimientos = () => sql`
   select m.*, a.marca, a.modelo, u.nombre as ubicacion, sa.nombre as sala
   from movimientos m
   join articulos a on a.id = m.articulo_id
@@ -203,13 +208,13 @@ const SELECT_MOVIMIENTOS = sql`
 
 export async function listarMovimientos(limite = 100): Promise<FilaMovimiento[]> {
   const filas = await sql<Fila[]>`
-    ${SELECT_MOVIMIENTOS} order by m.fecha desc, m.creado_en desc limit ${limite}`;
+    ${selectMovimientos()} order by m.fecha desc, m.creado_en desc limit ${limite}`;
   return filas.map(aMovimiento);
 }
 
 export async function movimientosDeArticulo(id: string): Promise<FilaMovimiento[]> {
   const filas = await sql<Fila[]>`
-    ${SELECT_MOVIMIENTOS} where m.articulo_id = ${id}
+    ${selectMovimientos()} where m.articulo_id = ${id}
     order by m.fecha desc, m.creado_en desc`;
   return filas.map(aMovimiento);
 }
@@ -220,7 +225,7 @@ export async function movimientosDeArticulo(id: string): Promise<FilaMovimiento[
  */
 export async function listarBajas(limite = 200): Promise<FilaMovimiento[]> {
   const filas = await sql<Fila[]>`
-    ${SELECT_MOVIMIENTOS} where m.tipo = 'baja'
+    ${selectMovimientos()} where m.tipo = 'baja'
     order by m.fecha desc limit ${limite}`;
   return filas.map(aMovimiento);
 }

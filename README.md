@@ -148,5 +148,7 @@ tarda unos segundos. Si la app se va a abrir desde obra, conviene plan de pago.
 | `docs/01-analisis-xtenav.md` | Análisis de XTEN-AV: qué copiar y qué no resuelve |
 | `docs/02-propuesta-app.md` | Alcance, arquitectura y fases |
 | `docs/03-datos-reales.md` | Extracción del inventario: tipologías, plantillas, huecos |
+| `docs/04-limpieza-catalogo.md` | Qué se unificó al limpiar el catálogo y qué queda por revisar |
+| `docs/05-continuar.md` | Prompt para retomar el proyecto en una conversación nueva |
 | `design-system/MASTER.md` | Sistema visual |
 | `AGENTS.md` | Contrato del proyecto para agentes |

@@ -398,9 +398,20 @@ const nombrePlantilla = (tipologia, aforoBruto) => {
 const leerSiExiste = (fichero) =>
   existsSync(data(fichero)) ? leerCsv(data(fichero)) : [];
 
+// La categoría del CSV pasa por la misma normalización que el catálogo. El
+// inventario escribe "CAJA CONEXIONES" y el nombre bueno es "CAJA DE
+// CONEXIONES": sin esto la línea no casa, el equipo se queda sin colocar y sus
+// tiradas no se siembran, en silencio y solo en la base que esté al día.
+const categoriasReescritas = new Map();
+const categoriaCanonica = (bruta) => {
+  const canonica = normalizarSeccion(bruta);
+  if (canonica !== bruta) categoriasReescritas.set(bruta, canonica);
+  return canonica;
+};
+
 const montajePlantilla = leerSiExiste('plantillas-montaje.csv').map((r) => ({
   plantilla: nombrePlantilla(r.tipologia, r.aforo),
-  categoria: r.categoria,
+  categoria: categoriaCanonica(r.categoria),
   extremo: r.extremo || null,
   x_m: r.x_m,
   y_m: r.y_m,
@@ -410,8 +421,8 @@ const montajePlantilla = leerSiExiste('plantillas-montaje.csv').map((r) => ({
 
 const tiradasPlantilla = leerSiExiste('plantillas-tiradas.csv').map((r) => ({
   plantilla: nombrePlantilla(r.tipologia, r.aforo),
-  origen: r.origen_categoria,
-  destino: r.destino_categoria,
+  origen: categoriaCanonica(r.origen_categoria),
+  destino: categoriaCanonica(r.destino_categoria),
   senal: SENALES.has(r.senal) ? r.senal : 'otro',
   ruta: r.ruta || null,
   orden: Number(r.orden) || 0,
@@ -705,6 +716,21 @@ if (medidasPlantilla.length) {
 where nombre = ${txt(m.nombre)}
   -- Solo si nadie las ha rellenado ya desde la aplicación.
   and largo_m is null and ancho_m is null and mesa_largo_m is null;`,
+    );
+  }
+  sql.push('');
+}
+
+if (categoriasReescritas.size) {
+  // Las plantillas sembradas antes de que existiera esta regla se quedaron con
+  // el nombre del inventario. Se pone al día antes de colocar nada: si no, la
+  // base vieja y la nueva se comportan distinto y no se nota hasta que falta
+  // media tabla de cables.
+  sql.push('-- Categorías de plantilla que el inventario escribía de otra forma');
+  for (const [bruta, canonica] of categoriasReescritas) {
+    sql.push(
+      `update plantilla_articulos set categoria = ${txt(canonica)}
+where categoria = ${txt(bruta)};`,
     );
   }
   sql.push('');

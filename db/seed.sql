@@ -2081,6 +2081,10 @@ where nombre = 'SALA TP · aforo 8'
   -- Solo si nadie las ha rellenado ya desde la aplicación.
   and largo_m is null and ancho_m is null and mesa_largo_m is null;
 
+-- Categorías de plantilla que el inventario escribía de otra forma
+update plantilla_articulos set categoria = 'CAJA DE CONEXIONES'
+where categoria = 'CAJA CONEXIONES';
+
 -- Montaje de plantilla: dónde va cada equipo (5 líneas)
 update plantilla_articulos pa set
   extremo = 'pantalla'::extremo_cable,
@@ -2104,7 +2108,7 @@ update plantilla_articulos pa set
 from plantillas_sala ps
 where pa.plantilla_id = ps.id
   and ps.nombre = 'SALA TP · aforo 8'
-  and pa.categoria = 'CAJA CONEXIONES'
+  and pa.categoria = 'CAJA DE CONEXIONES'
   and pa.x_m is null and pa.y_m is null;
 update plantilla_articulos pa set
   extremo = 'mesa'::extremo_cable,
@@ -2128,7 +2132,7 @@ insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_i
 select ps.id, o.id, d.id, 'hdmi'::senal,
        'falso_techo'::ruta_cable, 1, 'El HDMI del portatil entra en el Spark. Es el unico que sube a la mesa.'
 from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA CONEXIONES'
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA DE CONEXIONES'
 join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
 where ps.nombre = 'SALA TP · aforo 8'
   and not exists (
@@ -2170,7 +2174,7 @@ insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_i
 select ps.id, o.id, d.id, 'red'::senal,
        'falso_techo'::ruta_cable, 4, 'RJ45 de la roseta de red del edificio para el portatil del usuario.'
 from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA CONEXIONES'
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA DE CONEXIONES'
 join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
 where ps.nombre = 'SALA TP · aforo 8'
   and not exists (

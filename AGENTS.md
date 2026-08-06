@@ -175,8 +175,10 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   otro problema, y para eso ya está `rol_usuario` en el esquema.
 - **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
   `SinConfigurar` en vez de lanzar un error.
-- **Aspecto:** `design-system/MASTER.md` manda. Cormorant Garamond + JetBrains
-  Mono, sin emojis en la interfaz.
+- **Aspecto:** `design-system/MASTER.md` manda. Desde el 7-8-2026 el sistema es
+  el extraído de XTEN-AV (volcado `Inicio/`): Plus Jakarta Sans + JetBrains
+  Mono, acento azul `#3669d9`, sidebar y tarjetas con sombra. La migración va
+  pantalla a pantalla según `docs/07-roadmap.md`; sin emojis en la interfaz.
 
 ## Comandos
 

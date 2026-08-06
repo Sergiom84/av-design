@@ -200,7 +200,7 @@ export function BuscadorArticulo({
             type="button"
             onClick={limpiar}
             aria-label="Vaciar la referencia elegida"
-            className="border border-linea-fuerte rounded-[2px] px-2 py-1 text-tinta-tenue hover:text-tinta hover:border-tinta"
+            className="border border-linea rounded-md px-2 py-1 text-tinta-tenue hover:text-acento hover:border-acento"
           >
             ×
           </button>
@@ -229,7 +229,7 @@ export function BuscadorArticulo({
             ? { top: caja.top, left: caja.left, width: Math.max(caja.width, 240) }
             : undefined
         }
-        className="fixed z-50 max-h-64 overflow-y-auto border border-linea-fuerte bg-papel rounded-[2px]"
+        className="fixed z-50 max-h-64 overflow-y-auto border border-linea bg-superficie rounded-md shadow-lg"
       >
         {resultados.length === 0 ? (
           <li className="px-2 py-1.5 text-tinta-tenue">Sin referencias que coincidan</li>

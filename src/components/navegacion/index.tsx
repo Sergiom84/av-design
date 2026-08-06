@@ -53,8 +53,8 @@ function Secciones({ ruta, alNavegar }: { ruta: string; alNavegar?: () => void }
             aria-current={activa ? 'page' : undefined}
             className={`flex items-center gap-3 rounded-md px-3 py-2 font-medium ${
               activa
-                ? 'bg-acento-suave text-acento'
-                : 'text-tinta-tenue hover:bg-superficie-hundida hover:text-tinta'
+                ? 'bg-acento text-rail-texto-activo'
+                : 'text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo'
             }`}
           >
             <Icono className="size-5 shrink-0" />
@@ -68,8 +68,8 @@ function Secciones({ ruta, alNavegar }: { ruta: string; alNavegar?: () => void }
 
 function Marca() {
   return (
-    <Link href="/" className="t-subtitulo block px-6 py-5">
-      AV<span className="text-tinta-tenue">_design</span>
+    <Link href="/" className="t-subtitulo block px-6 py-5 text-rail-texto-activo">
+      AV<span className="text-rail-texto">_design</span>
     </Link>
   );
 }
@@ -83,7 +83,7 @@ function BotonSalir() {
     <form action={salir} className="mt-auto px-3 pb-4">
       <button
         type="submit"
-        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-tinta-tenue hover:bg-superficie-hundida hover:text-tinta"
+        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
       >
         <IconoSalir className="size-5 shrink-0" />
         Salir
@@ -108,7 +108,7 @@ export function Marco({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-full">
       {/* Sidebar de escritorio */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-linea-suave bg-superficie md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-rail md:flex">
         <Marca />
         <Secciones ruta={ruta} />
         <BotonSalir />
@@ -122,14 +122,14 @@ export function Marco({ children }: { children: ReactNode }) {
             onClick={() => setAbierto(false)}
             aria-hidden
           />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-superficie shadow-lg">
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-rail shadow-lg">
             <div className="flex items-center justify-between pr-3">
               <Marca />
               <button
                 type="button"
                 onClick={() => setAbierto(false)}
                 aria-label="Cerrar menú"
-                className="rounded-md p-2 text-tinta-tenue hover:text-tinta"
+                className="rounded-md p-2 text-rail-texto hover:text-rail-texto-activo"
               >
                 <IconoCerrar />
               </button>

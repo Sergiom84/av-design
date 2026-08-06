@@ -26,6 +26,12 @@
   --sombra-tarjeta: 0 2px 4px -2px rgba(23, 23, 23, 0.06),
     0 4px 8px -2px rgba(23, 23, 23, 0.1);
 
+  /* Rail de navegación oscuro, como el de XTEN-AV. */
+  --rail: #10141f;
+  --rail-texto: #8e97a8;
+  --rail-texto-activo: #ffffff;
+  --rail-hundido: #1c2333;
+
   /* Alias del sistema anterior (papel/tinta). No usar en pantallas nuevas. */
   --papel: var(--fondo);
   --papel-hundido: var(--superficie-hundida);
@@ -50,6 +56,10 @@
   --color-alerta: var(--alerta);
   --color-alerta-suave: var(--alerta-suave);
   --color-aviso: var(--aviso);
+  --color-rail: var(--rail);
+  --color-rail-texto: var(--rail-texto);
+  --color-rail-texto-activo: var(--rail-texto-activo);
+  --color-rail-hundido: var(--rail-hundido);
 
   --font-ui: var(--fuente-ui), system-ui, sans-serif;
   --font-mono: var(--fuente-mono), ui-monospace, monospace;

@@ -71,6 +71,9 @@ Tokens extraídos del styleguide de XTEN-AV (`--csk-3669d9*`, `--gray-*`,
 | `--alerta` | `#b3261e` | `schemes-error` | Falta un dato imprescindible |
 | `--alerta-suave` | `#f9dedc` | `error-container` | Fondo de aviso bloqueante |
 | `--aviso` | `#8a6d1f` | propio | Advertencia no bloqueante (validación de conexiones) |
+| `--rail` | `#10141f` | rail lateral oscuro | Fondo de la navegación |
+| `--rail-texto` | `#8e97a8` | derivado | Texto del rail en reposo |
+| `--rail-hundido` | `#1c2333` | derivado | Hover en el rail |
 
 El rojo `--alerta` sigue reservado para lo que impide calcular o montar. Que
 falte un precio no es alerta: es información, y va en `--tinta-tenue`.
@@ -87,9 +90,12 @@ token:
 
 ## Disposición
 
-- **Sidebar vertical fija** de `16rem` en escritorio, fondo `--superficie`,
-  colapsable a iconos; en móvil, cajón sobre el contenido. Sección activa con
-  `--acento-suave` de fondo y texto `--acento`.
+- **Rail vertical fijo oscuro** de `16rem` en escritorio, como el de XTEN-AV
+  (decisión de Sergio, 7-8-2026): fondo `--rail` (`#10141f`), texto
+  `--rail-texto` (`#8e97a8`), sección activa con fondo `--acento` y texto
+  blanco. En móvil, cajón sobre el contenido. A diferencia de XTEN-AV no se
+  colapsa a iconos: nueve secciones con etiqueta se leen mejor que nueve
+  iconos con flyout.
 - **Barra superior** de `3.5rem`: nombre de la sala o sección actual a la
   izquierda, acciones de la vista a la derecha.
 - Contenido sobre `--fondo`, contenedor máximo `100rem`, relleno `1.5rem`.

@@ -41,8 +41,10 @@ conserva el aspecto viejo entero, sin mezclas dentro de la misma vista:
    dentro de una tarjeta con buscador y contador, así que la lista de salas
    sigue ese patrón. Las primitivas compartidas (`Tarjeta`, `Aviso`, `Dato`)
    llevan ya la superficie nueva, con lo que el resto de pantallas la hereda.
-3. **R1c · Ficha de sala**: la pantalla más usada. Medidas, equipamiento,
-   cable, tabla de cables, en tarjetas.
+3. **R1c · Ficha de sala**. Hecho. La ficha ya era composición de bloques
+   sobre `Tarjeta`, así que heredó la superficie de R1b; lo que quedaba era el
+   buscador de artículo (estilo viejo incrustado) y la decisión del rail:
+   oscuro como XTEN-AV, con etiquetas en vez de solo iconos.
 4. **R1d · Plantillas y catálogo.**
 5. **R1e · Almacén, compras y carga**: incluye la vista móvil de carga, que se
    usa de pie.

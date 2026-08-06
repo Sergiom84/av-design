@@ -73,7 +73,7 @@ export function ListaDeCarga({
                 type="submit"
                 disabled={!editable}
                 aria-pressed={l.cargado}
-                className="w-full flex items-center gap-4 text-left py-4 px-1 min-h-[3.5rem] disabled:opacity-70 hover:bg-papel-hundido transition-colors"
+                className="w-full flex items-center gap-4 text-left py-4 px-1 min-h-[3.5rem] disabled:opacity-70 hover:bg-superficie-hundida transition-colors"
               >
                 {/*
                   Cuadro de 2 rem: se ve y se acierta con el pulgar. Sin icono
@@ -82,8 +82,8 @@ export function ListaDeCarga({
                 */}
                 <span
                   aria-hidden
-                  className={`shrink-0 w-8 h-8 border rounded-[2px] ${
-                    l.cargado ? 'bg-acento border-acento' : 'bg-papel border-linea-fuerte'
+                  className={`shrink-0 w-8 h-8 border rounded-md ${
+                    l.cargado ? 'bg-acento border-acento' : 'bg-superficie border-linea-fuerte'
                   }`}
                 />
                 <span className="flex-1 min-w-0">

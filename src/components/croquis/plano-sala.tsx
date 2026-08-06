@@ -43,7 +43,7 @@ export function PlanoSala({
       aria-label={`Croquis en planta de ${escena.titulo}`}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect width="100%" height="100%" fill="var(--papel)" />
+      <rect width="100%" height="100%" fill="var(--fondo)" />
 
       <Paredes p={p} escena={escena} />
       <Mesa p={p} escena={escena} />
@@ -83,7 +83,7 @@ function Mesa({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
       y={p.y(mesa.y_m + mesa.ancho_m)}
       width={p.d(mesa.largo_m)}
       height={p.d(mesa.ancho_m)}
-      fill="var(--papel-hundido)"
+      fill="var(--superficie-hundida)"
       stroke="var(--tinta)"
       strokeWidth={1.25}
     />

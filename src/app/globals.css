@@ -4,8 +4,8 @@
    Sistema visual · ver design-system/MASTER.md
    Lenguaje extraído de XTEN-AV (volcado Inicio/): Plus Jakarta Sans para
    interfaz, JetBrains Mono para datos, acento azul, tarjetas con sombra.
-   Los nombres papel/tinta se conservan como alias para que las pantallas
-   aún no migradas sigan compilando; apuntan ya a los valores nuevos.
+   La migración terminó el 7-8-2026: los alias papel/papel-hundido de la
+   etapa anterior ya no existen; tinta y linea conservan su nombre.
    --------------------------------------------------------------------- */
 
 :root {
@@ -32,9 +32,7 @@
   --rail-texto-activo: #ffffff;
   --rail-hundido: #1c2333;
 
-  /* Alias del sistema anterior (papel/tinta). No usar en pantallas nuevas. */
-  --papel: var(--fondo);
-  --papel-hundido: var(--superficie-hundida);
+  /* Borde de control marcado (cabecera de tabla, checkbox de carga). */
   --linea-fuerte: #cbd5e1;
 }
 
@@ -42,8 +40,6 @@
   --color-fondo: var(--fondo);
   --color-superficie: var(--superficie);
   --color-superficie-hundida: var(--superficie-hundida);
-  --color-papel: var(--papel);
-  --color-papel-hundido: var(--papel-hundido);
   --color-tinta: var(--tinta);
   --color-tinta-tenue: var(--tinta-tenue);
   --color-linea: var(--linea);

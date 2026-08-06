@@ -13,8 +13,8 @@ export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
   const { destino, error } = await searchParams;
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center">
-      <div className="w-full max-w-sm">
+    <div className="min-h-[70vh] flex items-center justify-center px-4">
+      <div className="w-full max-w-sm tarjeta p-6">
         <h1 className="t-titulo mb-1">
           AV<span className="text-tinta-tenue">_design</span>
         </h1>

@@ -49,11 +49,48 @@ conserva el aspecto viejo entero, sin mezclas dentro de la misma vista:
    primitivas; el catálogo cambió su rejilla de marcas pegadas (`gap-px`) por
    tarjetas sueltas, y los contadores del almacén se adelantaron porque eran
    el mismo patrón.
-5. **R1e · Almacén, compras y carga**: incluye la vista móvil de carga, que se
-   usa de pie.
-6. **R1f · Parámetros y restos.**
+5. **R1e · Almacén, compras y carga**. Hecho: el checkbox táctil de la lista
+   de carga y los tonos del check-in eran los últimos restos.
+6. **R1f · Parámetros y restos.** Hecho: la puerta de entrada gana tarjeta, el
+   croquis usa los tokens nuevos y los alias papel/papel-hundido se
+   eliminaron. **R1 completo.**
 
-Cada paso se verifica en escritorio y móvil antes de pasar al siguiente.
+Cada paso se verificó en escritorio y móvil antes de pasar al siguiente.
+
+### Mejoras adoptadas del análisis de la base de conocimiento de XTEN-AV (7-8-2026)
+
+Del recorrido documental de su KB (subagente, ~200 artículos de X-DRAW más
+proyectos y X-Pro). Lo confirmado: **XTEN-AV no calcula metros de cable** — su
+"longitud" es una columna de texto que se teclea a mano — y su BOM y su dibujo
+son dos estados que se desincronizan, con una familia entera de artículos de
+soporte para arreglar el desajuste. Las dos ventajas de AV_design (metros
+calculados, todo derivado de las mismas tablas) quedan validadas por su propia
+documentación.
+
+Criterios que entran en módulos ya planificados:
+
+- **R2 (diagrama)**: vista "solo puertos conectados / todos" por query param —
+  con matrices de 20+ puertos el esquema es ilegible sin ello—; color del
+  punto de conexión por señal con la misma paleta que `PREFIJO_CABLE`, para
+  que tabla y diagrama se lean igual; sufijo por tipo en los equipos del
+  croquis (DISPLAY-1, DISPLAY-2) sin renumeración retroactiva, mismo criterio
+  que los cables.
+- **P1 (ciclo de vida)**: el estado del material de una obra
+  (pedido/recibido/instalado/entregado) se deriva de movimientos y
+  recepciones, nunca se teclea — en X-Pro es un campo manual y es su punto
+  débil. El "inventario entregado de la sala" saldrá de esas tablas.
+- **Editar puertos con conexiones vivas** (Ahora, pieza suelta): XTEN-AV
+  destruye todas las conexiones del bloque al editar puertos; aquí se
+  conservarán las que sobreviven y se avisará listando los cables que se
+  pierden.
+
+Para `Después`: nota libre por cable en `conexiones`; export XLS de la tabla
+de cables; "guardar sala como plantilla" (el camino inverso ya existe a
+medias) y "duplicar sala" para gemelas; `edificio`/`planta` en salas para
+agrupar; ordenar el buscador de artículo por frecuencia de uso real.
+
+Para `Experimental`: aprobación humana explícita, submittals compilados,
+export DXF del croquis, fichaje de horas de campo.
 
 ### R2 · Diagrama de conexiones, solo lectura
 

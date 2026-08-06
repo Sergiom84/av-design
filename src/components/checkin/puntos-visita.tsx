@@ -142,7 +142,7 @@ function clases(estado: Exclude<EstadoPunto, 'pendiente'>, puesto: boolean): str
   if (!puesto) return 'text-tinta-tenue';
   if (estado === 'conforme') return 'boton-principal';
   if (estado === 'incidencia') return 'border-alerta bg-alerta-suave text-alerta';
-  return 'border-linea-fuerte bg-papel-hundido text-tinta-tenue';
+  return 'border-linea-fuerte bg-superficie-hundida text-tinta-tenue';
 }
 
 function PuntoLeido({ punto }: { punto: PuntoRevision }) {

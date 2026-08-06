@@ -204,7 +204,10 @@ function puntoCatalogo(
       clave: 'catalogo',
       titulo: 'Referencias de catálogo',
       estado: 'listo',
-      detalle: `Los ${equipos.length} equipos tienen referencia de catálogo.`,
+      detalle:
+        equipos.length === 1
+          ? '1 equipo, con referencia de catálogo.'
+          : `${equipos.length} equipos, todos con referencia de catálogo.`,
     };
   }
 
@@ -261,7 +264,10 @@ function puntoPuertos(conexiones: Conexion[]): PuntoMontaje {
       clave: 'puertos',
       titulo: 'Puertos de la conexión',
       estado: 'listo',
-      detalle: `Las ${conexiones.length} tiradas tienen puerto de origen y de destino.`,
+      detalle:
+        conexiones.length === 1
+          ? '1 tirada, con puerto de origen y de destino.'
+          : `${conexiones.length} tiradas, todas con puerto de origen y de destino.`,
     };
   }
 
@@ -326,7 +332,10 @@ function puntoCableArticulo(conexiones: Conexion[]): PuntoMontaje {
       clave: 'cable_articulo',
       titulo: 'Cable elegido',
       estado: 'listo',
-      detalle: `Las ${conexiones.length} tiradas tienen cable del catálogo.`,
+      detalle:
+        conexiones.length === 1
+          ? '1 tirada, con cable del catálogo.'
+          : `${conexiones.length} tiradas, todas con cable del catálogo.`,
     };
   }
 
@@ -356,7 +365,10 @@ function puntoCompatibilidad(filas: FilaCable[]): PuntoMontaje {
       clave: 'compatibilidad',
       titulo: 'Compatibilidad de la tirada',
       estado: 'listo',
-      detalle: `Las ${filas.length} tiradas casan en señal y sentido.`,
+      detalle:
+        filas.length === 1
+          ? '1 tirada, casa en señal y sentido.'
+          : `${filas.length} tiradas, todas casan en señal y sentido.`,
     };
   }
 

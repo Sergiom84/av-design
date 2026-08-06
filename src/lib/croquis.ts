@@ -284,6 +284,8 @@ export function construirEscena({
     };
   });
 
+  separarAmontonados(dibujados);
+
   const estimados = dibujados.filter((e) => e.estimada).length;
   if (estimados > 0) {
     avisos.push(
@@ -327,6 +329,46 @@ export function construirEscena({
     anotaciones: anotacionesDeLaEscena(sala, dibujados),
     avisos,
   };
+}
+
+/** Hueco entre dos equipos que se han tenido que separar. */
+const SEPARACION_EQUIPOS_M = 0.12;
+
+/**
+ * Reparte los equipos que han caído en el mismo punto.
+ *
+ * La caja de conexiones y el panel táctil son extremos distintos que se colocan
+ * los dos en el centro de la mesa, así que sin esto se dibujan uno encima de
+ * otro y sus dos rótulos se pisan: el croquis deja de leerse justo en la sala
+ * más repetida del inventario, que lleva los dos.
+ *
+ * Solo mueve lo que se dedujo. Una posición escrita es una medida y no se toca.
+ * Modifica la lista en el sitio: se llama una vez, justo después de colocar.
+ */
+function separarAmontonados(equipos: EquipoCroquis[]): void {
+  const grupos = new Map<string, EquipoCroquis[]>();
+  for (const e of equipos) {
+    if (!e.estimada) continue;
+    const clave = `${e.x_m}|${e.y_m}`;
+    const grupo = grupos.get(clave);
+    if (grupo) grupo.push(e);
+    else grupos.set(clave, [e]);
+  }
+
+  for (const grupo of grupos.values()) {
+    if (grupo.length < 2) continue;
+
+    // Se separan por el eje corto y no por el largo a propósito: la distancia
+    // en x de la pantalla a la caja de conexiones es la cota de la tirada, y
+    // moverla por un motivo de dibujo falsearía el número que se lee en el
+    // plano. El orden es el de la lista, ya ordenada por nombre, para que el
+    // mismo croquis salga igual dos veces.
+    const paso = Math.max(...grupo.map((e) => e.ancho_m)) + SEPARACION_EQUIPOS_M;
+    const centro = (grupo.length - 1) / 2;
+    grupo.forEach((e, i) => {
+      e.y_m = redondear(e.y_m + (i - centro) * paso);
+    });
+  }
 }
 
 /**
@@ -383,7 +425,11 @@ function cotasDeLaEscena(
   const pantalla = equipos.find((e) => e.extremo === 'pantalla');
   const caja = equipos.find((e) => e.extremo === 'caja_conexiones');
   if (pantalla && caja) {
-    const recorrido = Math.abs(caja.x_m - pantalla.x_m) + Math.abs(caja.y_m - pantalla.y_m);
+    // Solo la distancia en x, que es lo que el croquis de mano escribe: "de la
+    // pared de la TV a la caja de conexiones, 2,40 m". Sumarle el desvío lateral
+    // mezclaría la cota con el recorrido del cable, y el recorrido con sus
+    // subidas y su holgura ya lo da `calculo-cable.ts` en la tabla de cables.
+    const recorrido = Math.abs(caja.x_m - pantalla.x_m);
     if (recorrido > 0) {
       cotas.push({
         clave: 'pantalla_caja',

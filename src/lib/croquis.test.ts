@@ -175,6 +175,62 @@ describe('la escena completa', () => {
     assert.ok(escena.avisos.some((a) => a.includes('posición')));
   });
 
+  it('dos equipos deducidos en el mismo punto se separan, no se pisan', () => {
+    // La SALA TP de aforo 8 lleva caja de conexiones y panel táctil, y los dos
+    // se deducen al centro de la mesa: uno encima de otro no se lee.
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [
+        equipo('caja', 'AMX', 'caja_conexiones'),
+        equipo('panel', 'Cisco Room Navigator', 'mesa'),
+      ],
+      conexiones: [],
+      tomas: [],
+    });
+
+    const [a, b] = escena.equipos;
+    assert.notEqual(a.y_m, b.y_m);
+    assert.ok(Math.abs(a.y_m - b.y_m) >= 0.3, 'quedan demasiado juntos');
+    // Siguen sobre la mesa: separarlos no puede echarlos fuera.
+    const mesa = escena.mesa!;
+    for (const e of [a, b]) {
+      assert.ok(e.y_m > mesa.y_m && e.y_m < mesa.y_m + mesa.ancho_m);
+    }
+  });
+
+  it('separarlos no mueve la cota de la tirada, que se mide en x', () => {
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [
+        equipo('tv', 'Samsung QB65R-B', 'pantalla'),
+        equipo('caja', 'AMX', 'caja_conexiones'),
+        equipo('panel', 'Cisco Room Navigator', 'mesa'),
+      ],
+      conexiones: [],
+      tomas: [],
+    });
+
+    assert.equal(
+      escena.cotas.find((c) => c.clave === 'pantalla_caja')?.texto,
+      '2,35 m',
+    );
+  });
+
+  it('separar equipos no mueve al que tiene posición medida', () => {
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [
+        equipo('caja', 'AMX', 'caja_conexiones'),
+        equipo('panel', 'Panel', 'mesa', { x_m: 2.35, y_m: 1.25, z_m: 0.73 }),
+      ],
+      conexiones: [],
+      tomas: [],
+    });
+
+    const panel = escena.equipos.find((e) => e.id === 'panel')!;
+    assert.equal(panel.x_m, 2.35, 'una posición medida no se toca');
+  });
+
   it('la posición escrita manda y no se marca como estimada', () => {
     const escena = construirEscena({
       sala: SALA_BATERIA,

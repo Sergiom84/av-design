@@ -484,3 +484,81 @@ Menos de lo que se suponía en el análisis anterior, y por motivos distintos:
   plan actual `$29.5`, renovación `$66 x 1`.
 - Limitación conocida del plan Free según su propia tabla de precios: **exportación a PDF con
   marca de agua**. No se descargó ningún fichero para comprobarlo.
+
+---
+
+## 9. Recorrido en vivo del 7-8-2026 (sesión de Sergio, navegación real)
+
+Recorrido completo con sesión iniciada: dashboard, All Projects, vista de
+proyecto, constructor de BOM, editor X-DRAW, hub de documentos, Cable Schedule
+y los dos asistentes de creación. Lo que corrige o añade sobre lo anterior:
+
+### Jerarquía real
+
+**Proyecto → Localizaciones → Diseños (salas) → Documentos.** El proyecto es la
+obra; cada diseño es una sala; los diseños se agrupan por localización ("Add
+Location", con "Unassigned" por defecto). Traducción a AV_design: la obra
+agrupa salas de una sede, cosa que hoy no existe (la sala cuelga directa).
+
+### Crear proyecto: asistente de 2 pasos
+
+Descripción (nombre*, grupo*, cuenta, contacto, país, vertical, descripción) →
+Especificaciones (presupuesto* en USD, etapa del embudo*, fecha de inicio,
+fecha de aprovisionamiento*). La etapa alimenta el embudo del dashboard
+(Bidding → Initial Briefing → Concept Design → Decision Stage → Final Design →
+Project Won).
+
+### Crear diseño: el modal que importa para las 144 salas
+
+"Design via X-DRAW": nombre, **Number of Designs** (alta en serie de N salas
+iguales de golpe), plantilla (pestañas XTEN-AV Templates / My Templates, con
+"Start From Scratch" como opción), Type of Room, localización y toggle "Start
+With Floor Plan". Un diseño se guarda como plantilla propia con "Save as
+X-DRAW Template" desde su hub. **El alta en serie con plantilla es exactamente
+el M5+alta en serie del roadmap.**
+
+### Flujo dentro del diseño
+
+1. **Search & Add Products**: se monta la BOM buscando en la biblioteca
+   (Combined Library / XTEN-AV Library), con cantidades, precio MSRP, "Add
+   Custom Product", "Upload BOM" y áreas. Totales en vivo (productos e
+   importe).
+2. **Edit Drawing** abre el editor (draw.io adaptado): paletas de Product
+   Blocks/Images, símbolos AVIXA, accesorios de rack y floorplans; pestañas de
+   página ("Line Schematics" + añadir); "Pull BOM Changes" sincroniza BOM →
+   dibujo.
+3. **View Design Docs**: hub del diseño con 12 documentos, verde el ya
+   generado: BOM, Line Schematics, Signal Flow, Rack Layout, **Cable
+   Schedule**, Ceiling Speaker Layout, Scope of Work, Floor Plans, Front
+   Elevation, Plates & Panels, Submittals, Asset Management. Más propuestas.
+
+### El bloque de equipo en el esquema (referencia para R2)
+
+Rectángulo redondeado con borde de color; etiqueta de categoría encima
+(DISPLAY, POE INJECTOR); entradas en columna izquierda y salidas en derecha
+con el nombre serigrafiado (HDMI IP1, AUDIO OP1, LAN1, POWER1); el tipo de
+conector fuera del borde (HDMI, DVI-D, 3.5MM JACK, RJ45, IEC, TYPE-A); marca y
+modelo en azul al pie. La línea lleva el identificador del cable encima
+(HD-1000 — la misma convención de prefijos que ya usa AV_design). Un kit se
+despliega en sub-bloques (el Crestron UC-C100-T sale como POE INJECTOR + VIDEO
+CONVERTER + DESKTOP/UC-ENGINE, cada uno etiquetado con su kit padre): así
+resuelven lo que aquí son las líneas Cisco a 0,00 de composición de kit.
+Opciones de vista: Hide Cable Ids / Hide Cables / Hide Unused Ports / Hide
+Unused Connectors.
+
+### Cable Schedule real
+
+Columnas: S.NO, CABLE ID, SOURCE DEVICE (con kit padre entre paréntesis),
+DESTINATION DEVICE, SOURCE PORT, SOURCE PORT CONNECTOR, DESTINATION PORT,
+DESTINATION PORT CONNECTOR, DESTINATION LOCATION, CABLE TYPE (editable).
+Columnas configurables ("Add Columns"), exportación .XLS/.PDF, buscador.
+**Sin metros por ningún sitio**: la longitud de tirada sigue siendo el vacío
+que AV_design llena.
+
+### Detalles de interfaz confirmados en vivo
+
+Rail lateral oscuro colapsado a iconos con flyout al pasar (PROJECTS → All /
+My / Shared); barra superior blanca con buscador central; tarjetas blancas de
+radio ~12 px con sombra suave; pestañas con subrayado azul; tablas con cebra
+azulada y paginación "Showing X to Y of Z entries"; botón verde solo para
+"Create Project" (el resto azules).

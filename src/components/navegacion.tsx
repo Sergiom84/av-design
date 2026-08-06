@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { salir } from '@/app/acciones-sesion';
+import { RUTA_ENTRADA } from '@/lib/sesion';
 
 const SECCIONES = [
   { href: '/', etiqueta: 'Panel' },
@@ -17,6 +19,10 @@ const SECCIONES = [
 
 export function Navegacion() {
   const ruta = usePathname();
+
+  // En la puerta no hay barra: desde ahí no se llega a ningún sitio, y una
+  // barra con nueve enlaces que redirigen a la propia puerta solo confunde.
+  if (ruta === RUTA_ENTRADA) return null;
 
   return (
     <header className="border-b border-linea">
@@ -43,6 +49,16 @@ export function Navegacion() {
             );
           })}
         </nav>
+
+        {/*
+          Salir va al final y sin destacar: se usa una vez al día y compite en
+          la misma barra con las nueve secciones que se usan todo el rato.
+        */}
+        <form action={salir} className="ml-auto">
+          <button type="submit" className="text-tinta-tenue hover:text-tinta">
+            Salir
+          </button>
+        </form>
       </div>
     </header>
   );

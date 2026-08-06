@@ -161,6 +161,15 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   JavaScript. Cien filas editables a la vez pesaban más que el resto junto.
 - **Cada bloque de la interfaz vive en su propia carpeta de componente.** Nada
   de páginas monolíticas: `src/components/<bloque>/`.
+- **Se entra con una clave de departamento, no con usuario.** La aplicación
+  está en una dirección pública con el inventario dentro, así que hay puerta:
+  `src/middleware.ts` la vigila y el criterio vive en `src/lib/sesion.ts`, que
+  es lógica pura con pruebas. La clave no se guarda en ningún sitio, solo su
+  huella SHA-256 (`CLAVE_ACCESO_HASH`), y la cookie va firmada con
+  `SESION_SECRETO`. Sin las dos variables, en desarrollo se pasa y **en
+  producción no pasa nadie**: un despliegue al que se le olvidó la variable es
+  justo el caso en el que el inventario acaba abierto. Saber quién tocó qué es
+  otro problema, y para eso ya está `rol_usuario` en el esquema.
 - **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
   `SinConfigurar` en vez de lanzar un error.
 - **Aspecto:** `design-system/MASTER.md` manda. Cormorant Garamond + JetBrains

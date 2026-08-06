@@ -9,6 +9,8 @@ import {
   firmarSesion,
   huella,
   igualSinFiltrar,
+  limpiarHuella,
+  limpiarSecreto,
   RUTA_ENTRADA,
 } from '@/lib/sesion';
 
@@ -23,8 +25,10 @@ export async function entrar(datos: FormData) {
   const clave = String(datos.get('clave') ?? '');
   const destino = String(datos.get('destino') ?? '/');
   // Con corchetes, no con punto: ver el comentario de src/middleware.ts.
-  const configurada = process.env['CLAVE_ACCESO_HASH'];
-  const secreto = process.env['SESION_SECRETO'];
+  // Y limpiadas: una huella pegada con un salto de línea detrás no coincide
+  // nunca, y desde fuera parece que la contraseña está mal.
+  const configurada = limpiarHuella(process.env['CLAVE_ACCESO_HASH']);
+  const secreto = limpiarSecreto(process.env['SESION_SECRETO']);
 
   if (!configurada || !secreto || !clave) {
     redirect(`${RUTA_ENTRADA}?error=1`);

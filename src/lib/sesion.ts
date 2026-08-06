@@ -125,6 +125,31 @@ async function firma(secreto: string, mensaje: string): Promise<string> {
   return aHex(await crypto.subtle.sign('HMAC', llave, codificar(mensaje)));
 }
 
+/**
+ * Limpia lo que llega de la configuración del servidor.
+ *
+ * Copiar una huella al portapapeles con `| clip` arrastra el salto de línea
+ * final, y Render lo guarda tal cual: 65 caracteres en vez de 64, y la clave
+ * correcta deja de entrar sin que nada explique por qué. Costó una tarde.
+ *
+ * Se recorta y se pasa a minúsculas porque una huella es hexadecimal: `3F` y
+ * `3f` son el mismo valor, y quien la pega de un sitio a otro no tiene por qué
+ * saberlo.
+ */
+export function limpiarHuella(valor: string | undefined): string | undefined {
+  const limpio = valor?.trim().toLowerCase();
+  return limpio ? limpio : undefined;
+}
+
+/**
+ * El secreto de firma solo se recorta: pasarlo a minúsculas lo cambiaría, y
+ * cambiar el secreto echa a todo el mundo de golpe.
+ */
+export function limpiarSecreto(valor: string | undefined): string | undefined {
+  const limpio = valor?.trim();
+  return limpio ? limpio : undefined;
+}
+
 export interface Configuracion {
   huellaClave: string | undefined;
   secreto: string | undefined;

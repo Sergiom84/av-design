@@ -8,6 +8,8 @@ import {
   firmarSesion,
   huella,
   igualSinFiltrar,
+  limpiarHuella,
+  limpiarSecreto,
   sesionValida,
 } from './sesion';
 
@@ -131,6 +133,29 @@ describe('a dónde se puede devolver después de entrar', () => {
     ]) {
       assert.equal(destinoSeguro(malo), '/', malo);
     }
+  });
+});
+
+describe('la limpieza de lo que llega del servidor', () => {
+  it('el salto de linea que arrastra el portapapeles no cuenta', () => {
+    // 65 caracteres en vez de 64, y la clave correcta dejaba de entrar.
+    assert.equal(limpiarHuella('a'.repeat(64) + '\n'), 'a'.repeat(64));
+    assert.equal(limpiarHuella('  ' + 'b'.repeat(64) + '  '), 'b'.repeat(64));
+  });
+
+  it('una huella en mayusculas es la misma huella', () => {
+    assert.equal(limpiarHuella('ABCDEF'), 'abcdef');
+  });
+
+  it('vacio o solo espacios es no configurado, no cadena vacia', () => {
+    assert.equal(limpiarHuella(undefined), undefined);
+    assert.equal(limpiarHuella(''), undefined);
+    assert.equal(limpiarHuella('   \n'), undefined);
+    assert.equal(limpiarSecreto('  '), undefined);
+  });
+
+  it('el secreto se recorta pero NO se pasa a minusculas: cambiarlo echa a todos', () => {
+    assert.equal(limpiarSecreto('  AbCdEf  '), 'AbCdEf');
   });
 });
 

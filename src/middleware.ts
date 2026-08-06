@@ -3,6 +3,8 @@ import {
   COOKIE_SESION,
   esRutaLibre,
   estadoPuerta,
+  limpiarHuella,
+  limpiarSecreto,
   RUTA_ENTRADA,
   sesionValida,
 } from '@/lib/sesion';
@@ -26,8 +28,8 @@ export async function middleware(peticion: NextRequest) {
   // aplicación seguía comparando contra la huella del despliegue anterior.
   const puerta = estadoPuerta(
     {
-      huellaClave: process.env['CLAVE_ACCESO_HASH'],
-      secreto: process.env['SESION_SECRETO'],
+      huellaClave: limpiarHuella(process.env['CLAVE_ACCESO_HASH']),
+      secreto: limpiarSecreto(process.env['SESION_SECRETO']),
     },
     process.env['NODE_ENV'] === 'production',
   );
@@ -44,7 +46,7 @@ export async function middleware(peticion: NextRequest) {
   }
 
   const vale = await sesionValida(
-    process.env['SESION_SECRETO']!,
+    limpiarSecreto(process.env['SESION_SECRETO'])!,
     peticion.cookies.get(COOKIE_SESION)?.value,
     Date.now(),
   );

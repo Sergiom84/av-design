@@ -36,8 +36,11 @@ conserva el aspecto viejo entero, sin mezclas dentro de la misma vista:
    Jakarta Sans, componente de sidebar + barra superior
    (`src/components/navegacion/`). Con esto toda la aplicación cambia de
    esqueleto aunque las pantallas sigan igual por dentro.
-2. **R1b · Lista de salas y panel de inicio**: rejilla de tarjetas tipo
-   proyecto de XTEN-AV (nombre, tipología, aforo, estado de revisión).
+2. **R1b · Lista de salas y panel de inicio**. Hecho. Visto el dashboard real
+   con sesión: su lista de proyectos no es rejilla de tarjetas sino tabla
+   dentro de una tarjeta con buscador y contador, así que la lista de salas
+   sigue ese patrón. Las primitivas compartidas (`Tarjeta`, `Aviso`, `Dato`)
+   llevan ya la superficie nueva, con lo que el resto de pantallas la hereda.
 3. **R1c · Ficha de sala**: la pantalla más usada. Medidas, equipamiento,
    cable, tabla de cables, en tarjetas.
 4. **R1d · Plantillas y catálogo.**

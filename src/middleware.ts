@@ -19,12 +19,17 @@ export async function middleware(peticion: NextRequest) {
   const ruta = peticion.nextUrl.pathname;
   if (esRutaLibre(ruta)) return NextResponse.next();
 
+  // Se leen con corchetes y no con punto a propósito. Con `process.env.X` el
+  // compilador incrusta el valor en el código, así que cambiar la clave en el
+  // servidor no cambia nada hasta que se vuelve a compilar entero. Costó una
+  // tarde descubrirlo: la clave nueva no entraba y la vieja tampoco, porque la
+  // aplicación seguía comparando contra la huella del despliegue anterior.
   const puerta = estadoPuerta(
     {
-      huellaClave: process.env.CLAVE_ACCESO_HASH,
-      secreto: process.env.SESION_SECRETO,
+      huellaClave: process.env['CLAVE_ACCESO_HASH'],
+      secreto: process.env['SESION_SECRETO'],
     },
-    process.env.NODE_ENV === 'production',
+    process.env['NODE_ENV'] === 'production',
   );
 
   if (puerta === 'abierta') return NextResponse.next();
@@ -39,7 +44,7 @@ export async function middleware(peticion: NextRequest) {
   }
 
   const vale = await sesionValida(
-    process.env.SESION_SECRETO!,
+    process.env['SESION_SECRETO']!,
     peticion.cookies.get(COOKIE_SESION)?.value,
     Date.now(),
   );

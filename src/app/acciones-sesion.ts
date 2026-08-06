@@ -22,8 +22,9 @@ import {
 export async function entrar(datos: FormData) {
   const clave = String(datos.get('clave') ?? '');
   const destino = String(datos.get('destino') ?? '/');
-  const configurada = process.env.CLAVE_ACCESO_HASH;
-  const secreto = process.env.SESION_SECRETO;
+  // Con corchetes, no con punto: ver el comentario de src/middleware.ts.
+  const configurada = process.env['CLAVE_ACCESO_HASH'];
+  const secreto = process.env['SESION_SECRETO'];
 
   if (!configurada || !secreto || !clave) {
     redirect(`${RUTA_ENTRADA}?error=1`);

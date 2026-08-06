@@ -168,7 +168,10 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   huella SHA-256 (`CLAVE_ACCESO_HASH`), y la cookie va firmada con
   `SESION_SECRETO`. Sin las dos variables, en desarrollo se pasa y **en
   producción no pasa nadie**: un despliegue al que se le olvidó la variable es
-  justo el caso en el que el inventario acaba abierto. Saber quién tocó qué es
+  justo el caso en el que el inventario acaba abierto. **Cambiar la clave exige
+  redesplegar**: el proceso lee las variables al arrancar, y guardar la nueva
+  huella en Render sin redesplegar deja la aplicación comparando contra la
+  anterior. Saber quién tocó qué es
   otro problema, y para eso ya está `rol_usuario` en el esquema.
 - **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
   `SinConfigurar` en vez de lanzar un error.

@@ -47,7 +47,7 @@ export default async function Almacen() {
         }
       />
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-linea border border-linea mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {(
           [
             ['Referencias en almacén', cuenta.referenciasEnAlmacen],
@@ -56,7 +56,7 @@ export default async function Almacen() {
             ['Bajas registradas', cuenta.bajas],
           ] as const
         ).map(([etiqueta, valor]) => (
-          <div key={etiqueta} className="bg-papel p-4">
+          <div key={etiqueta} className="tarjeta p-4">
             <Dato etiqueta={etiqueta} valor={valor} />
           </div>
         ))}

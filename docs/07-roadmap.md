@@ -45,7 +45,10 @@ conserva el aspecto viejo entero, sin mezclas dentro de la misma vista:
    sobre `Tarjeta`, así que heredó la superficie de R1b; lo que quedaba era el
    buscador de artículo (estilo viejo incrustado) y la decisión del rail:
    oscuro como XTEN-AV, con etiquetas en vez de solo iconos.
-4. **R1d · Plantillas y catálogo.**
+4. **R1d · Plantillas y catálogo.** Hecho. Plantillas heredó entero de las
+   primitivas; el catálogo cambió su rejilla de marcas pegadas (`gap-px`) por
+   tarjetas sueltas, y los contadores del almacén se adelantaron porque eran
+   el mismo patrón.
 5. **R1e · Almacén, compras y carga**: incluye la vista móvil de carga, que se
    usa de pie.
 6. **R1f · Parámetros y restos.**

@@ -49,12 +49,12 @@ export default async function Catalogo({ searchParams }: PageProps<'/catalogo'>)
           <Vacio>Sin resultados.</Vacio>
         </Tarjeta>
       ) : (
-        <div className="grid gap-px bg-linea border border-linea sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {marcas.map((m) => (
             <Link
               key={m.marca}
               href={`/catalogo/${encodeURIComponent(m.marca)}`}
-              className="bg-papel p-4 hover:bg-papel-hundido block"
+              className="tarjeta p-4 hover:bg-superficie-hundida block"
             >
               <div className="t-subtitulo">{m.marca}</div>
               <div className="text-tinta-tenue mt-1">

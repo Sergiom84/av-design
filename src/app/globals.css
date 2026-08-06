@@ -2,46 +2,64 @@
 
 /* ---------------------------------------------------------------------
    Sistema visual · ver design-system/MASTER.md
-   Dos familias: Cormorant Garamond para títulos, JetBrains Mono para todo
-   lo demás. Tres tamaños semánticos: título, subtítulo, texto.
+   Lenguaje extraído de XTEN-AV (volcado Inicio/): Plus Jakarta Sans para
+   interfaz, JetBrains Mono para datos, acento azul, tarjetas con sombra.
+   Los nombres papel/tinta se conservan como alias para que las pantallas
+   aún no migradas sigan compilando; apuntan ya a los valores nuevos.
    --------------------------------------------------------------------- */
 
 :root {
-  --papel: #fbfaf8;
-  --papel-hundido: #f4f2ed;
-  --tinta: #1a1a18;
-  --tinta-tenue: #6b6862;
-  --linea: #e2ded6;
-  --linea-fuerte: #cdc7ba;
-  --acento: #1f4d46;
-  --acento-suave: #e8f0ed;
-  --alerta: #8c3a2b;
-  --alerta-suave: #f7ece9;
+  --fondo: #f6f8fb;
+  --superficie: #ffffff;
+  --superficie-hundida: #f1f7ff;
+  --tinta: #23262f;
+  --tinta-tenue: #637381;
+  --linea: #e0e0e0;
+  --linea-suave: #eef1f5;
+  --acento: #3669d9;
+  --acento-fuerte: #204cac;
+  --acento-suave: #eaeffb;
+  --exito: #298d74;
+  --alerta: #b3261e;
+  --alerta-suave: #f9dedc;
   --aviso: #8a6d1f;
+  --sombra-tarjeta: 0 2px 4px -2px rgba(23, 23, 23, 0.06),
+    0 4px 8px -2px rgba(23, 23, 23, 0.1);
+
+  /* Alias del sistema anterior (papel/tinta). No usar en pantallas nuevas. */
+  --papel: var(--fondo);
+  --papel-hundido: var(--superficie-hundida);
+  --linea-fuerte: #cbd5e1;
 }
 
 @theme inline {
+  --color-fondo: var(--fondo);
+  --color-superficie: var(--superficie);
+  --color-superficie-hundida: var(--superficie-hundida);
   --color-papel: var(--papel);
   --color-papel-hundido: var(--papel-hundido);
   --color-tinta: var(--tinta);
   --color-tinta-tenue: var(--tinta-tenue);
   --color-linea: var(--linea);
+  --color-linea-suave: var(--linea-suave);
   --color-linea-fuerte: var(--linea-fuerte);
   --color-acento: var(--acento);
+  --color-acento-fuerte: var(--acento-fuerte);
   --color-acento-suave: var(--acento-suave);
+  --color-exito: var(--exito);
   --color-alerta: var(--alerta);
   --color-alerta-suave: var(--alerta-suave);
   --color-aviso: var(--aviso);
 
-  --font-titulo: var(--fuente-titulo), Georgia, serif;
+  --font-ui: var(--fuente-ui), system-ui, sans-serif;
   --font-mono: var(--fuente-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--papel);
+  background: var(--fondo);
   color: var(--tinta);
-  font-family: var(--fuente-mono), ui-monospace, monospace;
-  font-size: 0.8125rem;
+  font-family: var(--fuente-ui), system-ui, sans-serif;
+  font-size: 0.875rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -49,31 +67,36 @@ body {
 h1,
 h2,
 h3 {
-  font-family: var(--fuente-titulo), Georgia, serif;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 /* Título · subtítulo · texto. El texto es el más pequeño, a propósito. */
 .t-titulo {
-  font-family: var(--fuente-titulo), Georgia, serif;
-  font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
   line-height: 1.15;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .t-subtitulo {
-  font-family: var(--fuente-titulo), Georgia, serif;
-  font-size: clamp(1.1rem, 0.95rem + 0.6vw, 1.375rem);
+  font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.25rem);
   line-height: 1.25;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .t-etiqueta {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--tinta-tenue);
+}
+
+/* Tarjeta: superficie blanca con sombra, sin borde. */
+.tarjeta {
+  background: var(--superficie);
+  border-radius: 8px;
+  box-shadow: var(--sombra-tarjeta);
 }
 
 /* Tablas de datos: alineación tabular y filas legibles */
@@ -85,29 +108,35 @@ table.datos {
 
 table.datos th {
   text-align: left;
-  font-weight: 400;
+  font-weight: 500;
   font-size: 0.6875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--tinta-tenue);
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--linea-fuerte);
+  border-bottom: 1px solid var(--linea);
   white-space: nowrap;
 }
 
 table.datos td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea-suave);
   vertical-align: top;
 }
 
 table.datos tbody tr:hover {
-  background: var(--papel-hundido);
+  background: var(--superficie-hundida);
 }
 
+/* Toda cifra es un dato: va en mono, alineada, con su unidad. */
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-family: var(--fuente-mono), ui-monospace, monospace;
+}
+
+.dato {
+  font-family: var(--fuente-mono), ui-monospace, monospace;
 }
 
 /* Botones.
@@ -115,27 +144,31 @@ table.datos tbody tr:hover {
    botón: /plantillas pinta cientos y cada uno costaba 110 bytes de HTML —y
    otros tantos en la carga que acompaña a la página. */
 .boton {
-  border: 1px solid var(--linea-fuerte);
-  border-radius: 2px;
-  padding: 0.375rem 0.75rem;
-  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: 6px;
+  padding: 0.375rem 0.875rem;
+  background: var(--superficie);
   color: var(--tinta);
-  transition: border-color 0.15s ease, opacity 0.15s ease;
+  font-weight: 500;
+  transition: border-color 0.15s ease, background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .boton:hover {
-  border-color: var(--tinta);
+  border-color: var(--acento);
+  color: var(--acento);
 }
 
 .boton-principal {
   background: var(--acento);
   border-color: var(--acento);
-  color: var(--papel);
+  color: #ffffff;
 }
 
 .boton-principal:hover {
-  border-color: var(--acento);
-  opacity: 0.9;
+  background: var(--acento-fuerte);
+  border-color: var(--acento-fuerte);
+  color: #ffffff;
 }
 
 .boton-peligro {
@@ -144,6 +177,7 @@ table.datos tbody tr:hover {
 
 .boton-peligro:hover {
   border-color: var(--alerta);
+  color: var(--alerta);
 }
 
 .enlace {
@@ -153,7 +187,7 @@ table.datos tbody tr:hover {
 }
 
 .enlace:hover {
-  opacity: 0.8;
+  color: var(--acento-fuerte);
 }
 
 /* Controles */
@@ -162,9 +196,9 @@ select,
 textarea {
   font-family: inherit;
   font-size: inherit;
-  background: var(--papel);
-  border: 1px solid var(--linea-fuerte);
-  border-radius: 2px;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: 6px;
   padding: 0.3rem 0.5rem;
   color: var(--tinta);
 }

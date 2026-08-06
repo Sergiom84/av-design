@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { Cormorant_Garamond, JetBrains_Mono } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-import { Navegacion } from '@/components/navegacion';
+import { Marco } from '@/components/navegacion';
 
-const titulo = Cormorant_Garamond({
-  variable: '--fuente-titulo',
+const ui = Plus_Jakarta_Sans({
+  variable: '--fuente-ui',
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 });
 
@@ -25,15 +25,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="es" className={`${titulo.variable} ${mono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <Navegacion />
-        <main className="flex-1 w-full max-w-[100rem] mx-auto px-4 sm:px-6 py-8">
-          {children}
-        </main>
-        <footer className="border-t border-linea px-4 sm:px-6 py-4 text-tinta-tenue text-[0.6875rem]">
-          Departamento de Audiovisuales · datos de partida: inventario de salas 2026
-        </footer>
+    <html lang="es" className={`${ui.variable} ${mono.variable} h-full antialiased`}>
+      <body className="min-h-full">
+        <Marco>{children}</Marco>
       </body>
     </html>
   );

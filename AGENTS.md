@@ -27,11 +27,14 @@ deja vacíos exactamente esos tres puntos.
 **Fase 1 completa:** catálogo, plantillas de sala, salas con medidas, cálculo de
 cable y lista de material. Más precios por artículo, que no estaba previsto.
 
-**Fase 3 a medias:** el modelo ya sostiene el esquema de conexiones. Hay puertos
-por artículo, conexiones de puerto a puerto y tabla de cables con los metros
-calculados, que es lo que XTEN-AV deja vacío. Falta el lienzo: nodos =
-`sala_equipos`, anclajes = `puertos`, aristas = `conexiones`. El dibujo es
-presentación de datos que ya existen, no un rediseño.
+**Fase 3:** puertos por artículo, conexiones de puerto a puerto y tabla de
+cables con los metros calculados, que es lo que XTEN-AV deja vacío. Más el
+croquis: la sala tiene mesa y los equipos tienen altura, y de ahí sale el plano
+en planta con sus cotas. El dibujo es presentación de datos que ya existen, no
+un rediseño.
+
+**Qué queda y en qué orden: `docs/07-roadmap.md`.** Manda sobre
+`docs/05-continuar.md`, que se quedó viejo.
 
 **Fase 2 implementada:** almacén con existencias por ubicación y movimientos,
 reservas de material para una obra, qué falta contra el almacén, pedidos por
@@ -75,7 +78,9 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   vigencia de un precio.
 - **Un artículo tiene tantos precios como ofertas.** La misma referencia sale a
   precios distintos según el proveedor y la antigüedad del presupuesto, así que
-  se guardan todos en `precios`. Cada precio es `final` (oferta escrita de un
+  se guardan todos en `precios`. **Los precios están aplazados**: el
+  presupuesto de Cisco de marzo de 2024 sigue sin cargar, y el porqué y las dos
+  decisiones pendientes están en `docs/07-roadmap.md`. Cada precio es `final` (oferta escrita de un
   proveedor, en `data/precios.csv`) u `orientativo` (referencia de mercado, en
   `data/precios-orientativos.csv`). `articulos.coste` se queda con la mejor
   oferta final vigente; si no hay ninguna, usa la mejor orientativa convertida a
@@ -96,6 +101,24 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   por señal, se numera por orden de alta de la conexión y **no puede cambiar**:
   puede estar ya escrito en una brida. Los prefijos viven solo en
   `PREFIJO_CABLE` (`src/lib/tipos.ts`).
+- **El croquis se dibuja con los datos, no se dibuja aparte.** El plano en
+  planta de una sala sale de sus medidas: paredes de `largo_m` y `ancho_m`,
+  mesa de `mesa_largo_m` y `mesa_ancho_m`, sillas repartidas según el aforo,
+  equipos en su `x_m`/`y_m` y tiradas con los metros que ya calcula
+  `calculo-cable.ts`. La escena se construye en `src/lib/croquis.ts`, que es
+  lógica pura con pruebas; pintarla es cosa de `src/components/croquis/`. Una
+  imagen de fondo no se recalcula, no da metros y habría que redibujarla 390
+  veces.
+- **Un equipo sin coordenadas se coloca donde suele ir, y se marca.** La
+  pantalla al testero, la caja de conexiones en la mesa, el rack a una esquina.
+  Sale con trazo discontinuo: sirve para orientarse, no para taladrar. Sin esto
+  el croquis de una sala recién creada sale todo amontonado en la esquina, que
+  es peor que no dibujar nada.
+- **La revisión de montaje se deriva; el check-in se teclea.** Si la sala está
+  lista para montarse lo dice `src/lib/revision.ts` mirando medidas, cable,
+  material y carga: no tiene tablas, porque un estado que se marca a mano
+  miente. Lo que sí se marca a mano es la visita previa a la sala (`revisiones`
+  y `revision_puntos`), porque eso se ve con los ojos y no está en ningún sitio.
 - **La toma de red es la roseta del edificio, no un puerto.** Vive en
   `tomas_red`, es de la sala concreta, y hoy **no es extremo de tirada**: dice
   dónde pincha un equipo. Hacerla extremo obligaría a cambiar

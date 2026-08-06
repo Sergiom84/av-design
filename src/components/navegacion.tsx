@@ -7,6 +7,7 @@ const SECCIONES = [
   { href: '/', etiqueta: 'Panel' },
   { href: '/salas', etiqueta: 'Salas' },
   { href: '/plantillas', etiqueta: 'Plantillas' },
+  { href: '/checkin', etiqueta: 'Check-in' },
   { href: '/catalogo', etiqueta: 'Catálogo' },
   { href: '/almacen', etiqueta: 'Almacén' },
   { href: '/compras', etiqueta: 'Compras' },

@@ -94,6 +94,14 @@ export interface Sala {
   alto_suelo_tecnico_m: number | null;
   ruta_por_defecto: Ruta;
   notas: string | null;
+  /** Mesa de la sala. Nula mientras no se haya medido: el croquis la omite. */
+  mesa_largo_m: number | null;
+  mesa_ancho_m: number | null;
+  /** Altura de la mesa desde el suelo, en centímetros: se mide así en obra. */
+  mesa_alto_cm: number | null;
+  /** Centro de la mesa desde la esquina inferior izquierda. Nulo = centrada. */
+  mesa_x_m: number | null;
+  mesa_y_m: number | null;
 }
 
 export interface PlantillaSala {
@@ -108,6 +116,10 @@ export interface PlantillaSala {
   alto_falso_techo_m: number | null;
   ruta_por_defecto: Ruta;
   notas: string | null;
+  /** Mesa estándar de esta tipología. La sala nueva la hereda. */
+  mesa_largo_m: number | null;
+  mesa_ancho_m: number | null;
+  mesa_alto_cm: number | null;
 }
 
 /**
@@ -480,4 +492,48 @@ export interface LineaCarga {
   devuelto: number;
   roto: number;
   notas: string | null;
+}
+
+// ---------------------------------------------------------------------
+// Check-in de sala
+// ---------------------------------------------------------------------
+
+/**
+ * Cómo ha quedado un punto de la visita. `no_aplica` no es un hueco: hay
+ * salas sin rack y sin falso techo, y dejar el punto en pendiente para
+ * siempre haría que ninguna visita se cerrara nunca.
+ */
+export type EstadoPunto = 'pendiente' | 'conforme' | 'incidencia' | 'no_aplica';
+
+export const ETIQUETA_PUNTO: Record<EstadoPunto, string> = {
+  pendiente: 'Sin mirar',
+  conforme: 'Conforme',
+  incidencia: 'Incidencia',
+  no_aplica: 'No aplica',
+};
+
+export interface Revision {
+  id: string;
+  sala_id: string;
+  sala?: string | null;
+  nombre: string;
+  cerrada: boolean;
+  quien: string | null;
+  notas: string | null;
+  creado_en: string;
+  cerrado_en: string | null;
+}
+
+export interface PuntoRevision {
+  id: string;
+  revision_id: string;
+  /** Clave estable: `medidas_largo`, `roseta`, `corriente_rack`. */
+  clave: string;
+  bloque: string;
+  titulo: string;
+  estado: EstadoPunto;
+  /** Lo medido, cuando el punto pide un número. Texto: `4,68`. */
+  valor: string | null;
+  notas: string | null;
+  orden: number;
 }

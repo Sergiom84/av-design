@@ -12,6 +12,11 @@ import {
 } from '@/lib/calculo-cable';
 import { construirTablaCables } from '@/lib/cable-schedule';
 import { TablaCables } from '@/components/cable-schedule/tabla-cables';
+import { CroquisSala } from '@/components/croquis/croquis-sala';
+import { revisarMontaje } from '@/lib/revision';
+import { EstadoMontaje } from '@/components/revision/estado-montaje';
+import { revisionesDeSala } from '@/lib/datos-checkin';
+import { ListaVisitas } from '@/components/checkin/lista-visitas';
 import { Conexiones } from '@/components/sala/conexiones';
 import { Equipamiento } from '@/components/sala/equipamiento';
 import { GuardarComoPlantilla } from '@/components/sala/guardar-como-plantilla';
@@ -70,9 +75,10 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
   // `faltaParaSala()` rehace la misma cadena (equipos + cable → necesidad →
   // falta) para que el botón de crear pedido y esta pantalla no puedan
   // discrepar.
-  const [falta, cargas] = await Promise.all([
+  const [falta, cargas, visitas] = await Promise.all([
     faltaParaSala(sala.id),
     cargasDeSala(sala.id),
+    revisionesDeSala(sala.id),
   ]);
 
   const filasCable = construirTablaCables({
@@ -82,6 +88,18 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
     puertos: new Map(puertos.map((p) => [p.id, p])),
     articulos: porId,
     resultados: new Map(resultados.map((r) => [r.conexion_id, r])),
+  });
+
+  // Si la sala se puede montar o no no se teclea: se deriva de lo que ya hay.
+  const puntosMontaje = revisarMontaje({
+    sala,
+    equipos,
+    conexiones,
+    tomas,
+    resultados,
+    filasCable,
+    falta,
+    cargas,
   });
 
   return (
@@ -119,6 +137,22 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
         <Medidas sala={sala} />
 
         <div className="space-y-6">
+          {/*
+            El croquis va lo primero: es lo que se mira antes de nada al abrir
+            una sala, y es el entregable que se lleva a la obra junto a la tabla
+            de cables. Los metros que pinta son los que calcula `calculo-cable`,
+            no un cálculo suyo.
+          */}
+          <CroquisSala
+            sala={sala}
+            equipos={equipos}
+            conexiones={conexiones}
+            tomas={tomas}
+            metrosPorConexion={
+              new Map(resultados.map((r) => [r.conexion_id, r.longitud_m]))
+            }
+          />
+          <EstadoMontaje puntos={puntosMontaje} />
           <TablaCables filas={filasCable} nombreSala={sala.nombre} />
           <ResultadoDelCable resultados={resultados} sinMedidas={sinMedidas} />
           <MaterialAComprar material={material} canalizacion={canalizacion} />
@@ -145,6 +179,15 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
               />
             </>
           )}
+          {/*
+            El check-in es lo contrario del semáforo de arriba: aquello se
+            deriva, esto se ve con los ojos en la sala y se marca a mano.
+          */}
+          <ListaVisitas
+            revisiones={visitas}
+            titulo="Check-in de la sala"
+            vacio="Sin visitas. Se abre una desde Check-in, eligiendo esta sala."
+          />
           <Equipamiento salaId={sala.id} equipos={equipos} tomas={tomas} />
           <TomasDeRed salaId={sala.id} tomas={tomas} equipos={equipos} />
           <Conexiones

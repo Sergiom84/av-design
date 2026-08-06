@@ -23,6 +23,9 @@ export async function guardarMedidasPlantilla(datos: FormData) {
       ancho_m            = ${numero(datos.get('ancho_m'))},
       alto_m             = ${numero(datos.get('alto_m'))},
       alto_falso_techo_m = ${numero(datos.get('alto_falso_techo_m'))},
+      mesa_largo_m       = ${numero(datos.get('mesa_largo_m'))},
+      mesa_ancho_m       = ${numero(datos.get('mesa_ancho_m'))},
+      mesa_alto_cm       = ${numero(datos.get('mesa_alto_cm'))},
       ruta_por_defecto   = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable
     where id = ${String(datos.get('id'))}`;
   revalidatePath('/plantillas');
@@ -101,6 +104,11 @@ export async function crearSala(datos: FormData) {
     ancho_m: numero(datos.get('ancho_m')) ?? 0,
     alto_m: numero(datos.get('alto_m')) ?? 0,
     alto_falso_techo_m: numero(datos.get('alto_falso_techo_m')),
+    // La mesa viene de la plantilla y se puede corregir en el alta. Sin ella la
+    // sala se crea igual, pero el croquis sale sin mesa ni sillas.
+    mesa_largo_m: numero(datos.get('mesa_largo_m')),
+    mesa_ancho_m: numero(datos.get('mesa_ancho_m')),
+    mesa_alto_cm: numero(datos.get('mesa_alto_cm')),
     ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
   };
 
@@ -241,6 +249,9 @@ export async function guardarSala(datos: FormData) {
       alto_falso_techo_m   = ${numero(datos.get('alto_falso_techo_m'))},
       alto_canaleta_m      = ${numero(datos.get('alto_canaleta_m'))},
       alto_suelo_tecnico_m = ${numero(datos.get('alto_suelo_tecnico_m'))},
+      mesa_largo_m         = ${numero(datos.get('mesa_largo_m'))},
+      mesa_ancho_m         = ${numero(datos.get('mesa_ancho_m'))},
+      mesa_alto_cm         = ${numero(datos.get('mesa_alto_cm'))},
       ruta_por_defecto     = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable,
       notas                = ${texto(datos.get('notas'))}
     where id = ${id}`;

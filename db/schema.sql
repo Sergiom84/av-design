@@ -683,3 +683,93 @@ create index if not exists carga_lineas_carga_idx on carga_lineas (carga_id);
 
 comment on table carga_lineas is
   'Que material sale a obra. Se marca desde el movil, de pie en el almacen.';
+
+-- =====================================================================
+-- Fase 3 · Geometría de la sala
+--
+-- Hasta aquí una sala eran tres números: largo, ancho y alto. Con eso se
+-- calculan los metros de cable, pero no se dibuja nada. El croquis que el
+-- departamento hace a mano lleva además la mesa, su altura y a qué altura
+-- va colgada la pantalla, y esos datos hoy se pierden.
+--
+-- No hace falta una tabla nueva: la mesa es de la sala y la altura del
+-- equipo ya tenía columna (`sala_equipos.z_m`). Lo que faltaba era la mesa.
+-- ---------------------------------------------------------------------
+alter table salas add column if not exists mesa_largo_m numeric(6,2);
+alter table salas add column if not exists mesa_ancho_m numeric(6,2);
+alter table salas add column if not exists mesa_alto_cm numeric(6,1);
+alter table salas add column if not exists mesa_x_m     numeric(6,2);
+alter table salas add column if not exists mesa_y_m     numeric(6,2);
+
+comment on column salas.mesa_x_m is
+  'Centro de la mesa medido desde la esquina inferior izquierda de la sala. Nulo = centrada, que es el caso normal.';
+comment on column salas.mesa_alto_cm is
+  'Altura de la mesa desde el suelo, en centimetros. Es como se mide en obra: 73 cm, no 0,73 m.';
+
+alter table plantillas_sala add column if not exists mesa_largo_m numeric(6,2);
+alter table plantillas_sala add column if not exists mesa_ancho_m numeric(6,2);
+alter table plantillas_sala add column if not exists mesa_alto_cm numeric(6,1);
+
+comment on column sala_equipos.z_m is
+  'Altura del equipo sobre el suelo. La pantalla a 0,74 m es dato de obra: sale en el croquis y se comprueba en el montaje.';
+
+-- =====================================================================
+-- Fase 3 · Check-in de sala
+--
+-- Antes de montar hay que ir a la sala y confirmar lo que hay: que las
+-- medidas de la plantilla son las de verdad, que la roseta existe y da
+-- red, que hay corriente donde va el rack, que la pared aguanta la
+-- pantalla. Eso no se deriva de nada: se ve con los ojos y se marca.
+--
+-- Es lo contrario de la revisión de montaje, que se calcula sola a partir
+-- de lo que ya hay en la base de datos y por eso no tiene tablas.
+-- ---------------------------------------------------------------------
+do $$ begin
+  create type estado_punto as enum ('pendiente', 'conforme', 'incidencia', 'no_aplica');
+exception when duplicate_object then null; end $$;
+
+comment on type estado_punto is
+  'pendiente = sin mirar. conforme = comprobado y correcto. incidencia = comprobado y mal. no_aplica = esta sala no lo lleva.';
+
+create table if not exists revisiones (
+  id             uuid primary key default gen_random_uuid(),
+  sala_id        uuid not null references salas on delete cascade,
+  nombre         text not null,
+  -- Abierta se puede marcar. Cerrada es una foto de aquel dia y no se toca.
+  cerrada        boolean not null default false,
+  quien          text,
+  notas          text,
+  creado_en      timestamptz not null default now(),
+  actualizado_en timestamptz not null default now(),
+  cerrado_en     timestamptz
+);
+
+create index if not exists revisiones_sala_idx on revisiones (sala_id, creado_en desc);
+
+comment on table revisiones is
+  'Visita de check-in a una sala. Se rellena de pie en la sala, con el movil.';
+
+drop trigger if exists revisiones_actualizado on revisiones;
+create trigger revisiones_actualizado before update on revisiones
+  for each row execute function tocar_actualizado_en();
+
+create table if not exists revision_puntos (
+  id            uuid primary key default gen_random_uuid(),
+  revision_id   uuid not null references revisiones on delete cascade,
+  -- Clave estable del punto (`medidas`, `roseta`, `corriente`...). Permite
+  -- comparar la misma visita entre dos salas sin depender del texto.
+  clave         text not null,
+  bloque        text not null,
+  titulo        text not null,
+  estado        estado_punto not null default 'pendiente',
+  -- Lo medido, cuando el punto pide un numero: el largo real de la sala.
+  valor         text,
+  notas         text,
+  orden         integer not null default 0,
+  unique (revision_id, clave)
+);
+
+create index if not exists revision_puntos_revision_idx on revision_puntos (revision_id, orden);
+
+comment on column revision_puntos.valor is
+  'Lo que se midio, si el punto pide una medida. Texto: "4,68" o "no llega el cable".';

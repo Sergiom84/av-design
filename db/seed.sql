@@ -2013,6 +2013,20 @@ cross join (values ('PC', 'HP ELITEDESK 800 G5', 1::numeric, false), ('PANTALLA'
 where ps.nombre = 'VIDEOWALL'
   and not exists (select 1 from plantilla_articulos pa where pa.plantilla_id = ps.id);
 
+-- Medidas de plantilla tomadas en sala: 1
+update plantillas_sala set
+  largo_m            = 4.7,
+  ancho_m            = 2.5,
+  alto_m             = 2.7,
+  alto_falso_techo_m = 2.4,
+  mesa_largo_m       = 2.4,
+  mesa_ancho_m       = 1.21,
+  mesa_alto_cm       = 73,
+  notas              = 'Medida sobre la Sala de Bateria 006. Pantalla a 74 cm del suelo, caja de conexiones en mesa a 2,40 m de la pared de la pantalla, HDMI de 7 a 10 m y RJ45 de 10 m al panel Cisco.'
+where nombre = 'SALA TP · aforo 8'
+  -- Solo si nadie las ha rellenado ya desde la aplicación.
+  and largo_m is null and ancho_m is null and mesa_largo_m is null;
+
 -- Enlaza cada línea de plantilla con el artículo del catálogo cuando el modelo coincide
 update plantilla_articulos pa
 set articulo_id = a.id

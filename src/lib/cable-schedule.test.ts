@@ -40,6 +40,12 @@ const SALA: Sala = {
   alto_suelo_tecnico_m: 0,
   ruta_por_defecto: 'falso_techo',
   notas: null,
+  // La mesa es del croquis, no de la tabla de cables.
+  mesa_largo_m: null,
+  mesa_ancho_m: null,
+  mesa_alto_cm: null,
+  mesa_x_m: null,
+  mesa_y_m: null,
 };
 
 const TOMA: TomaRed = {

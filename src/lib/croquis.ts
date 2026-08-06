@@ -1,0 +1,471 @@
+/**
+ * Croquis de sala: de los datos al dibujo.
+ *
+ * El departamento lleva años dibujando estas salas a mano en un plano con
+ * cotas: el rectángulo de la sala, la mesa en medio, las sillas alrededor, la
+ * pantalla en la pared, la caja de conexiones y las tiradas marcadas en rojo
+ * con sus metros. Ese plano es el entregable que se lleva a la obra.
+ *
+ * Aquí no se dibuja nada: se construye la escena. Entra la sala con su mesa,
+ * sus equipos y sus tiradas, y sale una lista de rectángulos, círculos, líneas
+ * y cotas en METROS. Pintarla es cosa de `src/components/croquis/`.
+ *
+ * Se separa así por lo mismo que `calculo-cable.ts`: es lógica pura, se puede
+ * probar sin navegador y sin base de datos, y el día que el dibujo se exporte a
+ * PDF o a DXF la escena ya está hecha.
+ *
+ * Sistema de coordenadas, el mismo que usa el cálculo de cable:
+ *   x va a lo largo (`largo_m`), y a lo ancho (`ancho_m`), z hacia arriba.
+ *   El origen es la esquina inferior izquierda de la sala vista en planta.
+ */
+
+import type { Conexion, EquipoEnSala, Extremo, Sala, Senal, TomaRed } from './tipos';
+
+/** Un rectángulo en planta, en metros, por su esquina inferior izquierda. */
+export interface Rectangulo {
+  x_m: number;
+  y_m: number;
+  largo_m: number;
+  ancho_m: number;
+}
+
+export interface SillaCroquis {
+  x_m: number;
+  y_m: number;
+  /** Radio del círculo que la representa. Una silla ocupa unos 50 cm. */
+  radio_m: number;
+}
+
+export interface EquipoCroquis {
+  id: string;
+  nombre: string;
+  x_m: number;
+  y_m: number;
+  z_m: number;
+  extremo: Extremo;
+  /** Ancho del símbolo en planta. Una pantalla se dibuja larga; una caja, cuadrada. */
+  largo_m: number;
+  ancho_m: number;
+  /**
+   * La posición no estaba puesta y se ha deducido del extremo. El dibujo la
+   * marca distinto: sirve para orientarse, no para taladrar.
+   */
+  estimada: boolean;
+}
+
+export interface TiradaCroquis {
+  id: string;
+  etiqueta: string;
+  senal: Senal;
+  desde: { x_m: number; y_m: number };
+  hasta: { x_m: number; y_m: number };
+  /** Metros calculados por `calculo-cable.ts`. Nulo mientras no haya cálculo. */
+  metros: number | null;
+}
+
+export interface TomaCroquis {
+  id: string;
+  codigo: string;
+  x_m: number;
+  y_m: number;
+}
+
+/** Una cota acotada entre dos puntos, con su texto ya formateado. */
+export interface CotaCroquis {
+  clave: string;
+  desde: { x_m: number; y_m: number };
+  hasta: { x_m: number; y_m: number };
+  texto: string;
+  /** Dónde se despega la línea de cota del objeto que mide. */
+  lado: 'arriba' | 'abajo' | 'izquierda' | 'derecha';
+}
+
+export interface EscenaCroquis {
+  titulo: string;
+  sala: Rectangulo;
+  mesa: Rectangulo | null;
+  sillas: SillaCroquis[];
+  equipos: EquipoCroquis[];
+  tomas: TomaCroquis[];
+  tiradas: TiradaCroquis[];
+  cotas: CotaCroquis[];
+  /** Notas al pie: alturas y todo lo que no cabe en una planta. */
+  anotaciones: string[];
+  /** Lo que falta por medir. Se enseña, no se inventa. */
+  avisos: string[];
+}
+
+/** Una silla ocupa medio metro largo. Es el círculo del plano de siempre. */
+const RADIO_SILLA_M = 0.25;
+
+/** Separación entre el borde de la mesa y el centro de la silla. */
+const SEPARACION_SILLA_M = 0.42;
+
+const TAMANO_SIMBOLO: Partial<Record<Extremo, { largo_m: number; ancho_m: number }>> = {
+  pantalla: { largo_m: 1.45, ancho_m: 0.1 },
+  proyector: { largo_m: 0.4, ancho_m: 0.35 },
+  rack: { largo_m: 0.6, ancho_m: 0.6 },
+  caja_conexiones: { largo_m: 0.3, ancho_m: 0.24 },
+  mesa: { largo_m: 0.24, ancho_m: 0.18 },
+  techo: { largo_m: 0.3, ancho_m: 0.3 },
+  pared: { largo_m: 0.3, ancho_m: 0.15 },
+};
+
+const SIMBOLO_POR_DEFECTO = { largo_m: 0.3, ancho_m: 0.2 };
+
+/**
+ * Dónde va un equipo del que nadie ha escrito las coordenadas.
+ *
+ * Sin esto el croquis de una sala recién creada sale con todo amontonado en la
+ * esquina, que es peor que no dibujar nada. Con esto sale la sala típica: la
+ * pantalla en el testero, la caja en la mesa, el rack en una esquina. Se marca
+ * como estimada para que nadie mida sobre ella.
+ */
+function posicionPorDefecto(
+  extremo: Extremo,
+  sala: Sala,
+  mesa: Rectangulo | null,
+): { x_m: number; y_m: number; z_m: number } {
+  const centroMesa = mesa
+    ? { x: mesa.x_m + mesa.largo_m / 2, y: mesa.y_m + mesa.ancho_m / 2 }
+    : { x: sala.largo_m / 2, y: sala.ancho_m / 2 };
+
+  switch (extremo) {
+    // El testero: pared corta de la izquierda, a media altura de la sala.
+    case 'pantalla':
+      return { x_m: 0, y_m: sala.ancho_m / 2, z_m: 0.74 };
+    case 'proyector':
+      return { x_m: sala.largo_m / 2, y_m: sala.ancho_m / 2, z_m: sala.alto_m || 2.7 };
+    case 'rack':
+      return { x_m: sala.largo_m, y_m: 0, z_m: 0 };
+    case 'caja_conexiones':
+      return { x_m: centroMesa.x, y_m: centroMesa.y, z_m: 0.73 };
+    case 'mesa':
+      return { x_m: centroMesa.x, y_m: centroMesa.y, z_m: 0.73 };
+    case 'techo':
+      return { x_m: sala.largo_m / 2, y_m: sala.ancho_m / 2, z_m: sala.alto_m || 2.7 };
+    case 'pared':
+      return { x_m: sala.largo_m, y_m: sala.ancho_m / 2, z_m: 1.2 };
+  }
+}
+
+/** Una posición sin tocar: los tres ejes a cero es el valor por defecto de la tabla. */
+const sinColocar = (e: EquipoEnSala): boolean =>
+  e.posicion.x_m === 0 && e.posicion.y_m === 0 && e.posicion.z_m === 0;
+
+/**
+ * La mesa del plano. Si no tiene centro escrito va centrada en la sala, que es
+ * el caso de casi todas: una mesa de reuniones se pone en medio.
+ */
+export function mesaDeLaSala(sala: Sala): Rectangulo | null {
+  const largo = sala.mesa_largo_m;
+  const ancho = sala.mesa_ancho_m;
+  if (!largo || !ancho) return null;
+
+  const cx = sala.mesa_x_m ?? sala.largo_m / 2;
+  const cy = sala.mesa_y_m ?? sala.ancho_m / 2;
+
+  return {
+    x_m: redondear(cx - largo / 2),
+    y_m: redondear(cy - ancho / 2),
+    largo_m: largo,
+    ancho_m: ancho,
+  };
+}
+
+/**
+ * Reparte el aforo alrededor de la mesa como se sienta la gente: uno en cada
+ * cabecera y el resto repartido a partes iguales por los dos lados largos. Con
+ * aforo 8 salen los 3 + 3 + 1 + 1 del croquis de la Sala de Batería.
+ *
+ * Con aforo 2 o 3 no hay cabeceras: se sienta uno enfrente de otro, que es como
+ * se usa una sala de dos.
+ */
+export function sillasAlrededor(mesa: Rectangulo, aforo: number): SillaCroquis[] {
+  if (aforo <= 0) return [];
+
+  const cabeceras = aforo >= 4 ? Math.min(2, aforo) : 0;
+  const porLados = aforo - cabeceras;
+  const arriba = Math.ceil(porLados / 2);
+  const abajo = porLados - arriba;
+
+  const sillas: SillaCroquis[] = [];
+  const enLado = (cuantas: number, y: number) => {
+    for (let i = 0; i < cuantas; i += 1) {
+      sillas.push({
+        x_m: redondear(mesa.x_m + (mesa.largo_m * (i + 1)) / (cuantas + 1)),
+        y_m: redondear(y),
+        radio_m: RADIO_SILLA_M,
+      });
+    }
+  };
+
+  enLado(arriba, mesa.y_m + mesa.ancho_m + SEPARACION_SILLA_M);
+  enLado(abajo, mesa.y_m - SEPARACION_SILLA_M);
+
+  if (cabeceras >= 1) {
+    sillas.push({
+      x_m: redondear(mesa.x_m - SEPARACION_SILLA_M),
+      y_m: redondear(mesa.y_m + mesa.ancho_m / 2),
+      radio_m: RADIO_SILLA_M,
+    });
+  }
+  if (cabeceras >= 2) {
+    sillas.push({
+      x_m: redondear(mesa.x_m + mesa.largo_m + SEPARACION_SILLA_M),
+      y_m: redondear(mesa.y_m + mesa.ancho_m / 2),
+      radio_m: RADIO_SILLA_M,
+    });
+  }
+
+  return sillas;
+}
+
+export interface EntradaCroquis {
+  sala: Sala;
+  equipos: EquipoEnSala[];
+  conexiones: Conexion[];
+  tomas: TomaRed[];
+  /** Metros por conexión, ya calculados. Lo que devuelve `calcularConexion()`. */
+  metrosPorConexion?: Map<string, number>;
+}
+
+/**
+ * Construye la escena completa. Nunca lanza: una sala a medio medir devuelve
+ * una escena con avisos, porque el croquis a medias sigue sirviendo para hablar
+ * con el instalador y el error en pantalla no.
+ */
+export function construirEscena({
+  sala,
+  equipos,
+  conexiones,
+  tomas,
+  metrosPorConexion,
+}: EntradaCroquis): EscenaCroquis {
+  const avisos: string[] = [];
+
+  if (!sala.largo_m || !sala.ancho_m) {
+    avisos.push('Faltan el largo o el ancho de la sala: el croquis no está a escala.');
+  }
+
+  const rectSala: Rectangulo = {
+    x_m: 0,
+    y_m: 0,
+    largo_m: sala.largo_m || 0,
+    ancho_m: sala.ancho_m || 0,
+  };
+
+  const mesa = mesaDeLaSala(sala);
+  if (!mesa) {
+    avisos.push('Sin las medidas de la mesa no se dibujan ni la mesa ni las sillas.');
+  }
+
+  const sillas = mesa && sala.aforo ? sillasAlrededor(mesa, sala.aforo) : [];
+  if (mesa && !sala.aforo) {
+    avisos.push('Sin aforo no se colocan las sillas.');
+  }
+
+  const dibujados: EquipoCroquis[] = equipos.map((e) => {
+    const estimada = sinColocar(e);
+    const pos = estimada ? posicionPorDefecto(e.extremo, sala, mesa) : e.posicion;
+    const tamano = TAMANO_SIMBOLO[e.extremo] ?? SIMBOLO_POR_DEFECTO;
+    return {
+      id: e.id,
+      nombre: e.nombre,
+      // La posición deducida sale de dividir medidas y arrastra la basura del
+      // coma flotante. Se redondea al centímetro: es la unidad del plano.
+      x_m: redondear(pos.x_m),
+      y_m: redondear(pos.y_m),
+      z_m: redondear(pos.z_m),
+      extremo: e.extremo,
+      largo_m: tamano.largo_m,
+      ancho_m: tamano.ancho_m,
+      estimada,
+    };
+  });
+
+  const estimados = dibujados.filter((e) => e.estimada).length;
+  if (estimados > 0) {
+    avisos.push(
+      estimados === 1
+        ? 'Un equipo no tiene posición y se ha colocado donde suele ir.'
+        : `${estimados} equipos no tienen posición y se han colocado donde suelen ir.`,
+    );
+  }
+
+  const porId = new Map(dibujados.map((e) => [e.id, e]));
+
+  const tiradas: TiradaCroquis[] = conexiones.flatMap((c) => {
+    const origen = porId.get(c.origen_id);
+    const destino = porId.get(c.destino_id);
+    if (!origen || !destino) return [];
+    return [
+      {
+        id: c.id,
+        etiqueta: `${origen.nombre} → ${destino.nombre}`,
+        senal: c.senal,
+        desde: { x_m: origen.x_m, y_m: origen.y_m },
+        hasta: { x_m: destino.x_m, y_m: destino.y_m },
+        metros: metrosPorConexion?.get(c.id) ?? null,
+      },
+    ];
+  });
+
+  const tomasDibujadas: TomaCroquis[] = tomas
+    .filter((t) => t.x_m != null && t.y_m != null)
+    .map((t) => ({ id: t.id, codigo: t.codigo, x_m: t.x_m!, y_m: t.y_m! }));
+
+  return {
+    titulo: sala.nombre,
+    sala: rectSala,
+    mesa,
+    sillas,
+    equipos: dibujados,
+    tomas: tomasDibujadas,
+    tiradas,
+    cotas: cotasDeLaEscena(sala, rectSala, mesa, dibujados),
+    anotaciones: anotacionesDeLaEscena(sala, dibujados),
+    avisos,
+  };
+}
+
+/**
+ * Las cotas que lleva el plano de siempre: el largo y el ancho de la sala, la
+ * mesa, y la distancia de la pared de la pantalla a la caja de conexiones, que
+ * es la que decide los metros de la tirada y la que el instalador pregunta.
+ */
+function cotasDeLaEscena(
+  sala: Sala,
+  rect: Rectangulo,
+  mesa: Rectangulo | null,
+  equipos: EquipoCroquis[],
+): CotaCroquis[] {
+  const cotas: CotaCroquis[] = [];
+
+  if (rect.largo_m > 0) {
+    cotas.push({
+      clave: 'sala_largo',
+      desde: { x_m: 0, y_m: rect.ancho_m },
+      hasta: { x_m: rect.largo_m, y_m: rect.ancho_m },
+      texto: `${metros(rect.largo_m)} m`,
+      lado: 'arriba',
+    });
+  }
+  if (rect.ancho_m > 0) {
+    cotas.push({
+      clave: 'sala_ancho',
+      desde: { x_m: rect.largo_m, y_m: 0 },
+      hasta: { x_m: rect.largo_m, y_m: rect.ancho_m },
+      texto: `${metros(rect.ancho_m)} m`,
+      lado: 'derecha',
+    });
+  }
+
+  if (mesa) {
+    cotas.push({
+      clave: 'mesa_largo',
+      desde: { x_m: mesa.x_m, y_m: mesa.y_m + mesa.ancho_m },
+      hasta: { x_m: mesa.x_m + mesa.largo_m, y_m: mesa.y_m + mesa.ancho_m },
+      texto: `${metros(mesa.largo_m)} m`,
+      lado: 'arriba',
+    });
+    cotas.push({
+      clave: 'mesa_ancho',
+      desde: { x_m: mesa.x_m, y_m: mesa.y_m },
+      hasta: { x_m: mesa.x_m, y_m: mesa.y_m + mesa.ancho_m },
+      texto: `${metros(mesa.ancho_m)} m`,
+      lado: 'izquierda',
+    });
+  }
+
+  // De la pared de la pantalla a la caja de conexiones. Es la cota que el
+  // croquis de mano lleva escrita en rojo, porque es la tirada larga.
+  const pantalla = equipos.find((e) => e.extremo === 'pantalla');
+  const caja = equipos.find((e) => e.extremo === 'caja_conexiones');
+  if (pantalla && caja) {
+    const recorrido = Math.abs(caja.x_m - pantalla.x_m) + Math.abs(caja.y_m - pantalla.y_m);
+    if (recorrido > 0) {
+      cotas.push({
+        clave: 'pantalla_caja',
+        desde: { x_m: pantalla.x_m, y_m: caja.y_m },
+        hasta: { x_m: caja.x_m, y_m: caja.y_m },
+        texto: `${metros(recorrido)} m`,
+        lado: 'abajo',
+      });
+    }
+  }
+
+  return cotas;
+}
+
+/**
+ * Lo que no cabe en una planta: alturas. El plano es en dos dimensiones y la
+ * altura de la pantalla y de la mesa son datos de montaje que hay que llevar.
+ */
+function anotacionesDeLaEscena(sala: Sala, equipos: EquipoCroquis[]): string[] {
+  const notas: string[] = [];
+
+  if (sala.alto_m) notas.push(`Alto de la sala ${metros(sala.alto_m)} m`);
+  if (sala.alto_falso_techo_m) {
+    notas.push(`Falso techo a ${metros(sala.alto_falso_techo_m)} m`);
+  }
+  if (sala.mesa_alto_cm) notas.push(`Altura de la mesa ${entero(sala.mesa_alto_cm)} cm`);
+
+  for (const e of equipos) {
+    if (e.extremo === 'pantalla' && e.z_m > 0) {
+      notas.push(`${e.nombre} a ${entero(e.z_m * 100)} cm del suelo`);
+    }
+  }
+
+  return notas;
+}
+
+// ---------------------------------------------------------------------
+// Proyección a píxeles
+//
+// Vive aquí y no en el componente para poder probarla: que el dibujo salga
+// a escala y quepa en la caja es justo lo que no se ve mirando el SVG.
+// ---------------------------------------------------------------------
+
+export interface Proyeccion {
+  /** Atributo `viewBox` del SVG. */
+  viewBox: string;
+  ancho_px: number;
+  alto_px: number;
+  /** Píxeles por metro. */
+  escala: number;
+  x: (m: number) => number;
+  /** Invierte el eje: en la sala la y crece hacia el fondo, en el SVG hacia abajo. */
+  y: (m: number) => number;
+  /** Una longitud en metros pasada a píxeles, sin desplazar. */
+  d: (m: number) => number;
+}
+
+export function proyectar(
+  escena: EscenaCroquis,
+  { ancho_px = 900, margen_px = 64 }: { ancho_px?: number; margen_px?: number } = {},
+): Proyeccion {
+  const largo = escena.sala.largo_m || 1;
+  const ancho = escena.sala.ancho_m || 1;
+  const escala = (ancho_px - 2 * margen_px) / largo;
+  const alto_px = Math.round(ancho * escala + 2 * margen_px);
+
+  return {
+    viewBox: `0 0 ${ancho_px} ${alto_px}`,
+    ancho_px,
+    alto_px,
+    escala,
+    x: (m) => redondear(margen_px + m * escala),
+    // Se mide desde arriba y no desde `alto_px`: el alto está redondeado a
+    // píxel entero y restarlo desplazaría el dibujo medio píxel hacia fuera.
+    y: (m) => redondear(margen_px + (ancho - m) * escala),
+    d: (m) => redondear(m * escala),
+  };
+}
+
+const redondear = (n: number): number => Math.round(n * 100) / 100;
+
+/** 4,7 se escribe 4,70: en un plano las cotas llevan dos decimales. */
+const metros = (n: number): string => n.toFixed(2).replace('.', ',');
+
+const entero = (n: number): string => String(Math.round(n));

@@ -21,6 +21,11 @@ export function MedidasDePlantilla({ plantilla }: { plantilla: PlantillaSala }) 
             ['ancho_m', 'Ancho (m)', p.ancho_m],
             ['alto_m', 'Alto (m)', p.alto_m],
             ['alto_falso_techo_m', 'Falso techo (m)', p.alto_falso_techo_m],
+            // La mesa la hereda la sala y es lo que hace que el croquis salga
+            // dibujado desde el primer momento, sin tocar nada.
+            ['mesa_largo_m', 'Mesa largo (m)', p.mesa_largo_m],
+            ['mesa_ancho_m', 'Mesa ancho (m)', p.mesa_ancho_m],
+            ['mesa_alto_cm', 'Mesa alto (cm)', p.mesa_alto_cm],
           ] as const
         ).map(([clave, etiqueta, valor]) => (
           <Campo key={clave} etiqueta={etiqueta}>

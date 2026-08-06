@@ -348,6 +348,35 @@ for (const r of filasPlantilla) {
 }
 
 // --------------------------------------------------------------------------
+// 3b · medidas de las plantillas, medidas en sala
+//
+// Las plantillas salen del inventario, que trae equipamiento pero ni una cota.
+// Las medidas las toma el departamento con el metro, sala por sala, y por eso
+// van en su propio CSV: son un dato distinto y llegan mucho más tarde.
+//
+// Solo se siembran donde no hay nada. Lo que se corrija desde /plantillas no lo
+// pisa la siembra, igual que en `precios` y `puertos`.
+// --------------------------------------------------------------------------
+const rutaMedidas = data('medidas-plantillas.csv');
+const hayMedidas = existsSync(rutaMedidas);
+const medidasPlantilla = hayMedidas
+  ? leerCsv(rutaMedidas).map((r) => {
+      const aforo = r.aforo && r.aforo !== 'None' ? Number(r.aforo) : null;
+      return {
+        nombre: aforo ? `${r.tipologia} · aforo ${aforo}` : r.tipologia,
+        largo_m: r.largo_m,
+        ancho_m: r.ancho_m,
+        alto_m: r.alto_m,
+        alto_falso_techo_m: r.alto_falso_techo_m,
+        mesa_largo_m: r.mesa_largo_m,
+        mesa_ancho_m: r.mesa_ancho_m,
+        mesa_alto_cm: r.mesa_alto_cm,
+        notas: r.notas || null,
+      };
+    })
+  : [];
+
+// --------------------------------------------------------------------------
 // 4 · volcado
 // --------------------------------------------------------------------------
 const sql = [];
@@ -613,6 +642,27 @@ for (const p of plantillas.values()) {
         // Solo siembra si la plantilla está vacía: así no se pisan las
         // ediciones que haya hecho el departamento desde la aplicación.
         `  and not exists (select 1 from plantilla_articulos pa where pa.plantilla_id = ps.id);`,
+    );
+  }
+  sql.push('');
+}
+
+if (medidasPlantilla.length) {
+  sql.push(`-- Medidas de plantilla tomadas en sala: ${medidasPlantilla.length}`);
+  for (const m of medidasPlantilla) {
+    sql.push(
+      `update plantillas_sala set
+  largo_m            = ${num(m.largo_m)},
+  ancho_m            = ${num(m.ancho_m)},
+  alto_m             = ${num(m.alto_m)},
+  alto_falso_techo_m = ${num(m.alto_falso_techo_m)},
+  mesa_largo_m       = ${num(m.mesa_largo_m)},
+  mesa_ancho_m       = ${num(m.mesa_ancho_m)},
+  mesa_alto_cm       = ${num(m.mesa_alto_cm)},
+  notas              = ${txt(m.notas)}
+where nombre = ${txt(m.nombre)}
+  -- Solo si nadie las ha rellenado ya desde la aplicación.
+  and largo_m is null and ancho_m is null and mesa_largo_m is null;`,
     );
   }
   sql.push('');

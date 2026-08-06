@@ -73,6 +73,11 @@ function aSala(f: Fila): Sala {
     alto_suelo_tecnico_m: n(f.alto_suelo_tecnico_m),
     ruta_por_defecto: (f.ruta_por_defecto as Sala['ruta_por_defecto']) ?? 'falso_techo',
     notas: s(f.notas),
+    mesa_largo_m: n(f.mesa_largo_m),
+    mesa_ancho_m: n(f.mesa_ancho_m),
+    mesa_alto_cm: n(f.mesa_alto_cm),
+    mesa_x_m: n(f.mesa_x_m),
+    mesa_y_m: n(f.mesa_y_m),
   };
 }
 
@@ -391,6 +396,9 @@ export async function listarPlantillas(): Promise<
     ruta_por_defecto:
       (f.ruta_por_defecto as PlantillaSala['ruta_por_defecto']) ?? 'falso_techo',
     notas: s(f.notas),
+    mesa_largo_m: n(f.mesa_largo_m),
+    mesa_ancho_m: n(f.mesa_ancho_m),
+    mesa_alto_cm: n(f.mesa_alto_cm),
     lineas: (f.lineas as LineaPlantilla[]).map((l) => ({
       id: String(l.id),
       articulo_id: l.articulo_id ?? null,

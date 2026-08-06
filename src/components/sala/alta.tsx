@@ -21,6 +21,9 @@ interface Borrador {
   ancho_m: string;
   alto_m: string;
   alto_falso_techo_m: string;
+  mesa_largo_m: string;
+  mesa_ancho_m: string;
+  mesa_alto_cm: string;
   ruta_por_defecto: Ruta;
 }
 
@@ -31,6 +34,9 @@ const VACIO: Borrador = {
   ancho_m: '',
   alto_m: '',
   alto_falso_techo_m: '',
+  mesa_largo_m: '',
+  mesa_ancho_m: '',
+  mesa_alto_cm: '',
   ruta_por_defecto: 'falso_techo',
 };
 
@@ -44,6 +50,9 @@ function desdePlantilla(p: PlantillaConEquipamiento): Borrador {
     ancho_m: cifra(p.ancho_m),
     alto_m: cifra(p.alto_m),
     alto_falso_techo_m: cifra(p.alto_falso_techo_m),
+    mesa_largo_m: cifra(p.mesa_largo_m),
+    mesa_ancho_m: cifra(p.mesa_ancho_m),
+    mesa_alto_cm: cifra(p.mesa_alto_cm),
     ruta_por_defecto: p.ruta_por_defecto,
   };
 }
@@ -213,6 +222,33 @@ export function AltaDeSala({
                   name={clave}
                   type="number"
                   step="0.01"
+                  min="0"
+                  value={borrador[clave]}
+                  onChange={campo(clave)}
+                  className="w-full num"
+                />
+              </Campo>
+            ))}
+          </div>
+
+          {/*
+            La mesa no entra en el cálculo de cable, pero es lo que hace que la
+            sala nazca con croquis. La plantilla la trae medida y aquí solo se
+            corrige la sala que se salga.
+          */}
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            {(
+              [
+                ['mesa_largo_m', 'Mesa largo (m)', '0.01'],
+                ['mesa_ancho_m', 'Mesa ancho (m)', '0.01'],
+                ['mesa_alto_cm', 'Mesa alto (cm)', '1'],
+              ] as const
+            ).map(([clave, etiqueta, paso]) => (
+              <Campo key={clave} etiqueta={etiqueta}>
+                <input
+                  name={clave}
+                  type="number"
+                  step={paso}
                   min="0"
                   value={borrador[clave]}
                   onChange={campo(clave)}

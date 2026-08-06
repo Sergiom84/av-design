@@ -107,6 +107,44 @@ export function Medidas({ sala }: { sala: Sala }) {
           </Campo>
         </div>
 
+        {/*
+          La mesa. No entra en el cálculo de cable —la tirada se mide entre
+          equipos— pero es lo que convierte el croquis en el plano que se lleva
+          a la obra: sin ella no hay ni mesa ni sillas que dibujar.
+        */}
+        <div className="grid grid-cols-3 gap-2">
+          <Campo etiqueta="Mesa largo (m)">
+            <input
+              name="mesa_largo_m"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={sala.mesa_largo_m ?? ''}
+              className="w-full"
+            />
+          </Campo>
+          <Campo etiqueta="Mesa ancho (m)">
+            <input
+              name="mesa_ancho_m"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={sala.mesa_ancho_m ?? ''}
+              className="w-full"
+            />
+          </Campo>
+          <Campo etiqueta="Mesa alto (cm)">
+            <input
+              name="mesa_alto_cm"
+              type="number"
+              step="1"
+              min="0"
+              defaultValue={sala.mesa_alto_cm ?? ''}
+              className="w-full"
+            />
+          </Campo>
+        </div>
+
         <Campo
           etiqueta="Ruta por defecto"
           ayuda="Por dónde discurren los cables salvo que la conexión diga otra cosa."

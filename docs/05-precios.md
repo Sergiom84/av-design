@@ -132,6 +132,113 @@ se escriban desde la aplicación (`fuente = 'app'`) no las toca nunca. Está
 probado: una línea de app sobrevive a `npm run db:seed` y sigue contando para
 el coste.
 
+## 3 ter. El presupuesto de Cisco QA152721337VJ
+
+Fecha del documento: 04-03-2024. Comercial: Moises Navarro, Cisco Systems.
+Nueve páginas, 264 líneas, todo en dólares. Fuente editable:
+`data/precios-cisco.csv`. Total del documento 296.226,12 USD, que cuadra con la
+suma de los importes extendidos línea a línea, así que la transcripción es
+completa.
+
+### Entra como orientativo, y en dólares
+
+Por tres motivos, y ninguno es discutible:
+
+1. El propio documento dice que es una estimación para planificar y **no una
+   oferta vinculante** de Cisco.
+2. Está en **USD**, no en lo que paga el departamento.
+3. Es de **marzo de 2024**.
+
+Un precio orientativo presupuesta pero no permite pedir, que es exactamente lo
+que corresponde aquí. La moneda se guarda como `USD` y la ficha del artículo la
+convierte con el parámetro `tipo_cambio_usd_eur`.
+
+**Efecto real sobre el coste del catálogo: ninguno, y es lo correcto.** Con
+`vigencia_precio_meses` en 18, un presupuesto de marzo de 2024 ya está caducado,
+así que estas diez líneas se ven en la ficha de cada artículo pero no fijan
+`articulos.coste`. Lo único que sí han rellenado es la
+`referencia_fabricante` de los artículos que no tenían ninguna: ahora nueve
+artículos CISCO llevan escrito su part number.
+
+### Dos trampas del documento
+
+- **La columna que salta a la vista es "Extended Net Price", que es cantidad ×
+  precio unitario.** Lo que se carga es el `Unit Net Price`. De las 47 líneas
+  con precio solo una tiene cantidad distinta de 1: la 8.8, `CAB-ETH-1.5M-GR`,
+  cantidad 2, unitario 11,68 y extendido 23,36. Cargar 23,36 habría metido un
+  latiguillo al doble de su precio. Esa línea no se carga por otro motivo (no
+  hay artículo), pero el criterio vale para cualquier ampliación.
+- **La mayoría de las líneas están a 0,00 porque son composición de kit**, no
+  precio: el cable, la fuente y el mando que vienen dentro de un Room Kit. De
+  264 líneas solo 47 llevan importe. Un cero no es un precio y no entra.
+
+### Lo que se ha casado
+
+Diez líneas, 44.700,89 USD sumados. El catálogo no usa part numbers, así que
+cada uno se ha casado a mano contra marca y modelo, y **solo donde no hay duda
+posible**:
+
+| Part number | Artículo del catálogo | USD |
+|---|---|---|
+| CS-KITPRO-K9 | CISCO ROOM KIT PRO | 11.641,33 |
+| CS-BRD55P-K9 | CISCO WEBEX BOARD PRO 55 | 8.696,52 |
+| CS-KITPLUS-K9 | CISCO ROOM KIT PLUS | 7.671,07 |
+| CS-KIT-K9 | CISCO CS-KIT-K9 | 4.330,07 |
+| CS-CAM-PTZ4K= | CISCO PTZ 4K | 3.465,15 |
+| CTS-CAM-P60= | CISCO CTS-CAM-P60 | 3.465,15 |
+| CS-KIT-MINI-K9 | CISCO MINI SPARK ROOM KIT | 2.179,92 |
+| CS-DESK-K9 | CISCO CS-DESK-K9 | 1.816,05 |
+| CS-DESKMINI-K9 | CISCO CS-DESKMINI-K9 | 1.220,62 |
+| CS-MIC-TABLE-J | CISCO TABLE MICROPHONE MINI JACK (V1) | 215,01 |
+
+Cuatro de ellos (`CS-KIT-K9`, `CS-DESK-K9`, `CS-DESKMINI-K9`, `CTS-CAM-P60`) el
+inventario ya los tenía apuntados con el propio part number como modelo, así que
+el casado es literal. `CS-MIC-TABLE-J` ya estaba colgado de la V1 en
+`data/precios-orientativos.csv`: se respeta esa decisión, no se inventa otra.
+
+### Lo que se ha dejado fuera a propósito
+
+De los 42 part numbers con precio, 32 no se cargan. La mayoría porque el
+producto no está en el catálogo del departamento (Room Panorama 85, Room 70
+Panorama, Room Kit EQX, Desk Pro, Board Pro 75, Room Phone, Desk Camera) o
+porque son accesorios y latiguillos que el catálogo no lista (soportes de pared,
+tapa de cámara, lápiz, brackets, cable ethernet y HDMI de Cisco).
+
+Estas ocho sí tienen candidato, pero **más de uno, y confundirlos sería peor que
+dejarlas sin precio**:
+
+| Part number | Descripción | Candidatos | Por qué no se casa |
+|---|---|---|---|
+| CS-BARPRO-K9 | Cisco Room Bar Pro, First Light · 5.123,97 | ROOM BAR PRO · WEBEX ROOM BAR PRO | Dos entradas del catálogo para el mismo nombre comercial |
+| CS-BAR-T-K9 | Cisco Room Bar w/Navigator · 2.179,92 | ROOM BAR · WEBEX ROOM BAR · ROOM BAR BYOD | Tres candidatos, y el BYOD es otro producto |
+| CS-KIT-EQ-K9 | Room Kit EQ, Quad Cam · 8.365,73 | ROOM KIT EQ · WEBEX ROOM EQ · WEBEX ROOM EQ QUADCAM · EQ | Cuatro formas de escribir lo que puede ser lo mismo o no |
+| CS-KIT-EQ-4K-K9 | Room Kit EQ, PTZ4K Cam · 7.406,43 | ROOM KIT EQ | El del catálogo no dice qué cámara lleva, y la cámara es la diferencia |
+| CS-T10-TS-K9= | Room Navigator, table stand · 584,01 | ROOM NAVIGATOR · WEBEX ROOM NAVIGATOR | Dos entradas, y además el de sobremesa y el de pared valen distinto |
+| CS-BRD75P-K9 | Cisco Board Pro 75 · 14.518,46 | WEBEX BOARD PRO | El del catálogo no dice la pulgada |
+| CS-MIC-ARRAY-T | Table Microphone Pro · 739,75 | TABLE MICROPHONE · CEILING MICROPHONE PRO | El "Pro" del catálogo es el de techo, no el de mesa |
+| CS-MIC-TABLE-E | Table Microphone, euroblock · 215,01 | TABLE MICROPHONE | El catálogo no distingue euroblock de minijack salvo en las V1 y V2 |
+
+Casi todas se resolverían con una sola decisión de departamento: **decidir si
+ROOM BAR PRO y WEBEX ROOM BAR PRO son el mismo artículo, y lo mismo con ROOM
+BAR, ROOM NAVIGATOR y las cuatro variantes de EQ.** Mientras el catálogo tenga
+la misma cosa escrita de dos formas no se le puede colgar un precio a ninguna
+de las dos sin equivocarse en la otra.
+
+Dos observaciones más, para la misma revisión:
+
+- **SPARK ROOM KIT PLUS** es probablemente ROOM KIT PLUS con la marca antigua.
+  El precio se ha cargado solo en el segundo.
+- **P60** (14 unidades) y **PRECISION 60** (3) son casi con seguridad la misma
+  cámara que CTS-CAM-P60 (4), que es la que se ha quedado con el precio por
+  llevar el part number escrito.
+
+### Un detalle de transcripción, por si alguien vuelve al PDF
+
+La extracción previa en CSV traía la referencia de la línea 1.0 escrita como
+`CS-ROOM-PAΝΟ85-K9`, con una Ν y una Ο **griegas** en vez de las latinas. No es
+visible a ojo y rompe cualquier búsqueda. Todas las referencias de
+`data/precios-cisco.csv` se han sacado del PDF y son ASCII puro.
+
 ## 4. Lo que más conviene localizar ahora
 
 Casi todo tiene ya un precio orientativo, así que el cálculo devuelve importes.
@@ -202,8 +309,10 @@ entrega y fecha de la oferta**.
 
 ## 5. Cómo se cargan más precios
 
-1. Se añaden filas a `data/precios.csv` (ofertas de proveedor) o a
-   `data/precios-orientativos.csv` (referencias de mercado).
+1. Se añaden filas a `data/precios.csv` (ofertas de proveedor), a
+   `data/precios-orientativos.csv` (referencias de mercado) o a
+   `data/precios-cisco.csv` (el presupuesto de Cisco). Todos tienen las mismas
+   columnas y se declaran en `fuentesPrecio`, en `scripts/generar-seed.mjs`.
 2. `npm run seed` regenera `db/seed.sql` e imprime el informe de qué se ha
    enlazado, qué es nuevo y qué queda por revisar.
 3. `npm run db:seed` lo aplica.

@@ -1,0 +1,5 @@
+tipologia;aforo;origen_categoria;destino_categoria;senal;ruta;orden;notas
+SALA TP;8;CAJA CONEXIONES;VIDEOCONFERENCIA;hdmi;falso_techo;1;El HDMI del portatil entra en el Spark. Es el unico que sube a la mesa.
+SALA TP;8;VIDEOCONFERENCIA;PANTALLA;hdmi;directo;2;Salida del Spark a la pantalla. Los dos van en la misma pared.
+SALA TP;8;PANEL TÁCTIL;VIDEOCONFERENCIA;red;falso_techo;3;RJ45 de 10 m. Ademas de datos, da corriente al panel por PoE.
+SALA TP;8;CAJA CONEXIONES;VIDEOCONFERENCIA;red;falso_techo;4;RJ45 de la roseta de red del edificio para el portatil del usuario.

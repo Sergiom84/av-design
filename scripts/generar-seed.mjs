@@ -148,6 +148,9 @@ const clavesPrevias = new Set(catalogoPorClave.keys());
 const fuentesPrecio = [
   { fichero: 'precios.csv', origen: 'final' },
   { fichero: 'precios-orientativos.csv', origen: 'orientativo' },
+  // El presupuesto de Cisco QA152721337VJ es una estimación no vinculante, en
+  // dólares y de marzo de 2024: presupuesta, pero no permite pedir.
+  { fichero: 'precios-cisco.csv', origen: 'orientativo' },
 ];
 
 const filasPrecio = fuentesPrecio.flatMap(({ fichero, origen }) =>
@@ -375,6 +378,45 @@ const medidasPlantilla = hayMedidas
       };
     })
   : [];
+
+// --------------------------------------------------------------------------
+// 3c · montaje de la plantilla: dónde va cada equipo y qué conecta con qué
+//
+// Sin esto una sala nueva nace con los equipos amontonados en la esquina y sin
+// una sola tirada: el croquis sale deducido y la tabla de cables, vacía. Con
+// 144 salas iguales, colocarlos a mano es hacerlo 144 veces.
+//
+// La clave de una línea de equipamiento es la categoría dentro de la plantilla.
+// Vale mientras una plantilla no lleve dos líneas de la misma categoría; si
+// algún día las lleva, esto hay que ampliarlo con el modelo.
+// --------------------------------------------------------------------------
+const nombrePlantilla = (tipologia, aforoBruto) => {
+  const aforo = aforoBruto && aforoBruto !== 'None' ? Number(aforoBruto) : null;
+  return aforo ? `${tipologia} · aforo ${aforo}` : tipologia;
+};
+
+const leerSiExiste = (fichero) =>
+  existsSync(data(fichero)) ? leerCsv(data(fichero)) : [];
+
+const montajePlantilla = leerSiExiste('plantillas-montaje.csv').map((r) => ({
+  plantilla: nombrePlantilla(r.tipologia, r.aforo),
+  categoria: r.categoria,
+  extremo: r.extremo || null,
+  x_m: r.x_m,
+  y_m: r.y_m,
+  z_m: r.z_m,
+  notas: r.notas || null,
+}));
+
+const tiradasPlantilla = leerSiExiste('plantillas-tiradas.csv').map((r) => ({
+  plantilla: nombrePlantilla(r.tipologia, r.aforo),
+  origen: r.origen_categoria,
+  destino: r.destino_categoria,
+  senal: SENALES.has(r.senal) ? r.senal : 'otro',
+  ruta: r.ruta || null,
+  orden: Number(r.orden) || 0,
+  notas: r.notas || null,
+}));
 
 // --------------------------------------------------------------------------
 // 4 · volcado
@@ -663,6 +705,50 @@ if (medidasPlantilla.length) {
 where nombre = ${txt(m.nombre)}
   -- Solo si nadie las ha rellenado ya desde la aplicación.
   and largo_m is null and ancho_m is null and mesa_largo_m is null;`,
+    );
+  }
+  sql.push('');
+}
+
+if (montajePlantilla.length) {
+  sql.push(`-- Montaje de plantilla: dónde va cada equipo (${montajePlantilla.length} líneas)`);
+  for (const m of montajePlantilla) {
+    // Solo si nadie ha colocado ya ese equipo desde la aplicación: colocar es
+    // una decisión del departamento y la siembra no la pisa.
+    sql.push(
+      `update plantilla_articulos pa set
+  extremo = ${m.extremo ? `'${m.extremo}'::extremo_cable` : 'null'},
+  x_m = ${num(m.x_m)}, y_m = ${num(m.y_m)}, z_m = ${num(m.z_m)}
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = ${txt(m.plantilla)}
+  and pa.categoria = ${txt(m.categoria)}
+  and pa.x_m is null and pa.y_m is null;`,
+    );
+  }
+  sql.push('');
+}
+
+if (tiradasPlantilla.length) {
+  sql.push(`-- Tiradas tipo de plantilla (${tiradasPlantilla.length})`);
+  for (const t of tiradasPlantilla) {
+    // `not exists` sobre la propia tirada y no sobre la plantilla entera: así
+    // añadir una tirada nueva al CSV la siembra sin duplicar las de antes.
+    sql.push(
+      `insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
+select ps.id, o.id, d.id, ${txt(t.senal)}::senal,
+       ${t.ruta ? `'${t.ruta}'::ruta_cable` : 'null'}, ${t.orden}, ${txt(t.notas)}
+from plantillas_sala ps
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = ${txt(t.origen)}
+join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = ${txt(t.destino)}
+where ps.nombre = ${txt(t.plantilla)}
+  and not exists (
+    select 1 from plantilla_conexiones pc
+    where pc.plantilla_id = ps.id
+      and pc.origen_linea_id = o.id
+      and pc.destino_linea_id = d.id
+      and pc.senal = ${txt(t.senal)}::senal
+  );`,
     );
   }
   sql.push('');

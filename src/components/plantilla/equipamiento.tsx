@@ -1,7 +1,7 @@
 import { Boton, Campo } from '@/components/ui';
 import { anadirLineaPlantilla, operarLineaPlantilla } from '@/app/acciones';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
-import type { LineaPlantilla } from '@/lib/tipos';
+import { ETIQUETA_EXTREMO, type LineaPlantilla } from '@/lib/tipos';
 
 /**
  * El equipamiento estándar de la plantilla. Lo que no está marcado como "no en
@@ -36,6 +36,10 @@ export function EquipamientoDePlantilla({
               <th className="num">Cantidad</th>
               <th>Equipo</th>
               <th>Sección</th>
+              <th>Dónde va</th>
+              <th className="num">X</th>
+              <th className="num">Y</th>
+              <th className="num">Z</th>
               <th>En todas las salas</th>
               <th />
             </tr>
@@ -75,6 +79,46 @@ export function EquipamientoDePlantilla({
                   </td>
                   <td>{equipo}</td>
                   <td className="text-tinta-tenue">{l.categoria}</td>
+                  {/*
+                    Colocar el equipo aquí es colocarlo en las 144 salas que
+                    salen de esta plantilla. Vacío significa "dedúcelo": la sala
+                    lo pone donde suele ir y el croquis lo dibuja discontinuo.
+                  */}
+                  <td>
+                    <select
+                      form={f}
+                      name="extremo"
+                      defaultValue={l.extremo ?? ''}
+                      aria-label={`${equipo}: dónde va`}
+                    >
+                      <option value="">deducir</option>
+                      {Object.entries(ETIQUETA_EXTREMO).map(([v, e]) => (
+                        <option key={v} value={v}>
+                          {e}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  {(
+                    [
+                      ['x_m', l.x_m, 'largo'],
+                      ['y_m', l.y_m, 'ancho'],
+                      ['z_m', l.z_m, 'altura'],
+                    ] as const
+                  ).map(([clave, valor, eje]) => (
+                    <td key={clave} className="num">
+                      <input
+                        form={f}
+                        name={clave}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={valor ?? ''}
+                        aria-label={`${equipo}: ${eje} en metros`}
+                        className="w-16 num"
+                      />
+                    </td>
+                  ))}
                   <td>
                     <span className="flex items-center gap-2">
                       <input

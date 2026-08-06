@@ -865,7 +865,11 @@ insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, sena
   ('consumible', 'MECANISMO', null, 'PLACA HDMI + RJ45 EMPOTRABLE', 'Placa de pared para toma de sala', 'ud', 'otro', null, null, null, null, null, null, null, null)
 on conflict (coalesce(marca, ''), modelo, categoria) do update set descripcion = excluded.descripcion, longitudes_comerciales_m = excluded.longitudes_comerciales_m, bobina_m = excluded.bobina_m, diametro_mm = excluded.diametro_mm;
 
--- Precios: 88 líneas de 12 presupuestos, 31 referencias nuevas
+-- Precios: 98 líneas de 13 presupuestos, 31 referencias nuevas
+insert into proveedores (nombre) values
+  ('CISCO SYSTEMS')
+on conflict (nombre) do nothing;
+
 insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, senal, conector_a, conector_b, longitudes_comerciales_m, bobina_m, referencia_fabricante) values
   ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/6', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 1,8 m (6 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[1.8]::numeric[], null, '26-663-06'),
   ('cable', 'CABLE HDMI', 'EXTRON', 'HDMI ULTRA/9', 'Latiguillo HDMI premium alta velocidad ultraflexible 4K, 2,7 m (9 ft)', 'ud', 'hdmi', 'HDMI A', 'HDMI A', array[2.7]::numeric[], null, '26-663-09'),
@@ -1341,6 +1345,56 @@ where precios.fuente = 'csv';
 insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
 select a.id, null, 'Referencia web · cable', 'orientativo', 'csv', 'USD', '2026-08-05'::date, null, 8, 8, 1, null, 'Rango 8-20 USD con keystone jacks'
 from articulos a where coalesce(marca, '') = '' and modelo = 'PLACA HDMI + RJ45 EMPOTRABLE' and categoria = 'MECANISMO'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-KITPRO-K9', 11641.33, 11641.33, 1, 1, 'Linea 3.0. Unit Net Price. Estimacion no vinculante en USD de marzo de 2024'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM KIT PRO' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-KITPLUS-K9', 7671.07, 7671.07, 1, 1, 'Linea 8.0. El catalogo tiene ademas SPARK ROOM KIT PLUS, que puede ser el mismo producto con la marca antigua: no se le cuelga el precio'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM KIT PLUS' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-KIT-K9', 4330.07, 4330.07, 1, 1, 'Linea 10.0. El catalogo guarda este articulo con el propio part number como modelo'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'CS-KIT-K9' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-KIT-MINI-K9', 2179.92, 2179.92, 1, 1, 'Linea 11.0. Unico Room Kit Mini del catalogo, escrito con las palabras en otro orden'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'MINI SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-BRD55P-K9', 8696.52, 8696.52, 1, 1, 'Linea 17.0. Primera generacion. BOARD PRO 55 G2 es la segunda y tiene otro part number: no se le cuelga el precio'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX BOARD PRO 55' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-DESK-K9', 1816.05, 1816.05, 1, 1, 'Linea 19.0. El catalogo guarda este articulo con el propio part number como modelo'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'CS-DESK-K9' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-DESKMINI-K9', 1220.62, 1220.62, 1, 1, 'Linea 20.0. El catalogo guarda este articulo con el propio part number como modelo'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'CS-DESKMINI-K9' and categoria = 'VIDEOCONFERENCIA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CTS-CAM-P60=', 3465.15, 3465.15, 1, 1, 'Linea 21.0. Recambio. P60 y PRECISION 60 son probablemente la misma camara escrita de otra forma y no se les cuelga el precio'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'CTS-CAM-P60' and categoria = 'CÁMARA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-CAM-PTZ4K=', 3465.15, 3465.15, 1, 1, 'Linea 22.0. Recambio'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'PTZ 4K' and categoria = 'CÁMARA'
+on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
+where precios.fuente = 'csv';
+insert into precios (articulo_id, proveedor_id, presupuesto, origen, fuente, moneda, fecha, referencia, precio, precio_compra, unidades_por_compra, cantidad, notas)
+select a.id, (select id from proveedores where nombre = 'CISCO SYSTEMS'), 'Cisco QA152721337VJ', 'orientativo', 'csv', 'USD', '2024-03-04'::date, 'CS-MIC-TABLE-J', 215.01, 215.01, 1, 1, 'Lineas 5.3, 8.2 y 9.3, las tres al mismo precio. El part number ya estaba colgado de la V1 en precios-orientativos.csv. La V2 se queda sin precio'
+from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V1)' and categoria = 'MICRÓFONO'
 on conflict (presupuesto, articulo_id) do update set origen = excluded.origen, fuente = excluded.fuente, moneda = excluded.moneda, fecha = excluded.fecha, precio = excluded.precio, precio_compra = excluded.precio_compra, unidades_por_compra = excluded.unidades_por_compra, cantidad = excluded.cantidad, notas = excluded.notas
 where precios.fuente = 'csv';
 
@@ -2026,6 +2080,106 @@ update plantillas_sala set
 where nombre = 'SALA TP · aforo 8'
   -- Solo si nadie las ha rellenado ya desde la aplicación.
   and largo_m is null and ancho_m is null and mesa_largo_m is null;
+
+-- Montaje de plantilla: dónde va cada equipo (5 líneas)
+update plantilla_articulos pa set
+  extremo = 'pantalla'::extremo_cable,
+  x_m = 0, y_m = 1.25, z_m = 0.74
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = 'SALA TP · aforo 8'
+  and pa.categoria = 'PANTALLA'
+  and pa.x_m is null and pa.y_m is null;
+update plantilla_articulos pa set
+  extremo = 'pared'::extremo_cable,
+  x_m = 0.05, y_m = 1.25, z_m = 0.55
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = 'SALA TP · aforo 8'
+  and pa.categoria = 'VIDEOCONFERENCIA'
+  and pa.x_m is null and pa.y_m is null;
+update plantilla_articulos pa set
+  extremo = 'caja_conexiones'::extremo_cable,
+  x_m = 2.4, y_m = 1.25, z_m = 0.73
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = 'SALA TP · aforo 8'
+  and pa.categoria = 'CAJA CONEXIONES'
+  and pa.x_m is null and pa.y_m is null;
+update plantilla_articulos pa set
+  extremo = 'mesa'::extremo_cable,
+  x_m = 2.1, y_m = 1.05, z_m = 0.73
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = 'SALA TP · aforo 8'
+  and pa.categoria = 'PANEL TÁCTIL'
+  and pa.x_m is null and pa.y_m is null;
+update plantilla_articulos pa set
+  extremo = 'mesa'::extremo_cable,
+  x_m = 2.7, y_m = 1.05, z_m = 0.73
+from plantillas_sala ps
+where pa.plantilla_id = ps.id
+  and ps.nombre = 'SALA TP · aforo 8'
+  and pa.categoria = 'MICRÓFONO'
+  and pa.x_m is null and pa.y_m is null;
+
+-- Tiradas tipo de plantilla (4)
+insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
+select ps.id, o.id, d.id, 'hdmi'::senal,
+       'falso_techo'::ruta_cable, 1, 'El HDMI del portatil entra en el Spark. Es el unico que sube a la mesa.'
+from plantillas_sala ps
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA CONEXIONES'
+join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
+where ps.nombre = 'SALA TP · aforo 8'
+  and not exists (
+    select 1 from plantilla_conexiones pc
+    where pc.plantilla_id = ps.id
+      and pc.origen_linea_id = o.id
+      and pc.destino_linea_id = d.id
+      and pc.senal = 'hdmi'::senal
+  );
+insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
+select ps.id, o.id, d.id, 'hdmi'::senal,
+       'directo'::ruta_cable, 2, 'Salida del Spark a la pantalla. Los dos van en la misma pared.'
+from plantillas_sala ps
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'VIDEOCONFERENCIA'
+join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'PANTALLA'
+where ps.nombre = 'SALA TP · aforo 8'
+  and not exists (
+    select 1 from plantilla_conexiones pc
+    where pc.plantilla_id = ps.id
+      and pc.origen_linea_id = o.id
+      and pc.destino_linea_id = d.id
+      and pc.senal = 'hdmi'::senal
+  );
+insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
+select ps.id, o.id, d.id, 'red'::senal,
+       'falso_techo'::ruta_cable, 3, 'RJ45 de 10 m. Ademas de datos, da corriente al panel por PoE.'
+from plantillas_sala ps
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'PANEL TÁCTIL'
+join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
+where ps.nombre = 'SALA TP · aforo 8'
+  and not exists (
+    select 1 from plantilla_conexiones pc
+    where pc.plantilla_id = ps.id
+      and pc.origen_linea_id = o.id
+      and pc.destino_linea_id = d.id
+      and pc.senal = 'red'::senal
+  );
+insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
+select ps.id, o.id, d.id, 'red'::senal,
+       'falso_techo'::ruta_cable, 4, 'RJ45 de la roseta de red del edificio para el portatil del usuario.'
+from plantillas_sala ps
+join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA CONEXIONES'
+join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
+where ps.nombre = 'SALA TP · aforo 8'
+  and not exists (
+    select 1 from plantilla_conexiones pc
+    where pc.plantilla_id = ps.id
+      and pc.origen_linea_id = o.id
+      and pc.destino_linea_id = d.id
+      and pc.senal = 'red'::senal
+  );
 
 -- Enlaza cada línea de plantilla con el artículo del catálogo cuando el modelo coincide
 update plantilla_articulos pa

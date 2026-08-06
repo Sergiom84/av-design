@@ -118,14 +118,39 @@ export async function crearSala(datos: FormData) {
     const lineas = plantillaId
       ? await tx<
           Array<{
+            id: string;
             articulo_id: string | null;
             categoria: string;
             cantidad: string;
             modelo_texto: string | null;
+            extremo: string | null;
+            x_m: string | null;
+            y_m: string | null;
+            z_m: string | null;
           }>
-        >`select articulo_id, categoria, cantidad, modelo_texto
+        >`select id, articulo_id, categoria, cantidad, modelo_texto,
+                 extremo, x_m, y_m, z_m
           from plantilla_articulos
           where plantilla_id = ${plantillaId} and not opcional`
+      : [];
+
+    // Las tiradas tipo de la plantilla. Se leen una vez y se copian a cada sala
+    // de la serie con los equipos de esa sala.
+    const tiradas = plantillaId
+      ? await tx<
+          Array<{
+            origen_linea_id: string;
+            destino_linea_id: string;
+            articulo_cable_id: string | null;
+            senal: string;
+            ruta: string | null;
+            notas: string | null;
+          }>
+        >`select origen_linea_id, destino_linea_id, articulo_cable_id,
+                 senal, ruta, notas
+          from plantilla_conexiones
+          where plantilla_id = ${plantillaId}
+          order by orden, creado_en`
       : [];
 
     const creadas: string[] = [];
@@ -139,12 +164,36 @@ export async function crearSala(datos: FormData) {
         })}
         returning id`;
 
+      // De qué línea de la plantilla salió cada equipo. Es lo que permite
+      // copiar después las tiradas: la tirada de la plantilla apunta a la
+      // línea, y aquí se traduce al equipo de esta sala concreta.
+      const equipoDeLinea = new Map<string, string>();
+
       for (const l of lineas) {
-        await tx`
-          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo)
+        const [equipo] = await tx<Array<{ id: string }>>`
+          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m)
           values (${sala.id}, ${l.articulo_id}, ${l.modelo_texto ?? l.categoria},
                   ${Math.max(1, Math.round(Number(l.cantidad) || 1))},
-                  ${extremoPorCategoria(l.categoria)}::extremo_cable)`;
+                  ${l.extremo ?? extremoPorCategoria(l.categoria)}::extremo_cable,
+                  ${Number(l.x_m ?? 0)}, ${Number(l.y_m ?? 0)}, ${Number(l.z_m ?? 0)})
+          returning id`;
+        equipoDeLinea.set(l.id, equipo.id);
+      }
+
+      // Una tirada cuyo equipo no se ha heredado —porque la línea estaba
+      // marcada "no en todas"— se salta. Insertarla apuntando a nada sería
+      // dejar la sala con una tirada rota.
+      for (const t of tiradas) {
+        const origen = equipoDeLinea.get(t.origen_linea_id);
+        const destino = equipoDeLinea.get(t.destino_linea_id);
+        if (!origen || !destino) continue;
+
+        await tx`
+          insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta, notas)
+          values (${sala.id}, ${origen}, ${destino}, ${t.articulo_cable_id},
+                  ${t.senal}::senal,
+                  ${t.ruta}::ruta_cable,
+                  ${t.notas})`;
       }
 
       creadas.push(sala.id);
@@ -484,13 +533,41 @@ export async function operarLineaPlantilla(datos: FormData) {
       await sql`
         update plantilla_articulos set
           cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
-          opcional = ${datos.get('opcional') === 'on'}
+          opcional = ${datos.get('opcional') === 'on'},
+          extremo  = ${texto(datos.get('extremo'))}::extremo_cable,
+          x_m      = ${numero(datos.get('x_m'))},
+          y_m      = ${numero(datos.get('y_m'))},
+          z_m      = ${numero(datos.get('z_m'))}
         where id = ${id}`;
       break;
     default:
       return;
   }
 
+  revalidatePath('/plantillas');
+}
+
+/**
+ * Una tirada tipo de la plantilla. Se valida lo mínimo: que los dos extremos
+ * existan y no sean el mismo. Lo demás avisa pero no bloquea, igual que en la
+ * sala: puede haber un adaptador por medio.
+ */
+export async function anadirTiradaPlantilla(datos: FormData) {
+  const plantillaId = String(datos.get('plantilla_id'));
+  const origen = texto(datos.get('origen_linea_id'));
+  const destino = texto(datos.get('destino_linea_id'));
+  if (!origen || !destino || origen === destino) return;
+
+  await sql`
+    insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta)
+    values (${plantillaId}, ${origen}, ${destino},
+            ${texto(datos.get('senal')) ?? 'otro'}::senal,
+            ${texto(datos.get('ruta'))}::ruta_cable)`;
+  revalidatePath('/plantillas');
+}
+
+export async function quitarTiradaPlantilla(datos: FormData) {
+  await sql`delete from plantilla_conexiones where id = ${String(datos.get('id'))}`;
   revalidatePath('/plantillas');
 }
 

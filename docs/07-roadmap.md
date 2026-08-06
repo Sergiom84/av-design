@@ -78,6 +78,44 @@ sala, medida:
 Estas medidas entran en la plantilla, así que crear las 144 salas es un alta en
 serie con la geometría ya puesta.
 
+### M6 · La plantilla trae el montaje
+
+Hecho. Una plantilla ya no dice solo **qué** equipos lleva la sala: dice
+**dónde** va cada uno y **qué conecta con qué**.
+
+- `plantilla_articulos` gana `extremo`, `x_m`, `y_m` y `z_m`.
+- `plantilla_conexiones` guarda las tiradas tipo, apuntando a las líneas de
+  equipamiento y no a artículos: una plantilla puede llevar dos pantallas del
+  mismo modelo.
+- Crear una sala copia las dos cosas. Una tirada cuyo equipo esté marcado
+  "no en todas" se salta: una tirada a un equipo que no está es una tirada rota.
+- Fuentes editables: `data/plantillas-montaje.csv` y `data/plantillas-tiradas.csv`.
+
+Efecto medido en la SALA TP de aforo 8: una sala nueva pasa de nacer con cuatro
+equipos amontonados en una esquina y cero tiradas, a nacer con los cuatro
+colocados y **cuatro tiradas con 20,8 m calculados**, tabla de cables incluida.
+Multiplicado por 144 salas.
+
+### Pendiente de tu criterio: la fórmula infraestima
+
+Ahora que la sala nace montada se puede comparar el cálculo con lo que el
+departamento pide de verdad, que era el pendiente número cuatro de
+`docs/05-continuar.md`. En la Sala de Batería 006:
+
+| Tirada | Calculado | Lo que pides |
+|---|---|---|
+| HDMI de la caja al Spark | 6,67 m | entre 7 y 10 m |
+| RJ45 al panel Cisco | 6,57 m | 10 m |
+
+El recorrido está bien: 1,67 de subida + 2,35 en horizontal + 1,85 de bajada =
+5,87 m, más 0,80 de holgura. Lo que falta es el margen de realidad: rodeos,
+registros, y lo que tú escribes como "+2 m aprox. de subidas".
+
+**No se toca `calculo-cable.ts` sin tu palabra.** Es lógica congelada con
+pruebas, y las holguras se editan en `/parametros` sin tocar código. Las
+opciones son subir la holgura de la caja de conexiones, subir el margen general,
+o dejarlo y aceptar que el número es un mínimo. Es criterio tuyo, no mío.
+
 ## Aplazado
 
 **Los precios.** Hay un presupuesto de Cisco de marzo de 2024 sin cargar

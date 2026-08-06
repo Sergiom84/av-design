@@ -773,3 +773,47 @@ create index if not exists revision_puntos_revision_idx on revision_puntos (revi
 
 comment on column revision_puntos.valor is
   'Lo que se midio, si el punto pide una medida. Texto: "4,68" o "no llega el cable".';
+
+-- =====================================================================
+-- Fase 3 · La plantilla trae el montaje, no solo la lista de material
+--
+-- Hasta aqui una plantilla decia QUE equipos lleva la sala. La sala nacia
+-- con los cuatro equipos amontonados en la esquina y sin una sola tirada,
+-- asi que el croquis salia deducido y la tabla de cables, vacia. Con 144
+-- salas iguales eso es colocar equipos 144 veces a mano.
+--
+-- La plantilla pasa a traer tambien donde va cada equipo y que conecta
+-- con que. Es el mismo dato de siempre, pero una vez en lugar de 144.
+-- ---------------------------------------------------------------------
+alter table plantilla_articulos add column if not exists extremo extremo_cable;
+alter table plantilla_articulos add column if not exists x_m numeric(6,2);
+alter table plantilla_articulos add column if not exists y_m numeric(6,2);
+alter table plantilla_articulos add column if not exists z_m numeric(6,2);
+
+comment on column plantilla_articulos.extremo is
+  'Donde acaba el cable en este equipo, y por tanto que holgura se deja. Nulo = se deduce de la categoria al crear la sala, como se hacia antes.';
+comment on column plantilla_articulos.x_m is
+  'Posicion estandar del equipo en la sala. Nula = la sala la deduce y el croquis la dibuja discontinua.';
+
+-- Las tiradas tipo de la plantilla. Apuntan a las lineas de equipamiento,
+-- no a articulos: una plantilla puede llevar dos pantallas del mismo
+-- modelo y la tirada va a una de las dos.
+create table if not exists plantilla_conexiones (
+  id                 uuid primary key default gen_random_uuid(),
+  plantilla_id       uuid not null references plantillas_sala on delete cascade,
+  origen_linea_id    uuid not null references plantilla_articulos on delete cascade,
+  destino_linea_id   uuid not null references plantilla_articulos on delete cascade,
+  articulo_cable_id  uuid references articulos on delete set null,
+  senal              senal not null default 'otro',
+  ruta               ruta_cable,
+  notas              text,
+  orden              integer not null default 0,
+  creado_en          timestamptz not null default now(),
+  check (origen_linea_id <> destino_linea_id)
+);
+
+create index if not exists plantilla_conexiones_plantilla_idx
+  on plantilla_conexiones (plantilla_id, orden, creado_en);
+
+comment on table plantilla_conexiones is
+  'Tiradas tipo de una plantilla. La sala nueva las copia a `conexiones` con sus propios equipos.';

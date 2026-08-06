@@ -12,6 +12,7 @@ import {
   PlantillaSala,
   Puerto,
   Sala,
+  TiradaPlantilla,
   TomaRed,
 } from './tipos';
 
@@ -372,7 +373,11 @@ export async function listarPlantillas(): Promise<
                  'categoria', pa.categoria,
                  'cantidad', pa.cantidad,
                  'opcional', pa.opcional,
-                 'modelo_texto', pa.modelo_texto
+                 'modelo_texto', pa.modelo_texto,
+                 'extremo', pa.extremo,
+                 'x_m', pa.x_m,
+                 'y_m', pa.y_m,
+                 'z_m', pa.z_m
                )
                order by pa.opcional, pa.categoria
              ) filter (where pa.id is not null),
@@ -406,7 +411,41 @@ export async function listarPlantillas(): Promise<
       cantidad: Number(l.cantidad),
       opcional: Boolean(l.opcional),
       modelo_texto: l.modelo_texto ?? null,
+      extremo: (l.extremo as LineaPlantilla['extremo']) ?? null,
+      x_m: n(l.x_m),
+      y_m: n(l.y_m),
+      z_m: n(l.z_m),
     })),
+  }));
+}
+
+/**
+ * Las tiradas tipo de todas las plantillas, ya con el nombre de los dos
+ * extremos resuelto. Una consulta para la página entera y no una por plantilla:
+ * `/plantillas` pinta las diecisiete de golpe.
+ */
+export async function tiradasDePlantillas(): Promise<TiradaPlantilla[]> {
+  const filas = await sql<Fila[]>`
+    select pc.*,
+           coalesce(o.modelo_texto, o.categoria) as origen,
+           coalesce(d.modelo_texto, d.categoria) as destino
+    from plantilla_conexiones pc
+    join plantilla_articulos o on o.id = pc.origen_linea_id
+    join plantilla_articulos d on d.id = pc.destino_linea_id
+    order by pc.plantilla_id, pc.orden, pc.creado_en`;
+
+  return filas.map((f) => ({
+    id: String(f.id),
+    plantilla_id: String(f.plantilla_id),
+    origen_linea_id: String(f.origen_linea_id),
+    destino_linea_id: String(f.destino_linea_id),
+    origen: String(f.origen),
+    destino: String(f.destino),
+    articulo_cable_id: s(f.articulo_cable_id),
+    senal: f.senal as TiradaPlantilla['senal'],
+    ruta: (f.ruta as TiradaPlantilla['ruta']) ?? null,
+    notas: s(f.notas),
+    orden: Number(f.orden ?? 0),
   }));
 }
 

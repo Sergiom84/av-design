@@ -1,5 +1,5 @@
 import { hayConfiguracion } from '@/lib/db';
-import { listarPlantillas } from '@/lib/datos';
+import { listarPlantillas, tiradasDePlantillas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera } from '@/components/ui';
 import { FichaDePlantilla } from '@/components/plantilla/ficha';
@@ -19,7 +19,11 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
 
   const { abierta } = await searchParams;
   const idAbierta = typeof abierta === 'string' ? abierta : null;
-  const plantillas = await listarPlantillas();
+  // Las tiradas de las diecisiete en una consulta, no una por plantilla.
+  const [plantillas, tiradas] = await Promise.all([
+    listarPlantillas(),
+    tiradasDePlantillas(),
+  ]);
   const sinMedidas = plantillas.filter((p) => p.largo_m == null).length;
 
   return (
@@ -46,6 +50,7 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
             key={p.id}
             plantilla={p}
             lineas={p.lineas}
+            tiradas={tiradas.filter((t) => t.plantilla_id === p.id)}
             orden={i + 1}
             abierta={p.id === idAbierta}
           />

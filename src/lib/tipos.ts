@@ -137,6 +137,35 @@ export interface LineaPlantilla {
   /** `no en todas`: la sala nueva no la hereda. */
   opcional: boolean;
   modelo_texto: string | null;
+  /**
+   * Dónde va este equipo en la sala tipo. Se copia tal cual a la sala nueva, y
+   * es lo que hace que el croquis salga medido en vez de deducido. Nulo
+   * mientras nadie lo haya colocado.
+   */
+  extremo: Extremo | null;
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+}
+
+/**
+ * Una tirada tipo de la plantilla. Apunta a las líneas de equipamiento y no a
+ * artículos: una plantilla puede llevar dos pantallas del mismo modelo y la
+ * tirada va a una de las dos.
+ */
+export interface TiradaPlantilla {
+  id: string;
+  plantilla_id: string;
+  origen_linea_id: string;
+  destino_linea_id: string;
+  /** Ya resueltos, para poder pintarlos sin otra consulta. */
+  origen: string;
+  destino: string;
+  articulo_cable_id: string | null;
+  senal: Senal;
+  ruta: Ruta | null;
+  notas: string | null;
+  orden: number;
 }
 
 export interface Articulo {

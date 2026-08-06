@@ -1,0 +1,6 @@
+tipologia;aforo;categoria;extremo;x_m;y_m;z_m;notas
+SALA TP;8;PANTALLA;pantalla;0.00;1.25;0.74;Testero, centrada. 74 cm del suelo al borde inferior. Samsung QB65R-B de 145 x 83 cm.
+SALA TP;8;VIDEOCONFERENCIA;pared;0.05;1.25;0.55;Cisco Spark, bajo la pantalla, en la misma pared.
+SALA TP;8;CAJA CONEXIONES;caja_conexiones;2.40;1.25;0.73;En la mesa, a 2,40 m de la pared de la pantalla. Lleva 3 chukos, HDMI x1 y RJ45 x1 para el portatil del usuario.
+SALA TP;8;PANEL TÁCTIL;mesa;2.10;1.05;0.73;Panel Cisco en la mesa, junto a la caja. El RJ45 de 10 m le da corriente.
+SALA TP;8;MICRÓFONO;mesa;2.70;1.05;0.73;Micro Cisco en la mesa. No va en todas las salas.

@@ -109,6 +109,11 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   lógica pura con pruebas; pintarla es cosa de `src/components/croquis/`. Una
   imagen de fondo no se recalcula, no da metros y habría que redibujarla 390
   veces.
+- **La plantilla trae el montaje, no solo la lista de material.** Además de qué
+  equipos lleva la sala, guarda dónde va cada uno (`plantilla_articulos.x_m`) y
+  qué conecta con qué (`plantilla_conexiones`). Crear una sala copia las dos
+  cosas, así que nace con croquis medido y tabla de cables. Colocar un equipo
+  una vez o colocarlo 144 veces es la diferencia.
 - **Un equipo sin coordenadas se coloca donde suele ir, y se marca.** La
   pantalla al testero, la caja de conexiones en la mesa, el rack a una esquina.
   Sale con trazo discontinuo: sirve para orientarse, no para taladrar. Sin esto

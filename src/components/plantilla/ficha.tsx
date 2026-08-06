@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { Tarjeta } from '@/components/ui';
-import type { LineaPlantilla, PlantillaSala } from '@/lib/tipos';
+import type { LineaPlantilla, PlantillaSala, TiradaPlantilla } from '@/lib/tipos';
 import { EquipamientoDePlantilla } from './equipamiento';
 import { MedidasDePlantilla } from './medidas';
+import { TiradasDePlantilla } from './tiradas';
 
 /**
  * Una plantilla: su equipamiento estándar a la izquierda y sus medidas a la
@@ -18,11 +19,13 @@ import { MedidasDePlantilla } from './medidas';
 export function FichaDePlantilla({
   plantilla,
   lineas,
+  tiradas,
   orden,
   abierta,
 }: {
   plantilla: PlantillaSala & { lineas: LineaPlantilla[] };
   lineas: LineaPlantilla[];
+  tiradas: TiradaPlantilla[];
   orden: number;
   abierta: boolean;
 }) {
@@ -44,6 +47,11 @@ export function FichaDePlantilla({
             <span>
               {heredadas} equipos se heredan
               {lineas.length > heredadas ? `, ${lineas.length - heredadas} no` : ''}
+            </span>
+            <span>
+              {tiradas.length === 0
+                ? 'sin tiradas tipo'
+                : `${tiradas.length} tiradas tipo`}
             </span>
             <Link
               href={`/salas/nueva?plantilla=${p.id}`}
@@ -67,7 +75,17 @@ export function FichaDePlantilla({
             </div>
 
             {abierta ? (
-              <EquipamientoDePlantilla plantillaId={p.id} lineas={lineas} orden={orden} />
+              <>
+                <EquipamientoDePlantilla plantillaId={p.id} lineas={lineas} orden={orden} />
+                <div className="mt-8">
+                  <div className="t-etiqueta mb-2">Tiradas tipo</div>
+                  <TiradasDePlantilla
+                    plantillaId={p.id}
+                    lineas={lineas}
+                    tiradas={tiradas}
+                  />
+                </div>
+              </>
             ) : lineas.length === 0 ? (
               <p className="text-tinta-tenue">Sin equipamiento definido.</p>
             ) : (

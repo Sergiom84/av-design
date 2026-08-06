@@ -18,10 +18,7 @@ export default async function Salas() {
         titulo="Salas"
         descripcion="Cada sala guarda sus medidas reales, su equipamiento y sus conexiones. De ahí salen los metros de cable."
         acciones={
-          <Link
-            href="/salas/nueva"
-            className="border border-acento bg-acento text-papel rounded-[2px] px-3 py-1.5 hover:opacity-90 transition-colors"
-          >
+          <Link href="/salas/nueva" className="boton boton-principal">
             Nueva sala
           </Link>
         }

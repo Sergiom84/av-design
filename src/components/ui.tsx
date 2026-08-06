@@ -31,13 +31,15 @@ export function Tarjeta({
   pie?: ReactNode;
 }) {
   return (
-    <section className="border border-linea bg-papel">
+    <section className="tarjeta">
       {titulo && (
-        <h2 className="t-subtitulo px-4 py-3 border-b border-linea">{titulo}</h2>
+        <h2 className="t-subtitulo px-4 py-3 border-b border-linea-suave">{titulo}</h2>
       )}
       {/* overflow-x-auto: en móvil las tablas de datos son más anchas que la pantalla */}
       <div className="p-4 overflow-x-auto">{children}</div>
-      {pie && <div className="px-4 py-3 border-t border-linea text-tinta-tenue">{pie}</div>}
+      {pie && (
+        <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue">{pie}</div>
+      )}
     </section>
   );
 }
@@ -54,7 +56,7 @@ export function Dato({
   return (
     <div>
       <div className="t-etiqueta">{etiqueta}</div>
-      <div className="t-subtitulo tabular-nums">
+      <div className="t-subtitulo dato tabular-nums">
         {valor}
         {sufijo && <span className="text-tinta-tenue text-[0.75rem] ml-1">{sufijo}</span>}
       </div>
@@ -73,9 +75,9 @@ export function Aviso({
     tono === 'alerta'
       ? 'border-alerta bg-alerta-suave text-alerta'
       : tono === 'aviso'
-        ? 'border-linea-fuerte bg-papel-hundido text-tinta'
-        : 'border-linea bg-papel text-tinta-tenue';
-  return <div className={`border-l-2 px-4 py-3 ${estilo}`}>{children}</div>;
+        ? 'border-acento bg-superficie-hundida text-tinta'
+        : 'border-linea bg-fondo text-tinta-tenue';
+  return <div className={`border-l-2 rounded-r-md px-4 py-3 ${estilo}`}>{children}</div>;
 }
 
 export function Boton({

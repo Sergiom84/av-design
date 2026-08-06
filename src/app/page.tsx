@@ -18,7 +18,7 @@ export default async function Panel() {
         descripcion="Diseño de salas, cálculo de metros de cable y lista de material para las instalaciones del departamento."
       />
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-px bg-linea border border-linea mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {(
           [
             ['Equipos en catálogo', c.equipos],
@@ -28,13 +28,13 @@ export default async function Panel() {
             ['Salas', c.salas],
           ] as const
         ).map(([etiqueta, valor]) => (
-          <div key={etiqueta} className="bg-papel p-4">
+          <div key={etiqueta} className="tarjeta p-4">
             <Dato etiqueta={etiqueta} valor={valor} />
           </div>
         ))}
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-linea border border-linea mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {(
           [
             ['Referencias en almacén', alm.referenciasEnAlmacen, '/almacen'],
@@ -43,7 +43,7 @@ export default async function Panel() {
             ['Cargas abiertas', alm.cargasAbiertas, '/carga'],
           ] as const
         ).map(([etiqueta, valor, href]) => (
-          <div key={etiqueta} className="bg-papel p-4">
+          <div key={etiqueta} className="tarjeta p-4">
             <Dato etiqueta={etiqueta} valor={<Enlace href={href}>{valor}</Enlace>} />
           </div>
         ))}

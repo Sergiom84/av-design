@@ -124,6 +124,11 @@ table.datos td {
   vertical-align: top;
 }
 
+/* Cebra sutil como la de XTEN-AV: la fila alterna lleva un tinte azulado. */
+table.datos tbody tr:nth-child(even) {
+  background: #f8fafd;
+}
+
 table.datos tbody tr:hover {
   background: var(--superficie-hundida);
 }

@@ -127,16 +127,25 @@ export function Dato({
   etiqueta,
   valor,
   sufijo,
+  reservarEtiqueta = false,
 }: {
   etiqueta: string;
   valor: ReactNode;
   sufijo?: string;
+  /** Reserva dos líneas de etiqueta (0.75rem × 1.35 × 2): solo tiene sentido
+   *  dentro de una rejilla de KPI (`Tarjeta variante="resumen"`), donde una
+   *  etiqueta larga en una tarjeta desalinearía el valor frente a las
+   *  vecinas. Fuera de ese contexto añadiría hueco vacío sin motivo, así
+   *  que por defecto está desactivada. */
+  reservarEtiqueta?: boolean;
 }) {
   return (
     <div>
-      {/* min-h reserva dos líneas (0.75rem × 1.35 × 2) para que una etiqueta
-          larga no desalinee el valor frente a los KPI vecinos de la rejilla. */}
-      <div className="t-etiqueta leading-[1.35] min-h-[2.025rem]">{etiqueta}</div>
+      <div
+        className={`t-etiqueta${reservarEtiqueta ? ' leading-[1.35] min-h-[2.025rem]' : ''}`}
+      >
+        {etiqueta}
+      </div>
       <div className="t-subtitulo dato tabular-nums">
         {valor}
         {sufijo && <span className="text-tinta-tenue text-[0.75rem] ml-1">{sufijo}</span>}
@@ -149,14 +158,12 @@ export function Dato({
  * Los cinco estados que aparecen en la aplicación (montaje, obra, recepción,
  * conexión...) comparten un único vocabulario visual: neutro, información,
  * listo, aviso y bloqueo. Antes de esta primitiva cada pantalla dibujaba su
- * propio mapa de colores para el mismo significado.
- */
-/**
- * El texto de 12 px de un badge necesita 4.5:1 de contraste (no cuenta como
- * texto grande). `--tinta-tenue`, `--exito` y `--aviso` se quedan cortos
- * sobre su propio fondo suave (4.31:1, 3.50:1 y 4.22:1); de ahí `--tinta`
- * (13.3:1, ya es el texto normal de la aplicación) y las variantes
- * `-fuerte` de éxito y aviso, con el mismo patrón que `--acento-fuerte`.
+ * propio mapa de colores para el mismo significado. El texto de 12 px
+ * necesita 4.5:1 de contraste (no cuenta como texto grande):
+ * `--tinta-tenue`, `--exito` y `--aviso` se quedan cortos sobre su propio
+ * fondo suave (4.31:1, 3.50:1 y 4.22:1), de ahí `--tinta` (13.3:1, ya es el
+ * texto normal de la aplicación) y las variantes `-fuerte` de éxito y aviso,
+ * con el mismo patrón que `--acento-fuerte`.
  */
 const TONO_ESTADO = {
   neutro: 'bg-linea-suave text-tinta',
@@ -230,6 +237,29 @@ export function Enlace({ href, children }: { href: string; children: ReactNode }
     <Link href={href as never} className="enlace">
       {children}
     </Link>
+  );
+}
+
+/**
+ * Un checkbox o radio no llega a 44px él solo, y su objetivo táctil real es
+ * la etiqueta que lo envuelve. `.campo-casilla` (`globals.css`) es una clase
+ * explícita, no una coincidencia estructural: un selector que buscara
+ * "cualquier `label` con un checkbox dentro" coincidía tanto con checkboxes
+ * sin `label` (quedaban en 13 × 13 px) como con un `Campo` cuya etiqueta
+ * exterior contenía la de un checkbox más abajo (ganaba 44px sin ser un
+ * campo de casilla). Esta es la única fuente del alto mínimo.
+ */
+export function CampoCasilla({
+  children,
+  ...resto
+}: {
+  children: ReactNode;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <label className="campo-casilla">
+      <input {...resto} />
+      <span>{children}</span>
+    </label>
   );
 }
 

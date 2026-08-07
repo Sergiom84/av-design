@@ -327,11 +327,7 @@ button:focus-visible {
    se quedan compactos: el ratón no necesita el margen que exige el dedo.
    `.boton` ya es `inline-flex` (regla base) para que un `<Link className=
    "boton">` —un `<a>`, elemento en línea que ignora min-height por
-   defecto— también respete el mínimo, igual que el `<button>` nativo.
-   Un checkbox o radio no crece hasta 44px él solo: sería un cuadrado
-   enorme. Su objetivo táctil real es la etiqueta que lo envuelve — así
-   está montado en toda la aplicación (`<label className="flex ...">`) — y
-   es ahí donde se reserva el alto mínimo. */
+   defecto— también respete el mínimo, igual que el `<button>` nativo. */
 @media (max-width: 640px) {
   .boton {
     min-height: 44px;
@@ -344,11 +340,22 @@ button:focus-visible {
     min-height: 44px;
   }
 
-  label:has(input[type="checkbox"]),
-  label:has(input[type="radio"]) {
-    display: flex;
+  .campo-casilla {
     min-height: 44px;
   }
+}
+
+/* Un checkbox o radio no crece a 44px él solo: sería un cuadrado enorme. Su
+   objetivo táctil real es la etiqueta que lo envuelve, pero un selector que
+   busque cualquier `label` con un checkbox descendiente coincide con
+   estructuras que no lo son (un `Campo` cuya etiqueta exterior contiene, más
+   abajo, la de un checkbox) y deja fuera las que no usan `<label>` en el
+   nivel esperado. `CampoCasilla` (`ui.tsx`) es la única fuente del alto
+   mínimo: una clase explícita, no una coincidencia estructural. */
+.campo-casilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

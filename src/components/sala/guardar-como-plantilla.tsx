@@ -38,7 +38,7 @@ export function GuardarComoPlantilla({
           <input
             name="nombre"
             defaultValue={`${sala.nombre} (plantilla)`}
-            className="min-w-[18rem]"
+            className="w-full min-w-0 sm:min-w-[18rem]"
           />
         </Campo>
         <Boton variante="secundario">Crear plantilla</Boton>

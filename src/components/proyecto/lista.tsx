@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Tarjeta, Vacio } from '@/components/ui';
 import type { ProyectoResumen } from '@/lib/datos-proyectos';
 
 /**

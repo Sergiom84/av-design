@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
-import { sedeId } from '@/lib/sedes';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
 
 const texto = (v: FormDataEntryValue | null): string | null => {
@@ -20,9 +19,20 @@ const texto = (v: FormDataEntryValue | null): string | null => {
 export async function crearProyecto(datos: FormData) {
   const nombre = texto(datos.get('nombre'));
   if (!nombre) return;
-  const sede = await sedeId(texto(datos.get('sede')));
 
   await sql.begin(async (tx) => {
+    // La sede se resuelve dentro de la transacción: si el alta falla no queda
+    // una sede huérfana recién creada.
+    const nombreSede = texto(datos.get('sede'));
+    const sede = nombreSede
+      ? (
+          await tx<Array<{ id: string }>>`
+            insert into sedes (nombre) values (${nombreSede})
+            on conflict (nombre) do update set nombre = excluded.nombre
+            returning id`
+        )[0].id
+      : null;
+
     const [p] = await tx<Array<{ id: string }>>`
       insert into proyectos (nombre, codigo, sede_id, notas)
       values (${nombre}, ${texto(datos.get('codigo'))}, ${sede},
@@ -73,13 +83,27 @@ export async function borrarProyecto(datos: FormData) {
   redirect('/proyectos');
 }
 
-/** Adopta una sala de antes de la jerarquía (o la mueve de localización). */
+/**
+ * Adopta una sala de antes de la jerarquía (o la mueve de localización). La
+ * sala arrastra la sede de su nueva obra: una sala de Madrid adoptada por un
+ * proyecto de Barcelona no puede seguir diciendo Madrid. Al soltarla del
+ * proyecto conserva la sede que tenía, que sigue siendo verdad.
+ */
 export async function asignarSalaALocalizacion(datos: FormData) {
   const salaId = texto(datos.get('sala_id'));
   if (!salaId) return;
-  await sql`
-    update salas set localizacion_id = ${texto(datos.get('localizacion_id'))}
-    where id = ${salaId}`;
+  const localizacionId = texto(datos.get('localizacion_id'));
+  if (localizacionId) {
+    await sql`
+      update salas set
+        localizacion_id = ${localizacionId},
+        sede_id = (select p.sede_id from localizaciones l
+                   join proyectos p on p.id = l.proyecto_id
+                   where l.id = ${localizacionId})
+      where id = ${salaId}`;
+  } else {
+    await sql`update salas set localizacion_id = null where id = ${salaId}`;
+  }
   revalidatePath('/proyectos');
   revalidatePath('/salas');
   revalidatePath(`/salas/${salaId}`);

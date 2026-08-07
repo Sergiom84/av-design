@@ -72,7 +72,9 @@ export function ListaDeSalas({
                   </td>
                 )}
                 <td>
-                  {[s.sede, s.edificio, s.nivel].filter(Boolean).join(' · ') || '—'}
+                  {[s.sede, s.localizacion, s.edificio, s.nivel]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
                 </td>
                 <td>{s.tipologia ?? '—'}</td>
                 <td className="num">{s.aforo ?? '—'}</td>

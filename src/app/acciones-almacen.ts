@@ -162,6 +162,15 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
     : falta.grupos;
 
   const creados = await sql.begin(async (tx) => {
+    // El pedido hereda la obra de la sala que lo origina. Con la sala suelta
+    // (legado) el pedido queda sin proyecto, que sigue siendo válido.
+    const [obra] = await tx<Array<{ proyecto_id: string | null }>>`
+      select l.proyecto_id
+      from salas s
+      left join localizaciones l on l.id = s.localizacion_id
+      where s.id = ${salaId}`;
+    const proyectoId = obra?.proyecto_id ?? null;
+
     const ids: string[] = [];
     for (const grupo of grupos) {
       if (grupo.lineas.length === 0) continue;
@@ -174,8 +183,8 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
         : [{ id: null as unknown as string }];
 
       const [pedido] = await tx<Array<{ id: string }>>`
-        insert into pedidos (proveedor_id, sala_id, referencia, notas)
-        values (${proveedor.id ?? null}, ${salaId},
+        insert into pedidos (proveedor_id, sala_id, proyecto_id, referencia, notas)
+        values (${proveedor.id ?? null}, ${salaId}, ${proyectoId},
                 ${`${falta.sala.nombre} · ${grupo.proveedor ?? 'sin proveedor'}`},
                 'Generado desde lo que falta para la sala.')
         returning id`;

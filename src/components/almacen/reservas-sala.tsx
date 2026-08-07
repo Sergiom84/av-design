@@ -8,33 +8,80 @@ import {
 import type { Disponibilidad } from '@/lib/almacen';
 import { ETIQUETA_RESERVA } from '@/lib/tipos';
 import type { FilaReserva } from '@/lib/datos-almacen';
+import type { LineaFaltante } from '@/lib/compras';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 
 /**
- * Material apartado para esta obra.
+ * Material apartado para esta obra, y cuánto hay en almacén para apartar.
  *
  * Reservado no es salido: sigue en el estante, pero ya no está disponible para
  * otra sala. Es lo que evita el fallo de partida —pedir dos veces lo mismo
  * porque estaba comprometido y no se veía— y lo que hace que la lista de
  * carga tenga de dónde salir.
+ *
+ * La disponibilidad no depende de que exista ya alguna reserva: `necesidad`
+ * trae una línea por cada referencia que la sala necesita (equipamiento y
+ * cable calculado, la misma lista que "Qué falta"), y `disponibilidad` ya
+ * viene calculada para todas ellas desde `faltaParaSala()`. Sin esto, una
+ * sala sin reservas todavía no enseñaba cuánto había en almacén hasta que se
+ * creaba la primera.
  */
 export function ReservasDeSala({
   salaId,
   reservas,
   disponibilidad,
+  necesidad,
 }: {
   salaId: string;
   reservas: FilaReserva[];
   disponibilidad: Map<string, Disponibilidad>;
+  necesidad: LineaFaltante[];
 }) {
   const activas = reservas.filter((r) => r.estado === 'activa');
   const resto = reservas.filter((r) => r.estado !== 'activa');
+  const conDisponibilidad = necesidad.filter((l) => disponibilidad.has(l.articulo_id));
 
   return (
     <Tarjeta
       titulo="Material reservado"
       pie="Lo reservado sigue en almacén hasta que se carga. Al confirmar la carga se convierte en salida."
     >
+      {conDisponibilidad.length > 0 && (
+        <div className="mb-4">
+          <ContenedorTabla etiqueta="Disponibilidad en almacén">
+            <table className="datos">
+              <thead>
+                <tr>
+                  <th>Referencia</th>
+                  <th className="num">Necesario</th>
+                  <th className="num">Existencias</th>
+                  <th className="num">Reservado</th>
+                  <th className="num">Disponible</th>
+                </tr>
+              </thead>
+              <tbody>
+                {conDisponibilidad.map((l) => {
+                  const d = disponibilidad.get(l.articulo_id)!;
+                  return (
+                    <tr key={l.articulo_id}>
+                      <td>
+                        <Enlace href={`/articulo/${l.articulo_id}`}>{l.descripcion}</Enlace>
+                      </td>
+                      <td className="num">
+                        {l.cantidad} {l.unidad}
+                      </td>
+                      <td className="num text-tinta-tenue">{d.existencias}</td>
+                      <td className="num text-tinta-tenue">{d.reservado}</td>
+                      <td className="num">{d.disponible}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </ContenedorTabla>
+        </div>
+      )}
+
       {reservas.length === 0 ? (
         <Vacio>
           Sin reservas. Aparta aquí el material de esta obra para que otra no cuente con

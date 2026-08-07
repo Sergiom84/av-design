@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { crearSala } from '@/app/acciones';
-import { Aviso, Boton, Campo, ContenedorTabla, Tarjeta } from '@/components/ui';
+import { Aviso, Boton, Campo, ContenedorTabla, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { MAXIMO_COPIAS, resumirSerie, serieDeNombres } from '@/lib/nombres-serie';
 import {
   ETIQUETA_RUTA,
@@ -409,34 +409,22 @@ export function AltaDeSala({
       {/* ------------------------------------------- qué se va a crear */}
       <div className="space-y-6 min-w-0 lg:sticky lg:top-4">
         <Tarjeta titulo="Se va a crear">
-          <dl className="space-y-2">
-            <div className="flex justify-between gap-3">
-              <dt className="t-etiqueta">Salas</dt>
-              <dd className="tabular-nums">{copias}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="t-etiqueta">Proyecto</dt>
-              <dd className="text-right">{proyecto?.nombre ?? 'ninguno'}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="t-etiqueta">Plantilla</dt>
-              <dd className="text-right">{plantilla?.nombre ?? 'ninguna'}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="t-etiqueta">Medidas</dt>
-              <dd className="text-right tabular-nums">
-                {sinMedidas ? (
+          <ListaClaveValor
+            items={[
+              { clave: 'Salas', valor: copias },
+              { clave: 'Plantilla', valor: plantilla?.nombre ?? 'ninguna' },
+              { clave: 'Proyecto', valor: proyecto?.nombre ?? 'ninguno' },
+              {
+                clave: 'Medidas',
+                valor: sinMedidas ? (
                   <span className="text-alerta">sin medidas</span>
                 ) : (
                   `${borrador.largo_m} × ${borrador.ancho_m} × ${borrador.alto_m} m`
-                )}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="t-etiqueta">Equipos heredados</dt>
-              <dd className="tabular-nums">{heredadas.length}</dd>
-            </div>
-          </dl>
+                ),
+              },
+              { clave: 'Equipos heredados', valor: heredadas.length },
+            ]}
+          />
 
           <p className="mt-3 pt-3 border-t border-linea text-tinta-tenue break-words">
             {resumirSerie(serie)}

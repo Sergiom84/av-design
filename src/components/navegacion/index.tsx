@@ -106,6 +106,13 @@ export function Marco({ children }: { children: ReactNode }) {
   if (ruta === RUTA_ENTRADA) return <>{children}</>;
 
   const seccion = SECCIONES.find((s) => seccionActiva(ruta, s.href));
+  /*
+    Solo /salas/nueva lleva la barra de acción sticky móvil
+    (components/sala/alta.tsx). Reservar aquí abajo del footer es cosa de
+    esta ruta exacta, no un padding global ni un selector estructural: en
+    cualquier otra pantalla no hay barra que tape nada.
+  */
+  const conBarraSticky = ruta === '/salas/nueva';
 
   return (
     <div className="min-h-full">
@@ -142,7 +149,11 @@ export function Marco({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-h-screen min-w-0 flex-col md:pl-64">
+      <div
+        className={`flex min-h-screen min-w-0 flex-col md:pl-64 ${
+          conBarraSticky ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-4' : ''
+        }`}
+      >
         {/* Barra superior */}
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-linea-suave bg-superficie px-4 sm:px-6">
           <button

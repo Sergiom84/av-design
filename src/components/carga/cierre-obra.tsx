@@ -1,4 +1,5 @@
 import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
+import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import { cerrarCarga, guardarCierreLinea } from '@/app/acciones-almacen';
 import { avisosDeCierre } from '@/lib/carga';
 import { ETIQUETA_CARGA, type Carga, type LineaCarga, type Ubicacion } from '@/lib/tipos';
@@ -109,7 +110,7 @@ export function CierreDeObra({
             </select>
           </Campo>
           <Campo etiqueta="Quién">
-            <input name="quien" className="w-32" defaultValue={carga.quien ?? ''} />
+            <QuienTecnico valorInicial={carga.quien} />
           </Campo>
           <Boton>Cerrar obra</Boton>
           <span className="text-tinta-tenue pb-1">

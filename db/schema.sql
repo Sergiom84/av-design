@@ -878,3 +878,60 @@ create index if not exists pedidos_proyecto_idx on pedidos (proyecto_id);
 
 comment on column pedidos.proyecto_id is
   'Para que obra se pide. Un pedido puede abastecer varias salas del proyecto; el reparto entre salas lo hacen las reservas. sala_id se conserva para el pedido que nace del que-falta de una sala.';
+
+-- =====================================================================
+-- P1 · Tecnicos e hitos: quien hizo que, y cuando
+--
+-- El estado del material se deriva de movimientos y recepciones; el hecho
+-- humano se registra. Un hito no es un estado editable: es un registro que
+-- se anade, como los movimientos del almacen. Los hitos de la obra (inicio,
+-- cierre) cuelgan del proyecto; los de la sala (instalacion, entrega), de
+-- la sala. La recepcion no es hito de ninguno de los dos: es por pedido, y
+-- ya vive en la recepcion de compras con `movimientos.quien`.
+-- ---------------------------------------------------------------------
+create table if not exists tecnicos (
+  id        uuid primary key default gen_random_uuid(),
+  nombre    text not null unique,
+  activo    boolean not null default true,
+  -- `csv` lo regenera la siembra; `app` se escribio aqui y no se toca.
+  fuente    text not null default 'csv' check (fuente in ('csv', 'app')),
+  creado_en timestamptz not null default now()
+);
+
+create table if not exists tecnico_roles (
+  tecnico_id uuid not null references tecnicos on delete cascade,
+  rol        text not null check (rol in ('inicio', 'recepcion', 'instalacion')),
+  primary key (tecnico_id, rol)
+);
+
+comment on table tecnicos is
+  'La lista de personas del departamento. Sin contrasenas: se elige el nombre al registrar el hecho; la puerta es la clave de departamento.';
+
+create table if not exists hitos_proyecto (
+  id          uuid primary key default gen_random_uuid(),
+  proyecto_id uuid not null references proyectos on delete cascade,
+  tipo        text not null check (tipo in ('inicio', 'cierre')),
+  tecnico_id  uuid references tecnicos on delete set null,
+  fecha       date not null default current_date,
+  notas       text,
+  creado_en   timestamptz not null default now(),
+  unique (proyecto_id, tipo)
+);
+
+create table if not exists hitos_sala (
+  id         uuid primary key default gen_random_uuid(),
+  sala_id    uuid not null references salas on delete cascade,
+  tipo       text not null check (tipo in ('instalacion', 'entrega')),
+  tecnico_id uuid references tecnicos on delete set null,
+  fecha      date not null default current_date,
+  notas      text,
+  creado_en  timestamptz not null default now(),
+  unique (sala_id, tipo)
+);
+
+comment on table hitos_proyecto is
+  'Inicio y cierre de la obra. Un hito de cada tipo por proyecto; si se registro mal, se borra y se registra de nuevo.';
+comment on table hitos_sala is
+  'Instalacion y entrega de la sala concreta. La entrega con bloqueos del semaforo avisa y exige nota, no bloquea.';
+comment on column hitos_sala.tecnico_id is
+  'Nulo = hito historico de alguien que ya no esta en la lista. El hecho no se pierde porque se vaya la persona.';

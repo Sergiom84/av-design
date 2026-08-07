@@ -663,6 +663,47 @@ if (hayCsvPuertos) {
   sql.push('');
 }
 
+// --------------------------------------------------------------------------
+// Técnicos del departamento (P1). Mismo criterio que puertos y precios: el
+// CSV manda sobre lo suyo (`fuente = 'csv'`) y lo dado de alta desde la
+// aplicación no se toca. Los roles se regeneran enteros para las filas csv.
+// --------------------------------------------------------------------------
+const hayCsvTecnicos = existsSync(data('tecnicos.csv'));
+const tecnicos = hayCsvTecnicos
+  ? leerCsv(data('tecnicos.csv')).map((r) => ({
+      nombre: r.nombre,
+      roles: String(r.roles || '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+    }))
+  : [];
+
+if (hayCsvTecnicos) {
+  sql.push(`-- Técnicos: ${tecnicos.length} personas (data/tecnicos.csv)`);
+  sql.push('-- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.');
+  sql.push(
+    "delete from tecnico_roles where tecnico_id in (select id from tecnicos where fuente = 'csv');",
+  );
+  sql.push("delete from tecnicos where fuente = 'csv';");
+  for (const t of tecnicos) {
+    // El único choque posible es contra alguien dado de alta desde la app.
+    // Ese manda, y sus roles tampoco se pisan.
+    sql.push(
+      `insert into tecnicos (nombre, fuente) values (${txt(t.nombre)}, 'csv') ` +
+        `on conflict (nombre) do nothing;`,
+    );
+    for (const rol of t.roles) {
+      sql.push(
+        `insert into tecnico_roles (tecnico_id, rol)\n` +
+          `select id, ${txt(rol)} from tecnicos where nombre = ${txt(t.nombre)} and fuente = 'csv'\n` +
+          `on conflict do nothing;`,
+      );
+    }
+  }
+  sql.push('');
+}
+
 sql.push(`-- Plantillas de sala: ${plantillas.size} deducidas del inventario`);
 for (const p of plantillas.values()) {
   sql.push(
@@ -801,6 +842,7 @@ console.log(`  equipos      ${equiposUnicos.size}`);
 console.log(`  cable/consum ${cables.length}`);
 console.log(`  plantillas   ${plantillas.size}`);
 if (hayCsvPuertos) console.log(`  puertos      ${puertos.length}`);
+if (hayCsvTecnicos) console.log(`  tecnicos     ${tecnicos.length}`);
 
 if (precios.length) {
   const presupuestos = new Set(precios.map((p) => p.presupuesto));

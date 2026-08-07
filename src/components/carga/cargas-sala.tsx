@@ -1,4 +1,5 @@
 import { Boton, Campo, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import { crearCargaDesdeReservas } from '@/app/acciones-almacen';
 import { ETIQUETA_CARGA } from '@/lib/tipos';
 import type { CargaConResumen } from '@/lib/datos-almacen';
@@ -68,7 +69,7 @@ export function CargasDeSala({
           />
         </Campo>
         <Campo etiqueta="Quién">
-          <input name="quien" className="w-32" />
+          <QuienTecnico />
         </Campo>
         <Boton disabled={reservasActivas === 0}>Preparar carga</Boton>
         <span className="text-tinta-tenue pb-1">

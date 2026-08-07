@@ -131,7 +131,14 @@ equivalente) y es la primera pieza con estado interactivo pesado. No se empieza
 hasta que R2 esté en uso: puede que con el diagrama en lectura y el alta por
 formulario baste.
 
-### P1 · Personas y ciclo de vida de la sala
+### P1 · Personas y ciclo de vida de la sala — HECHO 7-8-2026
+
+Ejecutado con una revisión: los hitos de obra (`inicio`, `cierre`) viven en
+`hitos_proyecto` y los de sala (`instalacion`, `entrega`) en `hitos_sala`,
+porque el mismo día entró la jerarquía Proyecto → Localización → Sala y el
+inicio resultó ser un hecho del proyecto, no de cada sala. El detalle y las
+diferencias con el plan original están en `docs/08-plan-p1-tecnicos.md`.
+Lo que sigue es el texto original.
 
 Quién hace cada cosa y cuándo. Sin contraseñas individuales: se elige el nombre
 de una lista al registrar el hecho. La puerta sigue siendo la clave de

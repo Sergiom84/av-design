@@ -1,4 +1,5 @@
 import { Aviso, Boton, Campo, Dato, Enlace, Tarjeta } from '@/components/ui';
+import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import {
   borrarLineaPedido,
   cambiarEstadoPedido,
@@ -204,7 +205,7 @@ export function LineasPedido({
             </select>
           </Campo>
           <Campo etiqueta="Quién">
-            <input name="quien" className="w-32" />
+            <QuienTecnico rol="recepcion" />
           </Campo>
           <Boton>Recibir todo lo pendiente</Boton>
         </form>

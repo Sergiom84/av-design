@@ -1,13 +1,20 @@
 import { crearProyecto } from '@/app/acciones-proyectos';
 import { Boton, Campo, Tarjeta } from '@/components/ui';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
+import { listarTecnicosConRoles } from '@/lib/datos-ciclo';
+import { tecnicosDeRol } from '@/lib/ciclo-vida';
 
 /**
  * Alta de la obra. Nombre y poco más: la obra nace con la localización
  * "Sin asignar" y las demás se añaden desde su portada. La sede es el mismo
- * texto libre con sugerencias del alta de sala.
+ * texto libre con sugerencias del alta de sala. Elegir quién la inicia
+ * registra el hito de inicio en el mismo alta: es el hecho de proyecto que
+ * el plan P1 viejo colgaba de cada sala.
  */
-export function AltaDeProyecto({ sedes }: { sedes: string[] }) {
+export async function AltaDeProyecto({ sedes }: { sedes: string[] }) {
+  const { tecnicos, roles } = await listarTecnicosConRoles();
+  const iniciadores = tecnicosDeRol(tecnicos, roles, 'inicio');
+
   return (
     <Tarjeta
       titulo="Nuevo proyecto"
@@ -41,6 +48,21 @@ export function AltaDeProyecto({ sedes }: { sedes: string[] }) {
         <Campo etiqueta="Notas">
           <input name="notas" className="w-full" />
         </Campo>
+        {iniciadores.length > 0 && (
+          <Campo
+            etiqueta="Quién lo inicia"
+            ayuda="Registra el hito de inicio del proyecto. Se puede dejar vacío."
+          >
+            <select name="tecnico_inicio_id" className="w-full">
+              <option value="">—</option>
+              {iniciadores.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        )}
         <div className="sm:col-span-2">
           <Boton>Crear proyecto</Boton>
         </div>

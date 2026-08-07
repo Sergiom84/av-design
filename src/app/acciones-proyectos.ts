@@ -43,6 +43,16 @@ export async function crearProyecto(datos: FormData) {
       insert into localizaciones (proyecto_id, nombre)
       values (${p.id}, ${LOCALIZACION_SIN_ASIGNAR})
       on conflict (proyecto_id, nombre) do nothing`;
+
+    // Quién inicia la obra es un hecho del proyecto, no de cada sala: se
+    // registra una vez aquí, no veinte veces en veinte altas de sala.
+    const tecnicoInicio = texto(datos.get('tecnico_inicio_id'));
+    if (tecnicoInicio) {
+      await tx`
+        insert into hitos_proyecto (proyecto_id, tipo, tecnico_id)
+        values (${p.id}, 'inicio', ${tecnicoInicio})
+        on conflict (proyecto_id, tipo) do nothing`;
+    }
   });
 
   revalidatePath('/proyectos');

@@ -1,5 +1,31 @@
 # Plan P1 · Técnicos y ciclo de vida de la sala
 
+**EJECUTADO el 7-8-2026, con una revisión de fondo.** Antes de ejecutarlo se
+introdujo la jerarquía Proyecto → Localización → Sala, y con ella cambió lo
+que este plan colgaba de la sala:
+
+- Los hitos van en **dos tablas**, no una: `hitos_proyecto` (tipos `inicio` y
+  `cierre`, unique por proyecto y tipo) e `hitos_sala` (tipos `instalacion` y
+  `entrega`, unique por sala y tipo). El "inicio del proyecto de sala" del §3
+  era en realidad un hecho de la obra: con 20 salas en un proyecto se habría
+  registrado 20 veces. Ahora se registra una vez, en el alta del proyecto
+  (select "Quién lo inicia") o desde su portada. El `cierre` de proyecto, que
+  este plan no contemplaba, existe.
+- La recepción sigue siendo por pedido, como decía el §4: campo `quien` con
+  sugerencias de los técnicos de rol `recepcion`
+  (`src/components/ciclo-vida/quien.tsx`), sin FK, y las recepciones de una
+  sala se derivan de sus movimientos de entrada (`recepcionesDeSala`).
+- Lo demás quedó como estaba planeado: `tecnicos` + `tecnico_roles` +
+  `data/tecnicos.csv` con `fuente` csv/app, lógica pura en
+  `src/lib/ciclo-vida.ts` con pruebas, la tarjeta "Ciclo de vida" en el
+  Resumen de la ficha (que ahora es una pestaña), y la entrega con bloqueos
+  del semáforo avisa y exige nota, no bloquea.
+
+El texto original se conserva debajo como referencia de lo que se decidió y
+por qué. Donde contradiga lo de arriba, manda lo de arriba (y el código).
+
+---
+
 Plan de implementación autocontenido para ejecutar en una sesión limpia.
 Escrito el 7-8-2026. El ejecutor debe leer antes `AGENTS.md` (contrato del
 proyecto) y `docs/07-roadmap.md` (dónde encaja P1); este documento manda sobre

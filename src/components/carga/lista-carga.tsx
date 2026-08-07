@@ -1,4 +1,5 @@
 import { Aviso, Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import {
   confirmarCarga,
   marcarLineaCarga,
@@ -123,7 +124,7 @@ export function ListaDeCarga({
               </select>
             </Campo>
             <Campo etiqueta="Quién carga">
-              <input name="quien" className="w-32" defaultValue={carga.quien ?? ''} />
+              <QuienTecnico valorInicial={carga.quien} />
             </Campo>
             <Boton>Confirmar carga</Boton>
             <span className="text-tinta-tenue pb-1">

@@ -4,6 +4,9 @@ import { SinConfigurar } from '@/components/sin-configurar';
 import { CroquisSala } from '@/components/croquis/croquis-sala';
 import { EstadoMontaje } from '@/components/revision/estado-montaje';
 import { Medidas } from '@/components/sala/medidas';
+import { CicloDeVidaSala } from '@/components/ciclo-vida/tarjeta-sala';
+import { avisosDeEntrega } from '@/lib/ciclo-vida';
+import { cicloDeSala, listarTecnicosConRoles } from '@/lib/datos-ciclo';
 import { fichaConAlmacen } from './datos-ficha';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +26,11 @@ export default async function ResumenSala({ params }: PageProps<'/salas/[id]'>) 
 
   const { sala, equipos, conexiones, tomas, resultados, puntosMontaje } = ficha;
 
+  const [ciclo, { tecnicos, roles }] = await Promise.all([
+    cicloDeSala(sala.id, sala.proyecto_id ?? null),
+    listarTecnicosConRoles(),
+  ]);
+
   return (
     <div className="grid xl:grid-cols-[22rem_1fr] gap-6 items-start [&>*]:min-w-0">
       <Medidas sala={sala} />
@@ -38,6 +46,15 @@ export default async function ResumenSala({ params }: PageProps<'/salas/[id]'>) 
           }
         />
         <EstadoMontaje puntos={puntosMontaje} />
+        <CicloDeVidaSala
+          salaId={sala.id}
+          hitosProyecto={ciclo.hitosProyecto}
+          hitosSala={ciclo.hitosSala}
+          recepciones={ciclo.recepciones}
+          tecnicos={tecnicos}
+          roles={roles}
+          avisosEntrega={avisosDeEntrega(puntosMontaje)}
+        />
       </div>
     </div>
   );

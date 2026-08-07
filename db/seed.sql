@@ -1938,6 +1938,49 @@ select a.id, 'HDMI', 1, 'bidireccional'::sentido_puerto, 'hdmi'::senal, 'HDMI A 
 from articulos a where coalesce(marca, '') = 'AMX' and modelo = 'HPX 1200' and categoria = 'CAJA DE CONEXIONES'
 on conflict (articulo_id, nombre) do nothing;
 
+-- Técnicos: 8 personas (data/tecnicos.csv)
+-- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.
+delete from tecnico_roles where tecnico_id in (select id from tecnicos where fuente = 'csv');
+delete from tecnicos where fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Daniel', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'inicio' from tecnicos where nombre = 'Daniel' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Elvin', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'inicio' from tecnicos where nombre = 'Elvin' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Carlos', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'inicio' from tecnicos where nombre = 'Carlos' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Diego', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'inicio' from tecnicos where nombre = 'Diego' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'instalacion' from tecnicos where nombre = 'Diego' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Roberto', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'recepcion' from tecnicos where nombre = 'Roberto' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Nacho', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'recepcion' from tecnicos where nombre = 'Nacho' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Miguel', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'recepcion' from tecnicos where nombre = 'Miguel' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'instalacion' from tecnicos where nombre = 'Miguel' and fuente = 'csv'
+on conflict do nothing;
+insert into tecnicos (nombre, fuente) values ('Marcos', 'csv') on conflict (nombre) do nothing;
+insert into tecnico_roles (tecnico_id, rol)
+select id, 'recepcion' from tecnicos where nombre = 'Marcos' and fuente = 'csv'
+on conflict do nothing;
+
 -- Plantillas de sala: 16 deducidas del inventario
 insert into plantillas_sala (nombre, tipologia, aforo, n_salas_reales, notas) values ('SALA TP · aforo 8', 'SALA TP', 8, 144, 'Deducida del inventario 2026. Faltan las medidas: rellenar largo, ancho y alto.') on conflict (nombre) do update set n_salas_reales = excluded.n_salas_reales;
 insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional)

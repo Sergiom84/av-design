@@ -142,7 +142,7 @@ export function Marco({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-h-screen flex-col md:pl-64">
+      <div className="flex min-h-screen min-w-0 flex-col md:pl-64">
         {/* Barra superior */}
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-linea-suave bg-superficie px-4 sm:px-6">
           <button
@@ -156,7 +156,14 @@ export function Marco({ children }: { children: ReactNode }) {
           <span className="font-semibold">{seccion?.etiqueta ?? 'AV_design'}</span>
         </header>
 
-        <main className="w-full max-w-[100rem] flex-1 px-4 py-6 sm:px-6">
+        {/*
+          min-w-0: sin esto un hijo con contenido ancho (tabla, texto sin
+          cortar) estira `main` más allá del viewport y el documento entero
+          gana scroll horizontal. overflow-x-clip es la última barrera: el
+          scroll técnico deliberado vive dentro de .contenedor-tabla y
+          table.datos, nunca aquí.
+        */}
+        <main className="w-full max-w-[100rem] min-w-0 flex-1 overflow-x-clip px-4 py-6 sm:px-6">
           {children}
         </main>
 

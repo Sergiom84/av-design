@@ -98,16 +98,48 @@ h3 {
   color: var(--tinta-tenue);
 }
 
-/* Tarjeta: superficie blanca con sombra, sin borde. */
+/* Tarjeta: superficie blanca con sombra, sin borde.
+   min-width: 0 y max-width: 100% la sacan del cálculo de ancho intrínseco de
+   sus hijos flex/grid: sin esto, una tarjeta con una tabla o un texto largo
+   dentro empuja a sus hermanas y corta el layout a 1280 px.
+   overflow-wrap: break-word es heredable: cubre cabecera, cuerpo y pie sin
+   tener que repetirlo en cada texto. */
 .tarjeta {
   background: var(--superficie);
   border-radius: 8px;
   box-shadow: var(--sombra-tarjeta);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
-/* Tablas de datos: alineación tabular y filas legibles */
+/* Scroll horizontal técnico deliberado: tabla de cables, inventario, diagramas.
+   Es la única forma admitida de desplazamiento lateral dentro de una tarjeta. */
+.contenedor-tabla {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* Salvaguarda de imágenes y gráficos: nunca superan el ancho de su contenedor. */
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tablas de datos: alineación tabular y filas legibles.
+   display: block + overflow-x: auto en la propia tabla es la salvaguarda: una
+   tabla ancha se desplaza dentro de su tarjeta en vez de ensancharla, sin
+   depender de que cada pantalla la envuelva en ContenedorTabla. */
 table.datos {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }

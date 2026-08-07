@@ -16,31 +16,84 @@ export function Cabecera({
         <h1 className="t-titulo">{titulo}</h1>
         {descripcion && <p className="text-tinta-tenue mt-1">{descripcion}</p>}
       </div>
-      {acciones && <div className="flex gap-3 items-center">{acciones}</div>}
+      {acciones && <div className="flex flex-wrap gap-3 items-center">{acciones}</div>}
     </div>
   );
 }
 
+/**
+ * La tarjeta base: cabecera, acciones opcionales, cuerpo y pie, con contrato
+ * explícito de contención. El cuerpo ya no lleva scroll horizontal universal:
+ * un formulario o un texto largo debe envolver, no convertirse en un panel
+ * desplazable. El scroll técnico deliberado es de quien lo necesita
+ * (`ContenedorTabla`, `table.datos`, un diagrama), no de la tarjeta entera.
+ */
 export function Tarjeta({
   titulo,
+  acciones,
   children,
   pie,
 }: {
   titulo?: string;
+  acciones?: ReactNode;
   children: ReactNode;
   pie?: ReactNode;
 }) {
   return (
     <section className="tarjeta">
-      {titulo && (
-        <h2 className="t-subtitulo px-4 py-3 border-b border-linea-suave">{titulo}</h2>
+      {(titulo || acciones) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-linea-suave">
+          {titulo && <h2 className="t-subtitulo">{titulo}</h2>}
+          {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
+        </div>
       )}
-      {/* overflow-x-auto: en móvil las tablas de datos son más anchas que la pantalla */}
-      <div className="p-4 overflow-x-auto">{children}</div>
+      <div className="p-4 min-w-0">{children}</div>
       {pie && (
-        <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue">{pie}</div>
+        <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue min-w-0">
+          {pie}
+        </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Envuelve el scroll horizontal técnico: tabla de cables, inventario,
+ * diagramas. Es la única forma admitida de desplazamiento lateral dentro de
+ * una tarjeta; todo lo demás debe envolver.
+ */
+export function ContenedorTabla({
+  children,
+  etiqueta,
+}: {
+  children: ReactNode;
+  etiqueta?: string;
+}) {
+  return (
+    <div className="contenedor-tabla" role="group" aria-label={etiqueta}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Fila de acciones que envuelve en vez de desbordar. La acción peligrosa se
+ * pasa aparte: queda separada del resto, nunca compitiendo con la principal.
+ */
+export function GrupoAcciones({
+  children,
+  peligro,
+}: {
+  children?: ReactNode;
+  peligro?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {children}
+      {peligro && (
+        <div className="sm:ml-auto sm:border-l sm:border-linea-suave sm:pl-3">{peligro}</div>
+      )}
+    </div>
   );
 }
 

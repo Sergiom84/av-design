@@ -75,7 +75,7 @@ export async function registrarMovimiento(datos: FormData) {
   revalidatePath('/almacen/movimientos');
   revalidatePath('/almacen/bajas');
   const salaId = texto(datos.get('sala_id'));
-  if (salaId) revalidatePath(`/salas/${salaId}`);
+  if (salaId) revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 // Un movimiento no se borra: se corrige con otro movimiento. Por eso no hay
@@ -94,7 +94,7 @@ export async function crearReserva(datos: FormData) {
     values (${salaId}, ${articuloId}, ${cantidad},
             ${texto(datos.get('notas'))}, ${texto(datos.get('quien'))})`;
   refrescarAlmacen();
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 /**
@@ -124,7 +124,7 @@ export async function reservarLoDisponible(datos: FormData) {
   }
 
   refrescarAlmacen();
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 /** Soltar la reserva: el material vuelve a estar disponible para otra obra. */
@@ -134,14 +134,14 @@ export async function liberarReserva(datos: FormData) {
     update reservas set estado = 'liberada'
     where id = ${String(datos.get('id'))} and estado = 'activa'`;
   refrescarAlmacen();
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 export async function borrarReserva(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   await sql`delete from reservas where id = ${String(datos.get('id'))}`;
   refrescarAlmacen();
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 // ------------------------------------------------------------------- pedidos
@@ -202,7 +202,7 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
   });
 
   revalidatePath('/compras');
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
   refrescarAlmacen();
   if (creados.length === 1) redirect(`/compras/${creados[0]}`);
   redirect('/compras');
@@ -368,7 +368,7 @@ export async function crearCargaDesdeReservas(datos: FormData) {
   });
 
   revalidatePath('/carga');
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
   if (cargaId) redirect(`/carga/${cargaId}`);
 }
 

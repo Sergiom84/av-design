@@ -104,8 +104,10 @@ export function Boton({
 }
 
 export function Enlace({ href, children }: { href: string; children: ReactNode }) {
+  // El href llega como texto montado en tiempo de ejecución (ids, filtros);
+  // las rutas estáticas ya las verifica typedRoutes en cada <Link> directo.
   return (
-    <Link href={href} className="enlace">
+    <Link href={href as never} className="enlace">
       {children}
     </Link>
   );

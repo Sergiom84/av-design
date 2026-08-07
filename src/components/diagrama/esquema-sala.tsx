@@ -53,14 +53,14 @@ export function EsquemaSala({
             {todosLosPuertos ? (
               <>
                 Se enseñan todos los puertos del catálogo.{' '}
-                <Link href={`/salas/${salaId}`} className="enlace">
+                <Link href={`/salas/${salaId}/cableado`} className="enlace">
                   Ver solo los conectados
                 </Link>
               </>
             ) : (
               <>
                 Solo puertos con cable.{' '}
-                <Link href={`/salas/${salaId}?puertos=todos`} className="enlace">
+                <Link href={`/salas/${salaId}/cableado?puertos=todos`} className="enlace">
                   Ver todos los puertos
                 </Link>
               </>

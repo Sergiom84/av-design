@@ -67,7 +67,7 @@ export function FichaDePlantilla({
             <div className="flex items-baseline justify-between gap-4 mb-2">
               <span className="t-etiqueta">Equipamiento estándar</span>
               <Link
-                href={abierta ? `/plantillas${ancla}` : `/plantillas?abierta=${p.id}${ancla}`}
+                href={(abierta ? `/plantillas${ancla}` : `/plantillas?abierta=${p.id}${ancla}`) as never}
                 className="enlace"
               >
                 {abierta ? 'Cerrar' : 'Editar equipamiento'}

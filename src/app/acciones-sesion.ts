@@ -48,7 +48,7 @@ export async function entrar(datos: FormData) {
     maxAge: DURACION_SESION_S,
   });
 
-  redirect(destinoSeguro(destino));
+  redirect(destinoSeguro(destino) as never);
 }
 
 export async function salir() {

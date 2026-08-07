@@ -106,5 +106,5 @@ export async function asignarSalaALocalizacion(datos: FormData) {
   }
   revalidatePath('/proyectos');
   revalidatePath('/salas');
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }

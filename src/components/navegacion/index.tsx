@@ -50,7 +50,7 @@ function Secciones({ ruta, alNavegar }: { ruta: string; alNavegar?: () => void }
         return (
           <Link
             key={href}
-            href={href}
+            href={href as never}
             onClick={alNavegar}
             aria-current={activa ? 'page' : undefined}
             className={`flex items-center gap-3 rounded-md px-3 py-2 font-medium ${

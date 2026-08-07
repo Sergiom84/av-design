@@ -317,7 +317,7 @@ export async function guardarSala(datos: FormData) {
       ruta_por_defecto     = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable,
       notas                = ${texto(datos.get('notas'))}
     where id = ${id}`;
-  revalidatePath(`/salas/${id}`);
+  revalidatePath(`/salas/${id}`, 'layout');
   revalidatePath('/salas');
 }
 
@@ -348,7 +348,7 @@ export async function anadirEquipo(datos: FormData) {
             ${numero(datos.get('y_m')) ?? 0},
             ${numero(datos.get('z_m')) ?? 0},
             ${texto(datos.get('toma_red_id'))})`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 export async function guardarEquipo(datos: FormData) {
@@ -363,7 +363,7 @@ export async function guardarEquipo(datos: FormData) {
       z_m      = ${numero(datos.get('z_m')) ?? 0},
       toma_red_id = ${texto(datos.get('toma_red_id'))}
     where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 /** Suma o resta unidades de un equipo sin abrir el formulario completo. */
@@ -374,13 +374,13 @@ export async function ajustarCantidadEquipo(datos: FormData) {
     update sala_equipos
     set cantidad = greatest(1, cantidad + ${paso})
     where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 export async function borrarEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   await sql`delete from sala_equipos where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 // --------------------------------------------------------------- tomas de red
@@ -404,7 +404,7 @@ export async function anadirToma(datos: FormData) {
             ${numero(datos.get('z_m'))},
             ${texto(datos.get('notas'))})
     on conflict (sala_id, codigo) do nothing`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 export async function guardarToma(datos: FormData) {
@@ -418,14 +418,14 @@ export async function guardarToma(datos: FormData) {
       z_m       = ${numero(datos.get('z_m'))},
       notas     = ${texto(datos.get('notas'))}
     where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 /** Los equipos que pinchaban en ella se quedan sin toma, no se borran. */
 export async function borrarToma(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   await sql`delete from tomas_red where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 // ---------------------------------------------------------------- conexiones
@@ -447,7 +447,7 @@ export async function anadirConexion(datos: FormData) {
             ${numero(datos.get('longitud_manual_m'))},
             ${texto(datos.get('puerto_origen_id'))},
             ${texto(datos.get('puerto_destino_id'))})`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 /**
@@ -466,13 +466,13 @@ export async function guardarConexion(datos: FormData) {
       puerto_origen_id  = ${texto(datos.get('puerto_origen_id'))},
       puerto_destino_id = ${texto(datos.get('puerto_destino_id'))}
     where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 export async function borrarConexion(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   await sql`delete from conexiones where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/salas/${salaId}`);
+  revalidatePath(`/salas/${salaId}`, 'layout');
 }
 
 // ---------------------------------------------------------------- parámetros

@@ -486,6 +486,23 @@ export async function listarSedes(): Promise<string[]> {
   return filas.map((f) => String(f.nombre));
 }
 
+/**
+ * Solo la fila de la sala con sus nombres resueltos, para la cabecera del
+ * layout de la ficha: las pestañas no pueden pagar equipos y conexiones que
+ * no van a pintar.
+ */
+export async function obtenerSalaCabecera(id: string): Promise<Sala | null> {
+  const [fila] = await sql<Fila[]>`
+    select s.*, sd.nombre as sede, l.nombre as localizacion,
+           p.id as proyecto_id, p.nombre as proyecto
+    from salas s
+    left join sedes sd on sd.id = s.sede_id
+    left join localizaciones l on l.id = s.localizacion_id
+    left join proyectos p on p.id = l.proyecto_id
+    where s.id = ${id}`;
+  return fila ? aSala(fila) : null;
+}
+
 export interface SalaCompleta {
   sala: Sala;
   equipos: EquipoEnSala[];

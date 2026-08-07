@@ -1,10 +1,19 @@
 import Link from 'next/link';
-import { ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
+import { Estado, Tarjeta, Vacio, type TonoEstado } from '@/components/ui';
+import { ETIQUETA_ESTADO_PROYECTO, type EstadoProyecto } from '@/lib/ciclo-vida';
 import type { ProyectoResumen } from '@/lib/datos-proyectos';
 
+const TONO_ESTADO_PROYECTO: Record<EstadoProyecto, TonoEstado> = {
+  sin_iniciar: 'neutro',
+  en_curso: 'informacion',
+  cerrado: 'listo',
+};
+
 /**
- * Las obras dadas de alta. El pie cuenta las salas de antes de la jerarquía:
- * siguen siendo válidas y se adoptan desde la portada del proyecto que toque.
+ * Las obras dadas de alta, como rejilla de tarjeta (design-system/MASTER.md,
+ * Disposición): nombre y estado de un vistazo, no una tabla para navegar
+ * entre entidades. El pie cuenta las salas de antes de la jerarquía: siguen
+ * siendo válidas y se adoptan desde la portada del proyecto que toque.
  */
 export function ListaDeProyectos({
   proyectos,
@@ -30,58 +39,35 @@ export function ListaDeProyectos({
   }
 
   return (
-    <Tarjeta pie={pieSalasLegado}>
-      <ContenedorTabla etiqueta="Proyectos">
-      <table className="datos">
-        <thead>
-          <tr>
-            <th>Proyecto</th>
-            <th>Sede</th>
-            <th>Estado</th>
-            <th className="num">Localizaciones</th>
-            <th className="num">Salas</th>
-          </tr>
-        </thead>
-        <tbody>
-          {proyectos.map((p) => (
-            <tr key={p.id}>
-              <td>
-                <Link href={`/proyectos/${p.id}`} className="enlace">
-                  {p.nombre}
-                </Link>
-                {p.codigo && <span className="text-tinta-tenue"> · {p.codigo}</span>}
-              </td>
-              <td>{p.sede ?? '—'}</td>
-              <td>
-                <span
-                  className={`inline-block rounded-md px-2 py-0.5 text-[0.75rem] ${
-                    p.estado === 'en_curso'
-                      ? 'bg-acento-suave text-acento-fuerte'
-                      : p.estado === 'cerrado'
-                        ? 'bg-superficie-hundida text-exito'
-                        : 'bg-superficie-hundida text-tinta-tenue'
-                  }`}
-                >
-                  {p.estado === 'en_curso'
-                    ? 'En curso'
-                    : p.estado === 'cerrado'
-                      ? 'Cerrado'
-                      : 'Sin iniciar'}
-                </span>
-              </td>
-              <td className="num">{p.n_localizaciones}</td>
-              <td className="num">
-                {p.n_salas > 0 ? (
-                  p.n_salas
-                ) : (
-                  <span className="text-tinta-tenue">0</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </ContenedorTabla>
-    </Tarjeta>
+    <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {proyectos.map((p) => (
+          <Link
+            key={p.id}
+            href={`/proyectos/${p.id}`}
+            className="tarjeta p-4 min-w-0 block hover:bg-superficie-hundida transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="t-subtitulo min-w-0 [overflow-wrap:anywhere]">{p.nombre}</h3>
+              <Estado tono={TONO_ESTADO_PROYECTO[p.estado]}>
+                {ETIQUETA_ESTADO_PROYECTO[p.estado]}
+              </Estado>
+            </div>
+            <div className="text-tinta-tenue mt-1 min-w-0 [overflow-wrap:anywhere]">
+              {[p.codigo, p.sede].filter(Boolean).join(' · ') || '—'}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[0.8125rem] text-tinta-tenue">
+              <span>
+                <span className="dato tabular-nums">{p.n_localizaciones}</span> localizaciones
+              </span>
+              <span>
+                <span className="dato tabular-nums">{p.n_salas}</span> salas
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+      {pieSalasLegado && <p className="text-tinta-tenue mt-4">{pieSalasLegado}</p>}
+    </div>
   );
 }

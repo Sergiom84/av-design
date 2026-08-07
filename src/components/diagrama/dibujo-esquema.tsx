@@ -1,6 +1,7 @@
 import type { EscenaDiagrama, FilaPuertoDiagrama, BloqueDiagrama } from '@/lib/diagrama';
 import { MEDIDAS_DIAGRAMA } from '@/lib/diagrama';
 import type { Senal } from '@/lib/tipos';
+import { ContenedorTabla } from '@/components/ui';
 
 /**
  * El SVG del esquema. Se pinta en el servidor, sin JavaScript, como el plano
@@ -167,7 +168,7 @@ function Bloque({ bloque }: { bloque: BloqueDiagrama }) {
 
 export function DibujoEsquema({ escena }: { escena: EscenaDiagrama }) {
   return (
-    <div className="overflow-x-auto">
+    <ContenedorTabla etiqueta="Esquema de conexiones">
       <svg
         viewBox={`0 0 ${escena.ancho} ${escena.alto}`}
         className="h-auto"
@@ -203,6 +204,6 @@ export function DibujoEsquema({ escena }: { escena: EscenaDiagrama }) {
           <Bloque key={b.equipo_id} bloque={b} />
         ))}
       </svg>
-    </div>
+    </ContenedorTabla>
   );
 }

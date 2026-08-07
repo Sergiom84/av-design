@@ -23,14 +23,15 @@ export function Cabecera({
 
 /**
  * Cuatro variantes que comparten radio, sombra y espaciado de `.tarjeta`:
- * estándar (sin marca), resumen/KPI (misma base, para cifras destacadas),
- * operativa (borde de acento: pide una acción) y peligrosa (borde de alerta:
- * agrupa una operación destructiva). No son cinco estilos nuevos, es un
- * modificador de borde sobre la misma superficie.
+ * estándar (sin marca), resumen/KPI (columna que se estira a la altura de
+ * sus vecinas en una rejilla, para que una etiqueta de dos líneas no
+ * desalinee el resto), operativa (borde de acento: pide una acción) y
+ * peligrosa (borde de alerta: agrupa una operación destructiva). No son
+ * cinco estilos nuevos, es un modificador sobre la misma superficie.
  */
 const VARIANTE_TARJETA = {
   estandar: '',
-  resumen: '',
+  resumen: 'h-full flex flex-col',
   operativa: 'border-l-2 border-acento',
   peligrosa: 'border-l-2 border-alerta',
 } as const;
@@ -57,6 +58,11 @@ export function Tarjeta({
   pie?: ReactNode;
   variante?: VarianteTarjeta;
 }) {
+  const cuerpo =
+    variante === 'resumen'
+      ? 'p-4 min-w-0 max-w-full flex-1 flex flex-col justify-between'
+      : 'p-4 min-w-0 max-w-full';
+
   return (
     <section className={`tarjeta ${VARIANTE_TARJETA[variante]}`.trim()}>
       {(titulo || acciones) && (
@@ -67,7 +73,7 @@ export function Tarjeta({
           {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
         </div>
       )}
-      <div className="p-4 min-w-0 max-w-full">{children}</div>
+      <div className={cuerpo}>{children}</div>
       {pie && (
         <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue min-w-0 max-w-full">
           {pie}
@@ -128,7 +134,9 @@ export function Dato({
 }) {
   return (
     <div>
-      <div className="t-etiqueta">{etiqueta}</div>
+      {/* min-h reserva dos líneas (0.75rem × 1.35 × 2) para que una etiqueta
+          larga no desalinee el valor frente a los KPI vecinos de la rejilla. */}
+      <div className="t-etiqueta leading-[1.35] min-h-[2.025rem]">{etiqueta}</div>
       <div className="t-subtitulo dato tabular-nums">
         {valor}
         {sufijo && <span className="text-tinta-tenue text-[0.75rem] ml-1">{sufijo}</span>}
@@ -143,11 +151,18 @@ export function Dato({
  * listo, aviso y bloqueo. Antes de esta primitiva cada pantalla dibujaba su
  * propio mapa de colores para el mismo significado.
  */
+/**
+ * El texto de 12 px de un badge necesita 4.5:1 de contraste (no cuenta como
+ * texto grande). `--tinta-tenue`, `--exito` y `--aviso` se quedan cortos
+ * sobre su propio fondo suave (4.31:1, 3.50:1 y 4.22:1); de ahí `--tinta`
+ * (13.3:1, ya es el texto normal de la aplicación) y las variantes
+ * `-fuerte` de éxito y aviso, con el mismo patrón que `--acento-fuerte`.
+ */
 const TONO_ESTADO = {
-  neutro: 'bg-linea-suave text-tinta-tenue',
+  neutro: 'bg-linea-suave text-tinta',
   informacion: 'bg-acento-suave text-acento-fuerte',
-  listo: 'bg-exito-suave text-exito',
-  aviso: 'bg-aviso-suave text-aviso',
+  listo: 'bg-exito-suave text-exito-fuerte',
+  aviso: 'bg-aviso-suave text-aviso-fuerte',
   bloqueo: 'bg-alerta-suave text-alerta',
 } as const;
 

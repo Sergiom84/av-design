@@ -21,10 +21,12 @@
   --acento-suave: #eaeffb;
   --exito: #298d74;
   --exito-suave: #e3f1ec;
+  --exito-fuerte: #1f6e57;
   --alerta: #b3261e;
   --alerta-suave: #f9dedc;
   --aviso: #8a6d1f;
   --aviso-suave: #f5eed9;
+  --aviso-fuerte: #6f5518;
   --sombra-tarjeta: 0 2px 4px -2px rgba(23, 23, 23, 0.06),
     0 4px 8px -2px rgba(23, 23, 23, 0.1);
 
@@ -52,10 +54,12 @@
   --color-acento-suave: var(--acento-suave);
   --color-exito: var(--exito);
   --color-exito-suave: var(--exito-suave);
+  --color-exito-fuerte: var(--exito-fuerte);
   --color-alerta: var(--alerta);
   --color-alerta-suave: var(--alerta-suave);
   --color-aviso: var(--aviso);
   --color-aviso-suave: var(--aviso-suave);
+  --color-aviso-fuerte: var(--aviso-fuerte);
   --color-rail: var(--rail);
   --color-rail-texto: var(--rail-texto);
   --color-rail-texto-activo: var(--rail-texto-activo);
@@ -191,6 +195,9 @@ table.datos tbody tr:hover {
    botón: /plantillas pinta cientos y cada uno costaba 110 bytes de HTML —y
    otros tantos en la carga que acompaña a la página. */
 .boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--linea-fuerte);
   border-radius: 6px;
   padding: 0.375rem 0.875rem;
@@ -316,16 +323,30 @@ button:focus-visible {
   opacity: 0.7;
 }
 
-/* Objetivo táctil mínimo en móvil (44px). En escritorio los controles se
-   quedan compactos: el ratón no necesita el margen que exige el dedo. */
+/* Objetivo táctil mínimo en móvil (44 × 44 px). En escritorio los controles
+   se quedan compactos: el ratón no necesita el margen que exige el dedo.
+   `.boton` ya es `inline-flex` (regla base) para que un `<Link className=
+   "boton">` —un `<a>`, elemento en línea que ignora min-height por
+   defecto— también respete el mínimo, igual que el `<button>` nativo.
+   Un checkbox o radio no crece hasta 44px él solo: sería un cuadrado
+   enorme. Su objetivo táctil real es la etiqueta que lo envuelve — así
+   está montado en toda la aplicación (`<label className="flex ...">`) — y
+   es ahí donde se reserva el alto mínimo. */
 @media (max-width: 640px) {
   .boton {
     min-height: 44px;
+    min-width: 44px;
   }
 
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
+    min-height: 44px;
+  }
+
+  label:has(input[type="checkbox"]),
+  label:has(input[type="radio"]) {
+    display: flex;
     min-height: 44px;
   }
 }

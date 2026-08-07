@@ -1,19 +1,35 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Aviso, Boton, Cabecera, ContenedorTabla, Dato, Enlace, Tarjeta, Vacio } from '@/components/ui';
-import { borrarProyecto } from '@/app/acciones-proyectos';
+import {
+  Aviso,
+  Cabecera,
+  ContenedorTabla,
+  Dato,
+  Enlace,
+  Estado,
+  Tarjeta,
+  Vacio,
+  type TonoEstado,
+} from '@/components/ui';
 import { listarSalasSinProyecto, obtenerProyecto } from '@/lib/datos-proyectos';
 import {
   hitosDeProyecto,
   listarTecnicosConRoles,
   tablasDeCicloListas,
 } from '@/lib/datos-ciclo';
-import { estadoDeProyecto, ETIQUETA_ESTADO_PROYECTO } from '@/lib/ciclo-vida';
+import { estadoDeProyecto, ETIQUETA_ESTADO_PROYECTO, type EstadoProyecto } from '@/lib/ciclo-vida';
 import { agruparSalasPorLocalizacion, resumenDeProyecto } from '@/lib/proyecto';
 import { HitosDeProyecto } from '@/components/proyecto/hitos';
 import { LocalizacionesDelProyecto } from '@/components/proyecto/localizaciones';
 import { AdopcionDeSalas } from '@/components/proyecto/adopcion';
+import { BorrarProyecto } from '@/components/proyecto/borrar';
+
+const TONO_ESTADO_PROYECTO: Record<EstadoProyecto, TonoEstado> = {
+  sin_iniciar: 'neutro',
+  en_curso: 'informacion',
+  cerrado: 'listo',
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -55,28 +71,26 @@ export default async function PortadaProyecto({
     <>
       <Cabecera
         titulo={proyecto.nombre}
-        descripcion={[
-          proyecto.codigo,
-          proyecto.sede,
-          ETIQUETA_ESTADO_PROYECTO[estado],
-          proyecto.notas,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
+        descripcion={[proyecto.codigo, proyecto.sede, proyecto.notas].filter(Boolean).join(' · ')}
         acciones={
-          <>
-            {estado !== 'cerrado' && (
-              <Enlace href={`/salas/nueva?proyecto=${proyecto.id}`}>Nueva sala</Enlace>
-            )}
-            {estado !== 'cerrado' && (
-              <form action={borrarProyecto}>
-                <input type="hidden" name="id" value={proyecto.id} />
-                <Boton variante="peligro">Borrar proyecto</Boton>
-              </form>
-            )}
-          </>
+          estado !== 'cerrado' && (
+            <Enlace href={`/salas/nueva?proyecto=${proyecto.id}`}>Nueva sala</Enlace>
+          )
         }
       />
+
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <Estado tono={TONO_ESTADO_PROYECTO[estado]}>{ETIQUETA_ESTADO_PROYECTO[estado]}</Estado>
+      </div>
+
+      {estado === 'cerrado' && (
+        <div className="mb-6">
+          <Aviso tono="neutro">
+            Obra cerrada: solo lectura. No admite nueva sala, alta de localización, adopción ni
+            hitos de sala. Para reabrirla, borra el cierre en Hitos del proyecto.
+          </Aviso>
+        </div>
+      )}
 
       {!cicloListo && (
         <div className="mb-6">
@@ -88,22 +102,22 @@ export default async function PortadaProyecto({
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <div className="tarjeta p-4">
-          <Dato etiqueta="Salas" valor={resumen.salas} />
-        </div>
-        <div className="tarjeta p-4">
-          <Dato etiqueta="Sin medidas" valor={resumen.sin_medidas} />
-        </div>
-        <div className="tarjeta p-4">
-          <Dato etiqueta="En diseño" valor={resumen.en_diseno} />
-        </div>
-        <div className="tarjeta p-4">
-          <Dato etiqueta="Instaladas" valor={resumen.instaladas} />
-        </div>
-        <div className="tarjeta p-4">
-          <Dato etiqueta="Entregadas" valor={resumen.entregadas} />
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 items-stretch">
+        <Tarjeta variante="resumen">
+          <Dato reservarEtiqueta etiqueta="Salas" valor={resumen.salas} />
+        </Tarjeta>
+        <Tarjeta variante="resumen">
+          <Dato reservarEtiqueta etiqueta="Sin medidas" valor={resumen.sin_medidas} />
+        </Tarjeta>
+        <Tarjeta variante="resumen">
+          <Dato reservarEtiqueta etiqueta="En diseño" valor={resumen.en_diseno} />
+        </Tarjeta>
+        <Tarjeta variante="resumen">
+          <Dato reservarEtiqueta etiqueta="Instaladas" valor={resumen.instaladas} />
+        </Tarjeta>
+        <Tarjeta variante="resumen">
+          <Dato reservarEtiqueta etiqueta="Entregadas" valor={resumen.entregadas} />
+        </Tarjeta>
       </div>
 
       <div className="grid xl:grid-cols-[1fr_24rem] gap-6 items-start [&>*]:min-w-0">
@@ -168,6 +182,10 @@ export default async function PortadaProyecto({
               </ContenedorTabla>
             )}
           </Tarjeta>
+
+          {estado !== 'cerrado' && (
+            <BorrarProyecto proyectoId={proyecto.id} confirmar={borrar === 'proyecto'} />
+          )}
         </div>
       </div>
     </>

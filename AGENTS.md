@@ -65,6 +65,25 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 
 ## Reglas del proyecto
 
+- **La obra agrupa salas por localización.** Jerarquía Proyecto → Localización
+  → Sala (`proyectos`, `localizaciones`, `salas.localizacion_id`), la de
+  XTEN-AV. Una sala sin proyecto es **legado válido, no error**: todos los
+  joins a la jerarquía son `left` y la sala se adopta desde la portada de la
+  obra, que le arrastra la sede del proyecto. Cada proyecto nace con la
+  localización `Sin asignar`. Un pedido puede abastecer varias salas de la
+  obra (`pedidos.proyecto_id`); el reparto entre salas lo hacen las reservas.
+- **El estado de proyecto y sala se deriva de hitos registrados, nunca se
+  teclea.** Los hitos de la obra (`inicio`, `cierre`) viven en
+  `hitos_proyecto`; los de la sala (`instalacion`, `entrega`), en
+  `hitos_sala`. Un hito mal registrado se borra y se registra de nuevo, como
+  un movimiento de almacén. La entrega con bloqueos del semáforo avisa y exige
+  nota, no bloquea. La recepción es por pedido (`movimientos.quien`), no un
+  hito. Los técnicos y sus roles se siembran de `data/tecnicos.csv` con la
+  convención `fuente` csv/app.
+- **La ficha de sala son cinco pestañas por ruta** (`salas/[id]`,
+  `/equipamiento`, `/cableado`, `/logistica`, `/documentos`) con layout
+  compartido. Las acciones que tocan la sala revalidan con alcance `layout`;
+  `typedRoutes` está activado y `next build` caza los enlaces rotos.
 - **El dominio se escribe en español.** Tablas, columnas, tipos, funciones y
   variables usan el vocabulario del departamento: sala, tipología, aforo, caja
   de conexiones, canaleta, falso techo, tirada, holgura, bobina, latiguillo.

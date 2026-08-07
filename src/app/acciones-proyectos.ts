@@ -20,7 +20,7 @@ export async function crearProyecto(datos: FormData) {
   const nombre = texto(datos.get('nombre'));
   if (!nombre) return;
 
-  await sql.begin(async (tx) => {
+  const proyectoId = await sql.begin(async (tx) => {
     // La sede se resuelve dentro de la transacción: si el alta falla no queda
     // una sede huérfana recién creada.
     const nombreSede = texto(datos.get('sede'));
@@ -53,10 +53,13 @@ export async function crearProyecto(datos: FormData) {
         values (${p.id}, 'inicio', ${tecnicoInicio})
         on conflict (proyecto_id, tipo) do nothing`;
     }
+
+    return p.id;
   });
 
   revalidatePath('/proyectos');
-  redirect('/proyectos');
+  // A la portada recién creada: lo siguiente es añadir localizaciones y salas.
+  redirect(`/proyectos/${proyectoId}`);
 }
 
 export async function crearLocalizacion(datos: FormData) {

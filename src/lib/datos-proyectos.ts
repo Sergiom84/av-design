@@ -4,8 +4,8 @@ import { sql } from '@/lib/db';
 type Fila = Record<string, unknown>;
 const s = (v: unknown): string | null => (v == null ? null : String(v));
 
-/** El nombre de la localización que crea sola cada proyecto al nacer. */
-export const LOCALIZACION_SIN_ASIGNAR = 'Sin asignar';
+import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/nombres-proyecto';
+export { LOCALIZACION_SIN_ASIGNAR };
 
 export interface ProyectoResumen {
   id: string;
@@ -14,6 +14,7 @@ export interface ProyectoResumen {
   sede: string | null;
   n_localizaciones: number;
   n_salas: number;
+  estado: 'sin_iniciar' | 'en_curso' | 'cerrado';
 }
 
 export interface LocalizacionDeProyecto {
@@ -35,7 +36,11 @@ export async function listarProyectos(): Promise<ProyectoResumen[]> {
       (select count(*) from localizaciones l where l.proyecto_id = p.id) as n_localizaciones,
       (select count(*) from salas sa
         join localizaciones l on l.id = sa.localizacion_id
-        where l.proyecto_id = p.id) as n_salas
+        where l.proyecto_id = p.id) as n_salas,
+      exists (select 1 from hitos_proyecto h
+              where h.proyecto_id = p.id and h.tipo = 'inicio') as iniciado,
+      exists (select 1 from hitos_proyecto h
+              where h.proyecto_id = p.id and h.tipo = 'cierre') as cerrado
     from proyectos p
     left join sedes sd on sd.id = p.sede_id
     order by p.creado_en desc`;
@@ -46,6 +51,7 @@ export async function listarProyectos(): Promise<ProyectoResumen[]> {
     sede: s(f.sede),
     n_localizaciones: Number(f.n_localizaciones ?? 0),
     n_salas: Number(f.n_salas ?? 0),
+    estado: f.cerrado ? 'cerrado' : f.iniciado ? 'en_curso' : 'sin_iniciar',
   }));
 }
 
@@ -54,6 +60,107 @@ export async function contarSalasSinProyecto(): Promise<number> {
   const [f] = await sql<Fila[]>`
     select count(*) as n from salas where localizacion_id is null`;
   return Number(f?.n ?? 0);
+}
+
+export interface ProyectoCompleto {
+  id: string;
+  nombre: string;
+  codigo: string | null;
+  sede: string | null;
+  notas: string | null;
+  localizaciones: LocalizacionDeProyecto[];
+  salas: import('@/lib/proyecto').SalaDePortada[];
+  pedidos: Array<{
+    id: string;
+    referencia: string | null;
+    proveedor: string | null;
+    estado: string;
+  }>;
+}
+
+/** La portada: el proyecto con sus localizaciones, salas y pedidos. */
+export async function obtenerProyecto(id: string): Promise<ProyectoCompleto | null> {
+  const [fila] = await sql<Fila[]>`
+    select p.id, p.nombre, p.codigo, p.notas, sd.nombre as sede
+    from proyectos p
+    left join sedes sd on sd.id = p.sede_id
+    where p.id = ${id}`;
+  if (!fila) return null;
+
+  const [localizaciones, salas, pedidos] = await Promise.all([
+    sql<Fila[]>`
+      select id, nombre from localizaciones where proyecto_id = ${id}`,
+    // El estado de cada sala en la portada es ligero a propósito: medidas,
+    // tiradas e hitos, agregables en una consulta. El semáforo completo de
+    // `revisarMontaje()` se mira en la ficha; rehacerlo aquí serían catorce
+    // consultas por sala.
+    sql<Fila[]>`
+      select s.id, s.nombre, s.codigo, s.localizacion_id,
+             s.largo_m, s.ancho_m, s.alto_m,
+             (select count(*) from conexiones c where c.sala_id = s.id) as n_conexiones,
+             exists (select 1 from hitos_sala h
+                     where h.sala_id = s.id and h.tipo = 'instalacion') as instalada,
+             exists (select 1 from hitos_sala h
+                     where h.sala_id = s.id and h.tipo = 'entrega') as entregada
+      from salas s
+      join localizaciones l on l.id = s.localizacion_id
+      where l.proyecto_id = ${id}
+      order by s.nombre`,
+    sql<Fila[]>`
+      select pe.id, pe.referencia, pe.estado, pr.nombre as proveedor
+      from pedidos pe
+      left join proveedores pr on pr.id = pe.proveedor_id
+      where pe.proyecto_id = ${id}
+      order by pe.creado_en desc`,
+  ]);
+
+  return {
+    id: String(fila.id),
+    nombre: String(fila.nombre),
+    codigo: s(fila.codigo),
+    sede: s(fila.sede),
+    notas: s(fila.notas),
+    localizaciones: localizaciones.map((f) => ({
+      id: String(f.id),
+      nombre: String(f.nombre),
+    })),
+    salas: salas.map((f) => ({
+      id: String(f.id),
+      nombre: String(f.nombre),
+      codigo: s(f.codigo),
+      localizacion_id: s(f.localizacion_id),
+      largo_m: Number(f.largo_m ?? 0),
+      ancho_m: Number(f.ancho_m ?? 0),
+      alto_m: Number(f.alto_m ?? 0),
+      n_conexiones: Number(f.n_conexiones ?? 0),
+      instalada: Boolean(f.instalada),
+      entregada: Boolean(f.entregada),
+    })),
+    pedidos: pedidos.map((f) => ({
+      id: String(f.id),
+      referencia: s(f.referencia),
+      proveedor: s(f.proveedor),
+      estado: String(f.estado),
+    })),
+  };
+}
+
+/** Salas sin proyecto, para adoptarlas desde la portada. */
+export async function listarSalasSinProyecto(): Promise<
+  Array<{ id: string; nombre: string; codigo: string | null; sede: string | null }>
+> {
+  const filas = await sql<Fila[]>`
+    select s.id, s.nombre, s.codigo, sd.nombre as sede
+    from salas s
+    left join sedes sd on sd.id = s.sede_id
+    where s.localizacion_id is null
+    order by s.nombre`;
+  return filas.map((f) => ({
+    id: String(f.id),
+    nombre: String(f.nombre),
+    codigo: s(f.codigo),
+    sede: s(f.sede),
+  }));
 }
 
 export async function listarProyectosConLocalizaciones(): Promise<

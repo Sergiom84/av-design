@@ -15,6 +15,8 @@ de una sala.
 | Fase 3 · datos | Puertos por artículo, conexiones puerto a puerto, tabla de cables |
 | M6 | La plantilla trae el montaje: posiciones y tiradas tipo, sala nace montada |
 | Acceso | Clave de departamento con huella SHA-256, cookie firmada, middleware |
+| Jerarquía de obra | Proyecto → Localización → Sala, portada operativa, pedidos por obra (7-8-2026) |
+| Ficha en pestañas | Resumen · Equipamiento · Cableado · Logística · Documentos, rutas anidadas (7-8-2026) |
 | Despliegue | Neon + Render, `av-design.onrender.com`, autodeploy desde `main` |
 
 ## Lo que queda, por módulos

@@ -36,6 +36,7 @@ export function ListaDeProyectos({
           <tr>
             <th>Proyecto</th>
             <th>Sede</th>
+            <th>Estado</th>
             <th className="num">Localizaciones</th>
             <th className="num">Salas</th>
           </tr>
@@ -44,12 +45,29 @@ export function ListaDeProyectos({
           {proyectos.map((p) => (
             <tr key={p.id}>
               <td>
-                <Link href={`/salas?proyecto=${p.id}`} className="enlace">
+                <Link href={`/proyectos/${p.id}`} className="enlace">
                   {p.nombre}
                 </Link>
                 {p.codigo && <span className="text-tinta-tenue"> · {p.codigo}</span>}
               </td>
               <td>{p.sede ?? '—'}</td>
+              <td>
+                <span
+                  className={`inline-block rounded-md px-2 py-0.5 text-[0.75rem] ${
+                    p.estado === 'en_curso'
+                      ? 'bg-acento-suave text-acento-fuerte'
+                      : p.estado === 'cerrado'
+                        ? 'bg-superficie-hundida text-exito'
+                        : 'bg-superficie-hundida text-tinta-tenue'
+                  }`}
+                >
+                  {p.estado === 'en_curso'
+                    ? 'En curso'
+                    : p.estado === 'cerrado'
+                      ? 'Cerrado'
+                      : 'Sin iniciar'}
+                </span>
+              </td>
               <td className="num">{p.n_localizaciones}</td>
               <td className="num">
                 {p.n_salas > 0 ? (

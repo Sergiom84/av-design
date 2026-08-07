@@ -23,14 +23,20 @@ export default async function EquipamientoSala({
   const completa = await obtenerSala(id);
   if (!completa) notFound();
 
-  const { sala, equipos, tomas } = completa;
+  const { sala, equipos, tomas, catalogoEquipos } = completa;
   const cerrado = sala.proyecto_id
     ? proyectoCerrado(await hitosDeProyecto(sala.proyecto_id))
     : false;
 
   return (
     <div className="space-y-6 [&>*]:min-w-0">
-      <Equipamiento salaId={sala.id} equipos={equipos} tomas={tomas} cerrado={cerrado} />
+      <Equipamiento
+        salaId={sala.id}
+        equipos={equipos}
+        tomas={tomas}
+        cerrado={cerrado}
+        catalogo={catalogoEquipos}
+      />
       <TomasDeRed salaId={sala.id} tomas={tomas} equipos={equipos} />
       <GuardarComoPlantilla sala={sala} equipos={equipos} />
     </div>

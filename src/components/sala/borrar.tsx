@@ -29,8 +29,11 @@ export function BorrarSala({
     <Tarjeta variante="peligrosa" titulo="Borrar sala">
       <div className="space-y-2">
         <Aviso tono="alerta">
-          Borra medidas, croquis, equipamiento, conexiones y tabla de cables de esta
-          sala. No se puede deshacer.
+          Borra la sala: sus medidas y croquis, el equipamiento, las conexiones y la
+          tabla de cables, las tomas de red, las reservas de material, las cargas de
+          furgoneta y las revisiones (check-in) e hitos de instalación y entrega. Los
+          movimientos de almacén y los pedidos que la mencionan no se borran: quedan
+          sin sala, como el material legado. No se puede deshacer.
         </Aviso>
         <div className="flex gap-3 items-center">
           <form action={borrarSala}>

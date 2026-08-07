@@ -581,6 +581,14 @@ export interface SalaCompleta {
   tomas: TomaRed[];
   /** Puertos de los artículos que hay puestos en la sala, ya resueltos. */
   puertos: Puerto[];
+  /**
+   * Marca, modelo y categoría de los artículos de catálogo puestos en la
+   * sala, por `articulo_id`. Consulta acotada a los artículos de esta sala
+   * (como `puertosDeArticulos`): el catálogo entero no viaja al navegador.
+   * Un equipo cuyo id no está aquí es un equipo suelto, sin ficha de
+   * catálogo.
+   */
+  catalogoEquipos: Map<string, { marca: string | null; modelo: string; categoria: string }>;
 }
 
 export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
@@ -618,6 +626,16 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
 
   const articulos = [...new Set(equipos.map((e) => e.articulo_id).filter(Boolean))];
 
+  const filasCatalogo = articulos.length
+    ? await sql<Fila[]>`select id, marca, modelo, categoria from articulos where id in ${sql(articulos)}`
+    : [];
+  const catalogoEquipos = new Map(
+    filasCatalogo.map((f) => [
+      String(f.id),
+      { marca: s(f.marca), modelo: String(f.modelo), categoria: String(f.categoria) },
+    ]),
+  );
+
   return {
     sala: aSala(fila),
     equipos,
@@ -647,6 +665,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       notas: s(f.notas),
     })),
     puertos: await puertosDeArticulos(articulos),
+    catalogoEquipos,
   };
 }
 

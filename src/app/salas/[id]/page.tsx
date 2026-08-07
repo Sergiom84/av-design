@@ -88,7 +88,7 @@ export default async function ResumenSala({
                   ? `${sala.largo_m} × ${sala.ancho_m} × ${sala.alto_m}`
                   : 'sin medir'
               }
-              sufijo="m"
+              sufijo={sala.largo_m && sala.ancho_m && sala.alto_m ? 'm' : undefined}
             />
             <Dato etiqueta="Equipos" valor={equipos.length} />
           </div>

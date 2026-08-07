@@ -1,4 +1,4 @@
-import { Aviso, Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, Campo, Estado, Tarjeta, Vacio } from '@/components/ui';
 import {
   ajustarCantidadEquipo,
   anadirEquipo,
@@ -7,6 +7,19 @@ import {
 } from '@/app/acciones';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 import { ETIQUETA_EXTREMO, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
+
+type Catalogo = Map<string, { marca: string | null; modelo: string; categoria: string }>;
+
+/** La referencia real del artículo si está en catálogo, o el aviso de que no lo está. */
+function Referencia({ equipo, catalogo }: { equipo: EquipoEnSala; catalogo: Catalogo }) {
+  const articulo = equipo.articulo_id ? catalogo.get(equipo.articulo_id) : undefined;
+  if (!articulo) return <Estado tono="aviso">Fuera de catálogo</Estado>;
+  return (
+    <Estado tono="informacion">
+      {[articulo.marca, articulo.modelo].filter(Boolean).join(' ')}
+    </Estado>
+  );
+}
 
 /**
  * Los equipos puestos en la sala, con su posición y en qué roseta pinchan.
@@ -29,11 +42,13 @@ export function Equipamiento({
   equipos,
   tomas,
   cerrado = false,
+  catalogo,
 }: {
   salaId: string;
   equipos: EquipoEnSala[];
   tomas: TomaRed[];
   cerrado?: boolean;
+  catalogo: Catalogo;
 }) {
   const opcionesToma = (
     <>
@@ -65,6 +80,7 @@ export function Equipamiento({
                 <span className="font-medium">
                   {e.cantidad}× {e.nombre}
                 </span>
+                <Referencia equipo={e} catalogo={catalogo} />
                 <span className="text-tinta-tenue">{ETIQUETA_EXTREMO[e.extremo]}</span>
                 <span className="text-tinta-tenue tabular-nums">
                   X {e.posicion.x_m} · Y {e.posicion.y_m} · Z {e.posicion.z_m}
@@ -121,6 +137,9 @@ export function Equipamiento({
         <div className="divide-y divide-linea-suave">
           {equipos.map((e) => (
             <div key={e.id} className="flex flex-wrap items-end gap-3 py-3">
+              <span className="self-center shrink-0">
+                <Referencia equipo={e} catalogo={catalogo} />
+              </span>
               <span className="inline-flex items-center gap-1 shrink-0">
                 <form action={ajustarCantidadEquipo} className="inline">
                   <input type="hidden" name="id" value={e.id} />

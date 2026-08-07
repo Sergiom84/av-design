@@ -135,7 +135,7 @@ export function AltaDeSala({
       <form
         id="alta-sala"
         action={crearSala}
-        className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-24 lg:pb-0"
+        className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0"
       >
       <div className="space-y-6 min-w-0">
         <Tarjeta
@@ -485,9 +485,15 @@ export function AltaDeSala({
           que la rejilla deja de tener dos columnas): el resumen "Se va a
           crear" queda al final de una sola columna larga, y sin esto la
           acción de enviar exige recorrer toda la página. Envía el mismo
-          <form> por id, no un segundo formulario ni una segunda acción. */}
+          <form> por id, no un segundo formulario ni una segunda acción.
+          Bajo `md` (768px) el rail es un cajón oculto: la barra ocupa todo
+          el ancho. De `md` a `lg` (768–1023px) el rail fijo de 16rem ya
+          está visible (`navegacion/index.tsx`, `md:flex w-64`): la barra
+          debe arrancar después de él, no por debajo. A partir de `lg`
+          queda oculta: el formulario pasa a dos columnas y el botón del
+          resumen ya está a la vista sin desplazarse. */}
       <div
-        className="lg:hidden fixed inset-x-0 bottom-0 z-10 border-t border-linea-suave bg-superficie px-4 py-3"
+        className="lg:hidden fixed inset-x-0 md:left-64 md:right-0 bottom-0 z-10 border-t border-linea-suave bg-superficie px-4 py-3"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
         <Boton form="alta-sala" className="w-full min-h-11">

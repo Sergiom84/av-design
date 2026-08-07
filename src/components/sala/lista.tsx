@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Estado, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Estado, Tarjeta, Vacio } from '@/components/ui';
 import type { SalaConEstado } from '@/lib/datos';
 import { estadoDeSalaEnPortada, ETIQUETA_ESTADO_SALA, TONO_ESTADO_SALA } from '@/lib/proyecto';
 
@@ -9,14 +9,22 @@ import { estadoDeSalaEnPortada, ETIQUETA_ESTADO_SALA, TONO_ESTADO_SALA } from '@
  * es el mismo ligero de la portada del proyecto (medidas + hitos) — mismo
  * cálculo, misma etiqueta, mismo tono, para que no se lea distinto en un
  * sitio y en otro.
+ *
+ * Sin las tablas de hitos, instalada/entregada degradan a falso (mismo
+ * criterio que la portada): una sala realmente instalada se vería "en
+ * diseño". El aviso es obligatorio en ese caso, no opcional: sin él, "en
+ * diseño" se leería como confirmado cuando en realidad es "no lo sabemos".
  */
 export function ListaDeSalas({
   salas,
   conProyecto = true,
+  cicloListo = true,
 }: {
   salas: SalaConEstado[];
   /** Filtrando ya por un proyecto, repetir su nombre en cada tarjeta sobra. */
   conProyecto?: boolean;
+  /** `tablasDeCicloListas()`: si faltan las tablas de hitos, el aviso es obligatorio. */
+  cicloListo?: boolean;
 }) {
   if (salas.length === 0) {
     return (
@@ -36,6 +44,16 @@ export function ListaDeSalas({
 
   return (
     <div>
+      {!cicloListo && (
+        <div className="mb-4">
+          <Aviso tono="alerta">
+            Faltan las tablas de técnicos e hitos: el despliegue llegó antes que su
+            migración (db/migraciones/2026-08-jerarquia-p1.sql). Instalada y entregada
+            no están disponibles: toda sala medida se ve como &quot;en diseño&quot; hasta
+            aplicarla.
+          </Aviso>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {salas.map((s) => {
           const estado = estadoDeSalaEnPortada(s);

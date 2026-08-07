@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSelectedLayoutSegment } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * La barra de pestañas de la ficha. Cada pestaña es una ruta, no un estado:
@@ -13,9 +13,13 @@ import { useEffect, useRef, useState } from 'react';
  * entrar, recargar, navegar o volver atrás, y una flecha discreta en cada
  * lado avisa de que hay más pestañas cuando el desbordamiento existe en esa
  * dirección — nunca las dos gratis por defecto. Es un icono SVG en línea
- * (`design-system/MASTER.md`: sin fuente de iconos, sin gradientes), no una
- * mancha decorativa. Todo esto es mejora progresiva sobre enlaces que ya
- * funcionan sin JavaScript.
+ * (`design-system/MASTER.md`: sin fuente de iconos, sin gradientes) con su
+ * propio `aria-label`, no un icono suelto y `aria-hidden`: la misma regla
+ * ("un icono nunca va solo: siempre con texto o aria-label") que ya siguen
+ * los botones +/− de equipamiento. No es `aria-live`, así que desplazar no
+ * genera anuncios: un lector de pantalla solo lo lee si navega hasta ahí,
+ * igual que cualquier otro texto de la página. Todo esto es mejora
+ * progresiva sobre enlaces que ya funcionan sin JavaScript.
  */
 function Flecha({ direccion }: { direccion: 'izquierda' | 'derecha' }) {
   return (
@@ -28,6 +32,10 @@ function Flecha({ direccion }: { direccion: 'izquierda' | 'derecha' }) {
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
+      role="img"
+      aria-label={
+        direccion === 'izquierda' ? 'Hay más pestañas hacia la izquierda' : 'Hay más pestañas hacia la derecha'
+      }
     >
       <path d={direccion === 'izquierda' ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} />
     </svg>
@@ -47,17 +55,18 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
   const activaRef = useRef<HTMLAnchorElement>(null);
   const [desborde, setDesborde] = useState({ izquierda: false, derecha: false });
 
+  const medir = useCallback(() => {
+    const el = contenedorRef.current;
+    if (!el) return;
+    setDesborde({
+      izquierda: el.scrollLeft > 1,
+      derecha: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+    });
+  }, []);
+
   useEffect(() => {
     const el = contenedorRef.current;
     if (!el) return;
-
-    const medir = () => {
-      setDesborde({
-        izquierda: el.scrollLeft > 1,
-        derecha: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
-      });
-    };
-
     medir();
     el.addEventListener('scroll', medir, { passive: true });
     window.addEventListener('resize', medir);
@@ -65,7 +74,7 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
       el.removeEventListener('scroll', medir);
       window.removeEventListener('resize', medir);
     };
-  }, []);
+  }, [medir]);
 
   useEffect(() => {
     const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -74,15 +83,18 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
       inline: 'nearest',
       behavior: reducido ? 'auto' : 'smooth',
     });
-  }, [activo]);
+    // Un scroll instantáneo (`auto`, con `prefers-reduced-motion` o sin él
+    // en salas ya visibles) puede no disparar el evento `scroll` con tiempo
+    // para el próximo pintado: se remide aquí mismo en vez de fiarlo solo al
+    // listener. Con `smooth` esta medida es la de partida; el listener de
+    // 'scroll' recoge el resto mientras la animación sigue en marcha.
+    medir();
+  }, [activo, medir]);
 
   return (
     <div className="relative mb-6">
       {desborde.izquierda && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-fondo pr-1 text-tinta-tenue"
-        >
+        <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-fondo pr-1 text-tinta-tenue">
           <Flecha direccion="izquierda" />
         </span>
       )}
@@ -113,10 +125,7 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
         })}
       </nav>
       {desborde.derecha && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-fondo pl-1 text-tinta-tenue"
-        >
+        <span className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-fondo pl-1 text-tinta-tenue">
           <Flecha direccion="derecha" />
         </span>
       )}

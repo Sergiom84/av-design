@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 export function Cabecera({
   titulo,
@@ -22,6 +22,22 @@ export function Cabecera({
 }
 
 /**
+ * Cuatro variantes que comparten radio, sombra y espaciado de `.tarjeta`:
+ * estándar (sin marca), resumen/KPI (misma base, para cifras destacadas),
+ * operativa (borde de acento: pide una acción) y peligrosa (borde de alerta:
+ * agrupa una operación destructiva). No son cinco estilos nuevos, es un
+ * modificador de borde sobre la misma superficie.
+ */
+const VARIANTE_TARJETA = {
+  estandar: '',
+  resumen: '',
+  operativa: 'border-l-2 border-acento',
+  peligrosa: 'border-l-2 border-alerta',
+} as const;
+
+export type VarianteTarjeta = keyof typeof VARIANTE_TARJETA;
+
+/**
  * La tarjeta base: cabecera, acciones opcionales, cuerpo y pie, con contrato
  * explícito de contención. El cuerpo ya no lleva scroll horizontal universal:
  * un formulario o un texto largo debe envolver, no convertirse en un panel
@@ -33,14 +49,16 @@ export function Tarjeta({
   acciones,
   children,
   pie,
+  variante = 'estandar',
 }: {
   titulo?: string;
   acciones?: ReactNode;
   children: ReactNode;
   pie?: ReactNode;
+  variante?: VarianteTarjeta;
 }) {
   return (
-    <section className="tarjeta">
+    <section className={`tarjeta ${VARIANTE_TARJETA[variante]}`.trim()}>
       {(titulo || acciones) && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-linea-suave">
           {titulo && (
@@ -119,6 +137,38 @@ export function Dato({
   );
 }
 
+/**
+ * Los cinco estados que aparecen en la aplicación (montaje, obra, recepción,
+ * conexión...) comparten un único vocabulario visual: neutro, información,
+ * listo, aviso y bloqueo. Antes de esta primitiva cada pantalla dibujaba su
+ * propio mapa de colores para el mismo significado.
+ */
+const TONO_ESTADO = {
+  neutro: 'bg-linea-suave text-tinta-tenue',
+  informacion: 'bg-acento-suave text-acento-fuerte',
+  listo: 'bg-exito-suave text-exito',
+  aviso: 'bg-aviso-suave text-aviso',
+  bloqueo: 'bg-alerta-suave text-alerta',
+} as const;
+
+export type TonoEstado = keyof typeof TONO_ESTADO;
+
+export function Estado({
+  tono = 'neutro',
+  children,
+}: {
+  tono?: TonoEstado;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[0.75rem] font-medium ${TONO_ESTADO[tono]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function Aviso({
   tono = 'aviso',
   children,
@@ -186,6 +236,48 @@ export function Campo({
   );
 }
 
-export function Vacio({ children }: { children: ReactNode }) {
-  return <p className="text-tinta-tenue py-6">{children}</p>;
+/**
+ * Pares clave/valor cortos que no justifican una tabla: cabecera de sala,
+ * ficha de pedido, resumen de conexión. `dt`/`dd` en rejilla de dos columnas
+ * en vez de reimplementar `Dato` a mano en cada pantalla.
+ */
+export function ListaClaveValor({
+  items,
+}: {
+  items: { clave: string; valor: ReactNode }[];
+}) {
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+      {items.map((item, indice) => (
+        <Fragment key={indice}>
+          <dt className="t-etiqueta self-start whitespace-nowrap">{item.clave}</dt>
+          <dd className="dato tabular-nums min-w-0 [overflow-wrap:anywhere]">{item.valor}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Qué falta y, si existe, la siguiente acción con enlace real — nunca un
+ * párrafo explicativo de relleno apuntando en prosa a un formulario de más
+ * abajo.
+ */
+export function Vacio({
+  children,
+  accion,
+}: {
+  children: ReactNode;
+  accion?: { texto: string; href: string };
+}) {
+  return (
+    <div className="py-6 text-tinta-tenue">
+      <p>{children}</p>
+      {accion && (
+        <p className="mt-1">
+          <Enlace href={accion.href}>{accion.texto}</Enlace>
+        </p>
+      )}
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { hayConfiguracion } from '@/lib/db';
-import { listarSalas } from '@/lib/datos';
+import { listarSalasConEstado } from '@/lib/datos';
 import { esUuid } from '@/lib/uuid';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Cabecera, Enlace } from '@/components/ui';
@@ -15,7 +15,7 @@ export default async function Salas({ searchParams }: PageProps<'/salas'>) {
   const proyectoId =
     typeof proyecto === 'string' && esUuid(proyecto) ? proyecto : undefined;
 
-  const salas = await listarSalas(proyectoId);
+  const salas = await listarSalasConEstado(proyectoId);
   const nombreProyecto = proyectoId ? salas[0]?.proyecto : undefined;
 
   return (

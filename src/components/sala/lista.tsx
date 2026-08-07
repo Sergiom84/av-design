@@ -1,18 +1,20 @@
 import Link from 'next/link';
 import { Estado, Tarjeta, Vacio } from '@/components/ui';
-import type { Sala } from '@/lib/tipos';
+import type { SalaConEstado } from '@/lib/datos';
+import { estadoDeSalaEnPortada, ETIQUETA_ESTADO_SALA, TONO_ESTADO_SALA } from '@/lib/proyecto';
 
 /**
  * Las salas dadas de alta, como rejilla de tarjeta (design-system/MASTER.md,
- * Disposición): nombre, tipología, aforo y estado de un vistazo. Una sala
- * sin medir está creada pero no calcula nada, y eso tiene que verse aquí
- * mismo, no solo al entrar en su ficha.
+ * Disposición): nombre, tipología, aforo y estado de un vistazo. El estado
+ * es el mismo ligero de la portada del proyecto (medidas + hitos) — mismo
+ * cálculo, misma etiqueta, mismo tono, para que no se lea distinto en un
+ * sitio y en otro.
  */
 export function ListaDeSalas({
   salas,
   conProyecto = true,
 }: {
-  salas: Sala[];
+  salas: SalaConEstado[];
   /** Filtrando ya por un proyecto, repetir su nombre en cada tarjeta sobra. */
   conProyecto?: boolean;
 }) {
@@ -36,7 +38,8 @@ export function ListaDeSalas({
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {salas.map((s) => {
-          const sinMedidas = !s.largo_m || !s.ancho_m;
+          const estado = estadoDeSalaEnPortada(s);
+          const sinMedidas = estado === 'sin_medidas';
           return (
             <Link
               key={s.id}
@@ -45,7 +48,7 @@ export function ListaDeSalas({
             >
               <div className="flex items-start justify-between gap-3">
                 <h3 className="t-subtitulo min-w-0 [overflow-wrap:anywhere]">{s.nombre}</h3>
-                {sinMedidas && <Estado tono="bloqueo">Sin medidas</Estado>}
+                <Estado tono={TONO_ESTADO_SALA[estado]}>{ETIQUETA_ESTADO_SALA[estado]}</Estado>
               </div>
               {s.codigo && <div className="text-tinta-tenue text-[0.8125rem]">{s.codigo}</div>}
               <div className="text-tinta-tenue mt-1 min-w-0 [overflow-wrap:anywhere]">

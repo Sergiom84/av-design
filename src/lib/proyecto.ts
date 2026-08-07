@@ -33,6 +33,20 @@ export const ETIQUETA_ESTADO_SALA: Record<EstadoSalaPortada, string> = {
   entregada: 'entregada',
 };
 
+/**
+ * Tono del badge `Estado` (`components/ui.tsx`) para cada estado de sala.
+ * Un solo mapa para /salas y la portada del proyecto: el mismo estado no
+ * puede verse de un color en un sitio y de otro color en el otro. Literales
+ * en vez de importar `TonoEstado`: esta capa es lógica pura y no depende
+ * de la interfaz.
+ */
+export const TONO_ESTADO_SALA = {
+  sin_medidas: 'bloqueo',
+  en_diseno: 'neutro',
+  instalada: 'informacion',
+  entregada: 'listo',
+} as const;
+
 /** El estado más avanzado manda: una sala entregada ya no está "en diseño". */
 export function estadoDeSalaEnPortada(sala: SalaDePortada): EstadoSalaPortada {
   if (sala.entregada) return 'entregada';

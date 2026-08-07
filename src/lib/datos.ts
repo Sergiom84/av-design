@@ -477,6 +477,74 @@ export async function listarSalas(proyectoId?: string): Promise<Sala[]> {
   return filas.map(aSala);
 }
 
+/** `Sala` más el estado ligero de la portada (medidas + hitos). Solo para
+ *  pantallas que necesitan mostrar ese estado; `Sala` en sí no cambia. */
+export interface SalaConEstado extends Sala {
+  n_conexiones: number;
+  instalada: boolean;
+  entregada: boolean;
+}
+
+function aSalaConEstado(f: Fila): SalaConEstado {
+  return {
+    ...aSala(f),
+    n_conexiones: Number(f.n_conexiones ?? 0),
+    instalada: Boolean(f.instalada),
+    entregada: Boolean(f.entregada),
+  };
+}
+
+/**
+ * Como `listarSalas`, pero enriquecida con el mismo estado ligero que ya
+ * calcula la portada del proyecto (medidas + hitos): Sin medidas / En
+ * diseño / Instalada / Entregada. Es una función aparte, no un cambio de
+ * `listarSalas`, para no arrastrar la consulta de hitos a checkin ni
+ * almacén, que no la necesitan.
+ *
+ * Los mismos joins left que `listarSalas`: una sala sin proyecto sigue
+ * siendo legado válido. Si la migración de hitos aún no llegó (42P01),
+ * instalada/entregada degradan a falso, igual que en la portada.
+ */
+export async function listarSalasConEstado(proyectoId?: string): Promise<SalaConEstado[]> {
+  const consulta = (conHitos: boolean) => {
+    const camposHitos = conHitos
+      ? sql`exists (select 1 from hitos_sala h
+              where h.sala_id = s.id and h.tipo = 'instalacion') as instalada,
+            exists (select 1 from hitos_sala h
+              where h.sala_id = s.id and h.tipo = 'entrega') as entregada`
+      : sql`false as instalada, false as entregada`;
+
+    return proyectoId
+      ? sql<Fila[]>`
+          select s.*, sd.nombre as sede, l.nombre as localizacion,
+                 p.id as proyecto_id, p.nombre as proyecto,
+                 (select count(*) from conexiones c where c.sala_id = s.id) as n_conexiones,
+                 ${camposHitos}
+          from salas s
+          left join sedes sd on sd.id = s.sede_id
+          left join localizaciones l on l.id = s.localizacion_id
+          left join proyectos p on p.id = l.proyecto_id
+          where p.id = ${proyectoId}
+          order by s.nombre`
+      : sql<Fila[]>`
+          select s.*, sd.nombre as sede, l.nombre as localizacion,
+                 p.id as proyecto_id, p.nombre as proyecto,
+                 (select count(*) from conexiones c where c.sala_id = s.id) as n_conexiones,
+                 ${camposHitos}
+          from salas s
+          left join sedes sd on sd.id = s.sede_id
+          left join localizaciones l on l.id = s.localizacion_id
+          left join proyectos p on p.id = l.proyecto_id
+          order by s.nombre`;
+  };
+
+  const filas = await consulta(true).catch((e) => {
+    if ((e as { code?: string }).code !== '42P01') throw e;
+    return consulta(false);
+  });
+  return filas.map(aSalaConEstado);
+}
+
 /**
  * Las sedes que ya existen, para ofrecerlas al escribir una sala nueva. Es
  * texto libre con sugerencias: si el departamento abre una sede, se escribe y

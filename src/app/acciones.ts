@@ -380,9 +380,23 @@ export async function anadirEquipo(datos: FormData) {
   revalidatePath('/salas/[id]', 'layout');
 }
 
+/**
+ * La sala real de un equipo, leída de la fila (no del `sala_id` que manda el
+ * formulario). Con el `sala_id` del cliente bastaba mandar el de una sala
+ * abierta —o inventado— junto al `id` de un equipo de una sala cerrada: la
+ * guarda comprobaba el cierre de la sala equivocada y el `update`/`delete`
+ * de debajo no llevaba `sala_id` en el `where`, así que igual escribía.
+ */
+async function salaIdDeEquipo(equipoId: string): Promise<string | null> {
+  const [f] = await sql<Array<{ sala_id: string }>>`
+    select sala_id from sala_equipos where id = ${equipoId}`;
+  return f ? String(f.sala_id) : null;
+}
+
 export async function guardarEquipo(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
-  if (await proyectoCerradoDeSala(salaId)) return;
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeEquipo(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
   await sql`
     update sala_equipos set
       nombre   = ${texto(datos.get('nombre')) ?? 'Equipo'},
@@ -392,26 +406,28 @@ export async function guardarEquipo(datos: FormData) {
       y_m      = ${numero(datos.get('y_m')) ?? 0},
       z_m      = ${numero(datos.get('z_m')) ?? 0},
       toma_red_id = ${texto(datos.get('toma_red_id'))}
-    where id = ${String(datos.get('id'))}`;
+    where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 
 /** Suma o resta unidades de un equipo sin abrir el formulario completo. */
 export async function ajustarCantidadEquipo(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
-  if (await proyectoCerradoDeSala(salaId)) return;
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeEquipo(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
   const paso = Number(datos.get('paso')) || 1;
   await sql`
     update sala_equipos
     set cantidad = greatest(1, cantidad + ${paso})
-    where id = ${String(datos.get('id'))}`;
+    where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 
 export async function borrarEquipo(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
-  if (await proyectoCerradoDeSala(salaId)) return;
-  await sql`delete from sala_equipos where id = ${String(datos.get('id'))}`;
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeEquipo(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
+  await sql`delete from sala_equipos where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 

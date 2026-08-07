@@ -9,13 +9,31 @@ import { ETIQUETA_RUTA, type Sala } from '@/lib/tipos';
  * El formulario largo no domina el primer pantallazo: por defecto se ve una
  * lectura compacta con `Editar medidas`, que despliega el formulario por
  * `?editar=medidas` (Atrás/Adelante funcionan, no depende de JavaScript).
+ *
+ * Con la obra cerrada la sala es de solo lectura: el formulario no se
+ * despliega aunque la dirección lleve `?editar=medidas` a mano, y no hay
+ * enlace "Editar medidas" que lo sugiera. `guardarSala` rechaza el envío en
+ * el servidor de todos modos; esto es solo para no enseñar un control que no
+ * hace nada.
  */
-export function Medidas({ sala, editar = false }: { sala: Sala; editar?: boolean }) {
-  if (!editar) {
+export function Medidas({
+  sala,
+  editar = false,
+  cerrado = false,
+}: {
+  sala: Sala;
+  editar?: boolean;
+  cerrado?: boolean;
+}) {
+  if (!editar || cerrado) {
     return (
       <Tarjeta
         titulo="Medidas y ruta"
-        acciones={<Enlace href={`/salas/${sala.id}?editar=medidas`}>Editar medidas</Enlace>}
+        acciones={
+          cerrado ? undefined : (
+            <Enlace href={`/salas/${sala.id}?editar=medidas`}>Editar medidas</Enlace>
+          )
+        }
       >
         <ListaClaveValor
           items={[

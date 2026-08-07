@@ -301,6 +301,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
 
 export async function guardarSala(datos: FormData) {
   const id = String(datos.get('id'));
+  if (await proyectoCerradoDeSala(id)) return;
   const sede = await sedeId(texto(datos.get('sede')));
   await sql`
     update salas set
@@ -327,7 +328,14 @@ export async function guardarSala(datos: FormData) {
   revalidatePath('/salas');
 }
 
-/** Una obra cerrada es de solo lectura: sus salas no se borran sin reabrirla. */
+/**
+ * Una obra cerrada es de solo lectura: sus salas no se borran, ni se editan
+ * sus medidas ni su equipamiento, sin reabrirla. Ocultar los controles no
+ * basta —la petición se puede repetir a mano sin pasar por la interfaz—, así
+ * que la guarda vive aquí y la comparten todas las acciones que tocan la
+ * sala. Una sala legado sin `localizacion_id` nunca casa con el join y sigue
+ * editable: es el mismo criterio que ya usaba `borrarSala`.
+ */
 async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
   const [f] = await sql<Array<{ cerrado: boolean }>>`
     select exists (
@@ -350,6 +358,7 @@ export async function borrarSala(datos: FormData) {
 // ------------------------------------------------------------------ equipos
 export async function anadirEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
+  if (await proyectoCerradoDeSala(salaId)) return;
   const articuloId = texto(datos.get('articulo_id'));
 
   let nombre = texto(datos.get('nombre'));
@@ -373,6 +382,7 @@ export async function anadirEquipo(datos: FormData) {
 
 export async function guardarEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
+  if (await proyectoCerradoDeSala(salaId)) return;
   await sql`
     update sala_equipos set
       nombre   = ${texto(datos.get('nombre')) ?? 'Equipo'},
@@ -389,6 +399,7 @@ export async function guardarEquipo(datos: FormData) {
 /** Suma o resta unidades de un equipo sin abrir el formulario completo. */
 export async function ajustarCantidadEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
+  if (await proyectoCerradoDeSala(salaId)) return;
   const paso = Number(datos.get('paso')) || 1;
   await sql`
     update sala_equipos
@@ -399,6 +410,7 @@ export async function ajustarCantidadEquipo(datos: FormData) {
 
 export async function borrarEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
+  if (await proyectoCerradoDeSala(salaId)) return;
   await sql`delete from sala_equipos where id = ${String(datos.get('id'))}`;
   revalidatePath('/salas/[id]', 'layout');
 }

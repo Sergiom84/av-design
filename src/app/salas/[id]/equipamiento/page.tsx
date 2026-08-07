@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { obtenerSala } from '@/lib/datos';
+import { hitosDeProyecto } from '@/lib/datos-ciclo';
+import { proyectoCerrado } from '@/lib/ciclo-vida';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Equipamiento } from '@/components/sala/equipamiento';
 import { GuardarComoPlantilla } from '@/components/sala/guardar-como-plantilla';
@@ -22,10 +24,13 @@ export default async function EquipamientoSala({
   if (!completa) notFound();
 
   const { sala, equipos, tomas } = completa;
+  const cerrado = sala.proyecto_id
+    ? proyectoCerrado(await hitosDeProyecto(sala.proyecto_id))
+    : false;
 
   return (
     <div className="space-y-6 [&>*]:min-w-0">
-      <Equipamiento salaId={sala.id} equipos={equipos} tomas={tomas} />
+      <Equipamiento salaId={sala.id} equipos={equipos} tomas={tomas} cerrado={cerrado} />
       <TomasDeRed salaId={sala.id} tomas={tomas} equipos={equipos} />
       <GuardarComoPlantilla sala={sala} equipos={equipos} />
     </div>

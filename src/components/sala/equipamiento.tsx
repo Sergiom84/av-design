@@ -1,4 +1,4 @@
-import { Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
 import {
   ajustarCantidadEquipo,
   anadirEquipo,
@@ -18,15 +18,22 @@ import { ETIQUETA_EXTREMO, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
  * No es una tabla técnica como el cable schedule: cada equipo es una fila que
  * envuelve, no una columna fija con scroll lateral, así que en móvil se apila
  * en vez de obligar a desplazar.
+ *
+ * Con la obra cerrada no se añaden ni tocan equipos: se enseña una lectura
+ * sin formularios. Las acciones (`anadirEquipo`, `guardarEquipo`,
+ * `ajustarCantidadEquipo`, `borrarEquipo`) también rechazan el envío en el
+ * servidor; esto evita mostrar controles que no harían nada.
  */
 export function Equipamiento({
   salaId,
   equipos,
   tomas,
+  cerrado = false,
 }: {
   salaId: string;
   equipos: EquipoEnSala[];
   tomas: TomaRed[];
+  cerrado?: boolean;
 }) {
   const opcionesToma = (
     <>
@@ -39,6 +46,36 @@ export function Equipamiento({
       ))}
     </>
   );
+
+  if (cerrado) {
+    return (
+      <Tarjeta titulo="Equipos en la sala">
+        <div className="mb-4">
+          <Aviso tono="neutro">
+            El proyecto está cerrado: el equipamiento no se toca. Para corregir algo se
+            reabre la obra borrando el cierre desde su portada.
+          </Aviso>
+        </div>
+        {equipos.length === 0 ? (
+          <Vacio>Sin equipos.</Vacio>
+        ) : (
+          <div className="divide-y divide-linea-suave">
+            {equipos.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
+                <span className="font-medium">
+                  {e.cantidad}× {e.nombre}
+                </span>
+                <span className="text-tinta-tenue">{ETIQUETA_EXTREMO[e.extremo]}</span>
+                <span className="text-tinta-tenue tabular-nums">
+                  X {e.posicion.x_m} · Y {e.posicion.y_m} · Z {e.posicion.z_m}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Tarjeta>
+    );
+  }
 
   return (
     <Tarjeta titulo="Equipos en la sala">

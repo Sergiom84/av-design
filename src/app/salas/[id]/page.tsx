@@ -108,7 +108,7 @@ export default async function ResumenSala({
         <EstadoMontaje puntos={puntosMontaje} />
       </div>
 
-      <Medidas sala={sala} editar={editar === 'medidas'} />
+      <Medidas sala={sala} editar={editar === 'medidas'} cerrado={cerrado} />
 
       <CicloDeVidaSala
         salaId={sala.id}

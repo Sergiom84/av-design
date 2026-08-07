@@ -59,10 +59,20 @@ moduloInterno._load = (request, ...resto) => {
 
 const sql = postgres(process.env.DATABASE_URL, { max: 1, ssl: false });
 
-const SEÑAL_REVALIDATE_FUERA_DE_PETICION = 'static generation store missing';
+// Mensaje y código exactos que lanza `revalidate()` de Next fuera de una
+// petición real (`node_modules/next/dist/server/web/spec-extension/revalidate.js`):
+// `Invariant: static generation store missing in ${expression}`, código E263.
+// Se ancla al prefijo y al código, no a un `includes()` genérico, para no
+// tragarse por error otra cosa que contenga esas palabras sueltas.
+const PREFIJO_SEÑAL_REVALIDATE = 'Invariant: static generation store missing in ';
+const CODIGO_SEÑAL_REVALIDATE = 'E263';
 
 let ok = true;
+let total = 0;
+let pasadas = 0;
 const afirmar = (cond: boolean, mensaje: string) => {
+  total += 1;
+  if (cond) pasadas += 1;
   console.log(`${cond ? 'OK   ' : 'FALLO'} ${mensaje}`);
   if (!cond) ok = false;
 };
@@ -73,11 +83,18 @@ const proyectoId = randomUUID();
 const localizacionId = randomUUID();
 const salaCerradaId = randomUUID();
 const salaLegadoId = randomUUID();
+// Filas propias para `borrarSala`: es destructiva, así que no puede compartir
+// sala con las comprobaciones de sala_id suplantado de arriba (le borrarían
+// el señuelo que necesitan).
+const salaCerradaBorrarId = randomUUID();
+const salaLegadoBorrarId = randomUUID();
 
 async function limpiar() {
   // `sala_equipos` tiene `on delete cascade` desde `salas` (db/schema.sql):
   // borrar las salas ya limpia sus equipos, altas incluidas.
-  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId})`;
+  await sql`delete from salas where id in (
+    ${salaCerradaId}, ${salaLegadoId}, ${salaCerradaBorrarId}, ${salaLegadoBorrarId}
+  )`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
   await sql`delete from localizaciones where id = ${localizacionId}`;
   await sql`delete from proyectos where id = ${proyectoId}`;
@@ -98,6 +115,10 @@ async function preparar() {
   // sala_id suplantado.
   await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
             values (${salaLegadoId}, 'TEST sala legado', 3, 3, 3)`;
+  await sql`insert into salas (id, nombre, localizacion_id, largo_m, ancho_m, alto_m)
+            values (${salaCerradaBorrarId}, 'TEST sala cerrada (borrar)', ${localizacionId}, 3, 3, 3)`;
+  await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
+            values (${salaLegadoBorrarId}, 'TEST sala legado (borrar)', 3, 3, 3)`;
 }
 
 /**
@@ -120,7 +141,7 @@ async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
 try {
   await preparar();
 
-  const { guardarSala, anadirEquipo, guardarEquipo, ajustarCantidadEquipo, borrarEquipo } =
+  const { guardarSala, anadirEquipo, guardarEquipo, ajustarCantidadEquipo, borrarEquipo, borrarSala } =
     await import('../src/app/acciones');
 
   /**
@@ -133,7 +154,10 @@ try {
       await accion(datos);
     } catch (e) {
       const mensaje = e instanceof Error ? e.message : String(e);
-      if (!mensaje.includes(SEÑAL_REVALIDATE_FUERA_DE_PETICION)) throw e;
+      const codigo = (e as { ['__NEXT_ERROR_CODE']?: string })?.['__NEXT_ERROR_CODE'];
+      const esSeñalEsperada =
+        mensaje.startsWith(PREFIJO_SEÑAL_REVALIDATE) && codigo === CODIGO_SEÑAL_REVALIDATE;
+      if (!esSeñalEsperada) throw e;
       console.log(`  (la acción llegó más allá de la guarda: ${mensaje})`);
     }
   };
@@ -296,10 +320,36 @@ try {
     // Bloqueado: `tras` sigue igual que `antes`. Bypass: `tras` es null.
     cambio: (antes, tras) => antes != null && tras == null,
   });
+
+  // ------------------------------------------------------------- borrarSala
+
+  console.log('\n=== borrarSala ===');
+  const existeSala = async (id: string) => {
+    const [f] = await sql<Array<{ n: string }>>`
+      select count(*)::text as n from salas where id = ${id}`;
+    return Number(f.n) === 1;
+  };
+  {
+    await invocar(borrarSala, (() => {
+      const fd = new FormData();
+      fd.set('id', salaCerradaBorrarId);
+      return fd;
+    })());
+    afirmar(await existeSala(salaCerradaBorrarId), 'proyecto cerrado: no borra');
+  }
+  {
+    await invocar(borrarSala, (() => {
+      const fd = new FormData();
+      fd.set('id', salaLegadoBorrarId);
+      return fd;
+    })());
+    afirmar(!(await existeSala(salaLegadoBorrarId)), 'sala legado: sí borra');
+  }
 } finally {
   await limpiar();
   await sql.end();
 }
 
-console.log(ok ? '\nTodo se comporta como se espera.' : '\nHay un fallo: revisar arriba.');
+console.log(`\n${pasadas}/${total} comprobaciones correctas.`);
+console.log(ok ? 'Todo se comporta como se espera.' : 'Hay un fallo: revisar arriba.');
 if (!ok) process.exitCode = 1;

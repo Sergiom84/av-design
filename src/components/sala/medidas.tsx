@@ -1,14 +1,44 @@
-import { Boton, Campo, Tarjeta } from '@/components/ui';
+import { Boton, Campo, Enlace, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { guardarSala } from '@/app/acciones';
 import { ETIQUETA_RUTA, type Sala } from '@/lib/tipos';
 
 /**
  * La geometría de la sala. Es el dato que XTEN-AV no pide en ningún punto de
  * su flujo (docs/06, apartado 6) y sin el cual no hay metros que calcular.
+ *
+ * El formulario largo no domina el primer pantallazo: por defecto se ve una
+ * lectura compacta con `Editar medidas`, que despliega el formulario por
+ * `?editar=medidas` (Atrás/Adelante funcionan, no depende de JavaScript).
  */
-export function Medidas({ sala }: { sala: Sala }) {
+export function Medidas({ sala, editar = false }: { sala: Sala; editar?: boolean }) {
+  if (!editar) {
+    return (
+      <Tarjeta
+        titulo="Medidas y ruta"
+        acciones={<Enlace href={`/salas/${sala.id}?editar=medidas`}>Editar medidas</Enlace>}
+      >
+        <ListaClaveValor
+          items={[
+            { clave: 'Sede', valor: sala.sede || '—' },
+            { clave: 'Edificio · Nivel', valor: [sala.edificio, sala.nivel].filter(Boolean).join(' · ') || '—' },
+            { clave: 'Tipología', valor: sala.tipologia || '—' },
+            { clave: 'Aforo', valor: sala.aforo ?? '—' },
+            {
+              clave: 'Largo × ancho × alto',
+              valor:
+                sala.largo_m && sala.ancho_m && sala.alto_m
+                  ? `${sala.largo_m} × ${sala.ancho_m} × ${sala.alto_m} m`
+                  : 'sin medir',
+            },
+            { clave: 'Ruta por defecto', valor: ETIQUETA_RUTA[sala.ruta_por_defecto] },
+          ]}
+        />
+      </Tarjeta>
+    );
+  }
+
   return (
-    <Tarjeta titulo="Medidas y ruta">
+    <Tarjeta titulo="Medidas y ruta" acciones={<Enlace href={`/salas/${sala.id}`}>Cancelar</Enlace>}>
       <form action={guardarSala} className="space-y-3">
         <input type="hidden" name="id" value={sala.id} />
         <Campo etiqueta="Nombre">

@@ -1,18 +1,12 @@
 import Link from 'next/link';
-import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Estado, Tarjeta, Vacio } from '@/components/ui';
 import { crearLocalizacion } from '@/app/acciones-proyectos';
 import {
   estadoDeSalaEnPortada,
   ETIQUETA_ESTADO_SALA,
+  TONO_ESTADO_SALA,
   type GrupoLocalizacion,
 } from '@/lib/proyecto';
-
-const CLASE_ESTADO: Record<string, string> = {
-  sin_medidas: 'bg-alerta-suave text-alerta',
-  en_diseno: 'bg-superficie-hundida text-tinta-tenue',
-  instalada: 'bg-acento-suave text-acento-fuerte',
-  entregada: 'bg-acento-suave text-exito',
-};
 
 /**
  * Las salas de la obra agrupadas por localización. Cada grupo es una tarjeta;
@@ -69,11 +63,9 @@ export function LocalizacionesDelProyecto({
                       </td>
                       <td className="num">{s.n_conexiones}</td>
                       <td>
-                        <span
-                          className={`inline-block rounded-md px-2 py-0.5 text-[0.75rem] ${CLASE_ESTADO[estado]}`}
-                        >
+                        <Estado tono={TONO_ESTADO_SALA[estado]}>
                           {ETIQUETA_ESTADO_SALA[estado]}
-                        </span>
+                        </Estado>
                       </td>
                     </tr>
                   );

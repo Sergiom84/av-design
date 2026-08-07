@@ -13,6 +13,7 @@ import {
 import { construirTablaCables } from '@/lib/cable-schedule';
 import { TablaCables } from '@/components/cable-schedule/tabla-cables';
 import { CroquisSala } from '@/components/croquis/croquis-sala';
+import { EsquemaSala } from '@/components/diagrama/esquema-sala';
 import { revisarMontaje } from '@/lib/revision';
 import { EstadoMontaje } from '@/components/revision/estado-montaje';
 import { revisionesDeSala } from '@/lib/datos-checkin';
@@ -36,10 +37,14 @@ export const dynamic = 'force-dynamic';
  * `src/components/sala/` salvo la tabla de cables, que es el entregable y
  * tiene carpeta propia en `src/components/cable-schedule/`.
  */
-export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) {
+export default async function DetalleSala({
+  params,
+  searchParams,
+}: PageProps<'/salas/[id]'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
+  const { puertos: vistaPuertos } = await searchParams;
   const completa = await obtenerSala(id);
   if (!completa) notFound();
 
@@ -153,6 +158,35 @@ export default async function DetalleSala({ params }: PageProps<'/salas/[id]'>) 
             }
           />
           <EstadoMontaje puntos={puntosMontaje} />
+          {/*
+            El esquema de bloques usa los mismos identificadores que la tabla
+            de cables: las dos vistas salen de `identificadoresDeCable()`.
+            Los puertos del catálogo se agrupan por artículo aquí, que es
+            donde ya están cargados.
+          */}
+          <EsquemaSala
+            salaId={sala.id}
+            todosLosPuertos={vistaPuertos === 'todos'}
+            entrada={{
+              equipos,
+              conexiones,
+              puertosPorArticulo: puertos.reduce((mapa, p) => {
+                const lista = mapa.get(p.articulo_id) ?? [];
+                lista.push(p);
+                mapa.set(p.articulo_id, lista);
+                return mapa;
+              }, new Map<string, (typeof puertos)[number][]>()),
+              descripcionArticulo: new Map(
+                equipos.map((e) => {
+                  const a = porId.get(e.articulo_id);
+                  return [e.articulo_id, `${a?.marca ?? ''} ${a?.modelo ?? ''}`.trim()];
+                }),
+              ),
+              categoriaArticulo: new Map(
+                equipos.map((e) => [e.articulo_id, porId.get(e.articulo_id)?.categoria ?? '']),
+              ),
+            }}
+          />
           <TablaCables filas={filasCable} nombreSala={sala.nombre} />
           <ResultadoDelCable resultados={resultados} sinMedidas={sinMedidas} />
           <MaterialAComprar material={material} canalizacion={canalizacion} />

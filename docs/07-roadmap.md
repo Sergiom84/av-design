@@ -92,7 +92,22 @@ agrupar; ordenar el buscador de artículo por frecuencia de uso real.
 Para `Experimental`: aprobación humana explícita, submittals compilados,
 export DXF del croquis, fichaje de horas de campo.
 
-### R2 · Diagrama de conexiones, solo lectura
+### R2 · Diagrama de conexiones, solo lectura — HECHO (7-8-2026)
+
+Implementado: `src/lib/diagrama.ts` (lógica pura, 16 pruebas) construye la
+escena —bloques por columnas según el flujo de señal, puertos por lado,
+líneas ortogonales con carriles— y `src/components/diagrama/` la pinta en SVG
+desde el servidor, dentro de la ficha de sala. El bloque copia la anatomía de
+XTEN-AV: categoría encima, serigrafía dentro, conector fuera del borde, marca
+y modelo al pie. El identificador y el color de la línea salen de
+`identificadoresDeCable()` y de la señal: mismas fuentes que la tabla de
+cables. El conmutador "solo puertos con cable / todos" va por dirección
+(`?puertos=todos`), y los repetidos se etiquetan `Pantalla 1`, `Pantalla 2`
+sin renumeración. Queda para después: descargarlo como fichero (hoy se
+imprime con la página) y afinar el enrutado cuando haya salas con muchos
+cruces.
+
+Lo planificado era:
 
 El esquema de bloques que XTEN-AV llama xDraw, hecho con los datos que ya
 existen: cada equipo un bloque con sus puertos serigrafiados, cada conexión una

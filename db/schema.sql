@@ -817,3 +817,64 @@ create index if not exists plantilla_conexiones_plantilla_idx
 
 comment on table plantilla_conexiones is
   'Tiradas tipo de una plantilla. La sala nueva las copia a `conexiones` con sus propios equipos.';
+
+-- =====================================================================
+-- Jerarquia de obra · Proyecto -> Localizaciones -> Salas
+--
+-- Hasta aqui las salas colgaban directas de la aplicacion. La obra real
+-- agrupa salas: un proyecto (la obra) tiene localizaciones (edificio,
+-- planta, campus) y cada localizacion tiene salas. Es la jerarquia de
+-- XTEN-AV (docs/06, L496) que faltaba.
+--
+-- Una sala sin proyecto es un estado valido, no una deuda: todo lo
+-- creado antes de esta ampliacion se queda con localizacion_id nulo y
+-- se puede adoptar desde la portada del proyecto cuando toque.
+-- ---------------------------------------------------------------------
+create table if not exists proyectos (
+  id             uuid primary key default gen_random_uuid(),
+  nombre         text not null unique,
+  codigo         text,
+  sede_id        uuid references sedes on delete set null,
+  notas          text,
+  creado_en      timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+
+create index if not exists proyectos_sede_idx on proyectos (sede_id);
+
+drop trigger if exists proyectos_actualizado on proyectos;
+create trigger proyectos_actualizado before update on proyectos
+  for each row execute function tocar_actualizado_en();
+
+comment on table proyectos is
+  'La obra. Agrupa localizaciones y salas; sin estado editable: el estado se deriva de sus hitos.';
+
+create table if not exists localizaciones (
+  id           uuid primary key default gen_random_uuid(),
+  proyecto_id  uuid not null references proyectos on delete cascade,
+  nombre       text not null,
+  notas        text,
+  creado_en    timestamptz not null default now(),
+  unique (proyecto_id, nombre)
+);
+
+create index if not exists localizaciones_proyecto_idx on localizaciones (proyecto_id);
+
+comment on table localizaciones is
+  'Agrupacion de salas dentro de un proyecto: edificio, planta, campus. Cada proyecto nace con una "Sin asignar".';
+
+alter table salas add column if not exists localizacion_id uuid
+  references localizaciones on delete set null;
+
+create index if not exists salas_localizacion_idx on salas (localizacion_id);
+
+comment on column salas.localizacion_id is
+  'Nula = sala sin proyecto (todo lo anterior a la jerarquia de obra). Estado valido, no error. Borrar el proyecto deja la sala viva y sin proyecto.';
+
+alter table pedidos add column if not exists proyecto_id uuid
+  references proyectos on delete set null;
+
+create index if not exists pedidos_proyecto_idx on pedidos (proyecto_id);
+
+comment on column pedidos.proyecto_id is
+  'Para que obra se pide. Un pedido puede abastecer varias salas del proyecto; el reparto entre salas lo hacen las reservas. sala_id se conserva para el pedido que nace del que-falta de una sala.';

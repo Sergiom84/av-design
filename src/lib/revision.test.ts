@@ -18,6 +18,7 @@ const sala = (extra: Partial<Sala> = {}): Sala => ({
   id: 's1',
   sede_id: null,
   sede: null,
+  localizacion_id: null,
   edificio: null,
   nivel: null,
   codigo: null,

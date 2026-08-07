@@ -79,6 +79,12 @@ export interface Sala {
    * ningún cálculo, y obligarlo rompería a quien construye una sala a mano.
    */
   sede?: string | null;
+  /** Nula = sala de antes de la jerarquía de obra. Legado válido, no error. */
+  localizacion_id: string | null;
+  /** Nombre de la localización y de su proyecto, resueltos por la consulta. */
+  localizacion?: string | null;
+  proyecto_id?: string | null;
+  proyecto?: string | null;
   edificio: string | null;
   nivel: string | null;
   codigo: string | null;

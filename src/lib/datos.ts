@@ -59,6 +59,10 @@ function aSala(f: Fila): Sala {
     id: String(f.id),
     sede_id: s(f.sede_id),
     sede: s(f.sede),
+    localizacion_id: s(f.localizacion_id),
+    localizacion: s(f.localizacion),
+    proyecto_id: s(f.proyecto_id),
+    proyecto: s(f.proyecto),
     edificio: s(f.edificio),
     nivel: s(f.nivel),
     codigo: s(f.codigo),
@@ -449,12 +453,26 @@ export async function tiradasDePlantillas(): Promise<TiradaPlantilla[]> {
   }));
 }
 
-export async function listarSalas(): Promise<Sala[]> {
-  const filas = await sql<Fila[]>`
-    select s.*, sd.nombre as sede
-    from salas s
-    left join sedes sd on sd.id = s.sede_id
-    order by s.nombre`;
+export async function listarSalas(proyectoId?: string): Promise<Sala[]> {
+  // Los joins son left a propósito: una sala sin proyecto es legado válido.
+  const filas = proyectoId
+    ? await sql<Fila[]>`
+        select s.*, sd.nombre as sede, l.nombre as localizacion,
+               p.id as proyecto_id, p.nombre as proyecto
+        from salas s
+        left join sedes sd on sd.id = s.sede_id
+        left join localizaciones l on l.id = s.localizacion_id
+        left join proyectos p on p.id = l.proyecto_id
+        where p.id = ${proyectoId}
+        order by s.nombre`
+    : await sql<Fila[]>`
+        select s.*, sd.nombre as sede, l.nombre as localizacion,
+               p.id as proyecto_id, p.nombre as proyecto
+        from salas s
+        left join sedes sd on sd.id = s.sede_id
+        left join localizaciones l on l.id = s.localizacion_id
+        left join proyectos p on p.id = l.proyecto_id
+        order by s.nombre`;
   return filas.map(aSala);
 }
 
@@ -480,9 +498,12 @@ export interface SalaCompleta {
 
 export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
   const [fila] = await sql<Fila[]>`
-    select s.*, sd.nombre as sede
+    select s.*, sd.nombre as sede, l.nombre as localizacion,
+           p.id as proyecto_id, p.nombre as proyecto
     from salas s
     left join sedes sd on sd.id = s.sede_id
+    left join localizaciones l on l.id = s.localizacion_id
+    left join proyectos p on p.id = l.proyecto_id
     where s.id = ${id}`;
   if (!fila) return null;
 

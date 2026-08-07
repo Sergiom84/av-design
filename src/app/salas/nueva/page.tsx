@@ -1,5 +1,6 @@
 import { hayConfiguracion } from '@/lib/db';
 import { listarPlantillas, listarSedes } from '@/lib/datos';
+import { listarProyectosConLocalizaciones } from '@/lib/datos-proyectos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Cabecera, Enlace } from '@/components/ui';
 import { AltaDeSala } from '@/components/sala/alta';
@@ -15,7 +16,11 @@ export default async function NuevaSala({ searchParams }: PageProps<'/salas/nuev
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { plantilla } = await searchParams;
-  const [plantillas, sedes] = await Promise.all([listarPlantillas(), listarSedes()]);
+  const [plantillas, sedes, proyectos] = await Promise.all([
+    listarPlantillas(),
+    listarSedes(),
+    listarProyectosConLocalizaciones(),
+  ]);
 
   return (
     <>
@@ -28,6 +33,7 @@ export default async function NuevaSala({ searchParams }: PageProps<'/salas/nuev
       <AltaDeSala
         plantillas={plantillas}
         sedes={sedes}
+        proyectos={proyectos}
         plantillaInicial={Array.isArray(plantilla) ? plantilla[0] : plantilla}
       />
     </>

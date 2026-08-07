@@ -20,6 +20,7 @@ import {
 const SALA: Sala = {
   id: 's1',
   sede_id: null,
+  localizacion_id: null,
   edificio: 'ÁFRICA',
   nivel: 'NIVEL 0',
   codigo: '001',

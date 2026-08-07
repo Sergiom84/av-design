@@ -7,6 +7,7 @@ import { salir } from '@/app/acciones-sesion';
 import { RUTA_ENTRADA } from '@/lib/sesion';
 import {
   IconoPanel,
+  IconoProyectos,
   IconoSalas,
   IconoPlantillas,
   IconoCheckin,
@@ -26,6 +27,7 @@ const SECCIONES: {
   Icono: ComponentType<{ className?: string }>;
 }[] = [
   { href: '/', etiqueta: 'Panel', Icono: IconoPanel },
+  { href: '/proyectos', etiqueta: 'Proyectos', Icono: IconoProyectos },
   { href: '/salas', etiqueta: 'Salas', Icono: IconoSalas },
   { href: '/plantillas', etiqueta: 'Plantillas', Icono: IconoPlantillas },
   { href: '/checkin', etiqueta: 'Check-in', Icono: IconoCheckin },

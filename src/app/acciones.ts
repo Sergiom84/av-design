@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
+import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
 
 const numero = (v: FormDataEntryValue | null): number | null => {
@@ -57,20 +58,6 @@ function extremoPorCategoria(categoria: string): string {
 }
 
 /**
- * La sede se escribe a mano y se da de alta sola. Es el `Location` de XTEN-AV
- * —lo que permite decir que esta sala está en Madrid— y no merece una pantalla
- * de mantenimiento propia mientras solo sea un nombre.
- */
-async function sedeId(nombre: string | null): Promise<string | null> {
-  if (!nombre) return null;
-  const [s] = await sql<Array<{ id: string }>>`
-    insert into sedes (nombre) values (${nombre})
-    on conflict (nombre) do update set nombre = excluded.nombre
-    returning id`;
-  return s.id;
-}
-
-/**
  * Da de alta la sala, con plantilla o sin ella, y tantas copias como se pidan.
  *
  * Dos diferencias deliberadas con el flujo de XTEN-AV (docs/06, apartados 2 y 6):
@@ -91,10 +78,28 @@ export async function crearSala(datos: FormData) {
   );
   const patronNombre = texto(datos.get('nombre')) ?? 'Sala sin nombre';
   const patronCodigo = texto(datos.get('codigo'));
-  const sede = await sedeId(texto(datos.get('sede')));
+
+  // Dentro de un proyecto la sala hereda la sede de la obra; fuera, la sede se
+  // escribe a mano como siempre. La localización manda sobre el texto libre.
+  const localizacionId = texto(datos.get('localizacion_id'));
+  let sede: string | null;
+  let proyectoId: string | null = null;
+  if (localizacionId) {
+    const [fila] = await sql<Array<{ proyecto_id: string; sede_id: string | null }>>`
+      select p.id as proyecto_id, p.sede_id
+      from localizaciones l
+      join proyectos p on p.id = l.proyecto_id
+      where l.id = ${localizacionId}`;
+    if (!fila) return;
+    proyectoId = fila.proyecto_id;
+    sede = fila.sede_id;
+  } else {
+    sede = await sedeId(texto(datos.get('sede')));
+  }
 
   const comun = {
     sede_id: sede,
+    localizacion_id: localizacionId,
     edificio: texto(datos.get('edificio')),
     nivel: texto(datos.get('nivel')),
     plantilla_id: plantillaId,
@@ -203,9 +208,17 @@ export async function crearSala(datos: FormData) {
   });
 
   revalidatePath('/salas');
+  revalidatePath('/proyectos');
   revalidatePath('/');
-  // Una sala se abre para seguir trabajando en ella; una serie de veinte, no.
-  redirect(ids.length === 1 ? `/salas/${ids[0]}` : '/salas');
+  // Una sala se abre para seguir trabajando en ella; una serie de veinte, no:
+  // la serie vuelve al listado, ya filtrado por su obra si la tiene.
+  redirect(
+    ids.length === 1
+      ? `/salas/${ids[0]}`
+      : proyectoId
+        ? `/salas?proyecto=${proyectoId}`
+        : '/salas',
+  );
 }
 
 /**

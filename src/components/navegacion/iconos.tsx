@@ -104,6 +104,14 @@ export function IconoParametros(p: Props) {
   );
 }
 
+export function IconoProyectos(p: Props) {
+  return (
+    <svg {...base(p)}>
+      <path d="M3 7a1.5 1.5 0 0 1 1.5-1.5H9l2 2h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5V7z" />
+    </svg>
+  );
+}
+
 export function IconoSalir(p: Props) {
   return (
     <svg {...base(p)}>

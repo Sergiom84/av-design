@@ -7,7 +7,14 @@ import type { Sala } from '@/lib/tipos';
  * sin medir está creada pero no calcula nada, y eso tiene que verse de un
  * vistazo desde la lista.
  */
-export function ListaDeSalas({ salas }: { salas: Sala[] }) {
+export function ListaDeSalas({
+  salas,
+  conProyecto = true,
+}: {
+  salas: Sala[];
+  /** Filtrando ya por un proyecto, repetir la columna en cada fila sobra. */
+  conProyecto?: boolean;
+}) {
   if (salas.length === 0) {
     return (
       <Tarjeta>
@@ -32,6 +39,7 @@ export function ListaDeSalas({ salas }: { salas: Sala[] }) {
         <thead>
           <tr>
             <th>Sala</th>
+            {conProyecto && <th>Proyecto</th>}
             <th>Ubicación</th>
             <th>Tipología</th>
             <th className="num">Aforo</th>
@@ -52,6 +60,17 @@ export function ListaDeSalas({ salas }: { salas: Sala[] }) {
                   </Link>
                   {s.codigo && <span className="text-tinta-tenue"> · {s.codigo}</span>}
                 </td>
+                {conProyecto && (
+                  <td>
+                    {s.proyecto_id ? (
+                      <Link href={`/salas?proyecto=${s.proyecto_id}`} className="enlace">
+                        {s.proyecto}
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                )}
                 <td>
                   {[s.sede, s.edificio, s.nivel].filter(Boolean).join(' · ') || '—'}
                 </td>

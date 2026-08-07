@@ -19,6 +19,7 @@ import type { Conexion, EquipoEnSala, Sala } from './tipos';
 const SALA_BATERIA: Sala = {
   id: 'sala-1',
   sede_id: null,
+  localizacion_id: null,
   edificio: null,
   nivel: null,
   codigo: 'BAT-006',

@@ -10,6 +10,7 @@ import {
   type PlantillaSala,
   type Ruta,
 } from '@/lib/tipos';
+import type { ProyectoConLocalizaciones } from '@/lib/datos-proyectos';
 
 export type PlantillaConEquipamiento = PlantillaSala & { lineas: LineaPlantilla[] };
 
@@ -69,10 +70,12 @@ function desdePlantilla(p: PlantillaConEquipamiento): Borrador {
 export function AltaDeSala({
   plantillas,
   sedes,
+  proyectos,
   plantillaInicial,
 }: {
   plantillas: PlantillaConEquipamiento[];
   sedes: string[];
+  proyectos: ProyectoConLocalizaciones[];
   plantillaInicial?: string;
 }) {
   const inicial = plantillas.find((p) => p.id === plantillaInicial);
@@ -84,6 +87,17 @@ export function AltaDeSala({
   const [nombre, setNombre] = useState('');
   const [codigo, setCodigo] = useState('');
   const [copias, setCopias] = useState(1);
+  const [proyectoId, setProyectoId] = useState('');
+  const [localizacionId, setLocalizacionId] = useState('');
+
+  const proyecto = proyectos.find((p) => p.id === proyectoId);
+
+  const cambiarProyecto = (id: string) => {
+    setProyectoId(id);
+    const p = proyectos.find((x) => x.id === id);
+    // Con una sola localización —la "Sin asignar" del nacimiento— se elige sola.
+    setLocalizacionId(p?.localizaciones.length === 1 ? p.localizaciones[0].id : '');
+  };
 
   const plantilla = plantillas.find((p) => p.id === plantillaId);
   const heredadas = plantilla?.lineas.filter((l) => !l.opcional) ?? [];
@@ -130,6 +144,56 @@ export function AltaDeSala({
 
         <Tarjeta titulo="Identificación">
           <div className="grid sm:grid-cols-2 gap-3">
+            {proyectos.length > 0 && (
+              <>
+                <Campo
+                  etiqueta="Proyecto"
+                  ayuda="Sin proyecto la sala se crea suelta, como hasta ahora."
+                >
+                  <select
+                    value={proyectoId}
+                    onChange={(e) => cambiarProyecto(e.target.value)}
+                    className="w-full"
+                  >
+                    <option value="">— sin proyecto —</option>
+                    {proyectos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+                {proyecto ? (
+                  <Campo
+                    etiqueta="Localización"
+                    ayuda={
+                      copias > 1
+                        ? 'Las salas de la serie caen todas en esta localización.'
+                        : undefined
+                    }
+                  >
+                    <select
+                      name="localizacion_id"
+                      required
+                      value={localizacionId}
+                      onChange={(e) => setLocalizacionId(e.target.value)}
+                      className="w-full"
+                    >
+                      {proyecto.localizaciones.length > 1 && (
+                        <option value="">Elegir localización</option>
+                      )}
+                      {proyecto.localizaciones.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                ) : (
+                  <div aria-hidden="true" className="hidden sm:block" />
+                )}
+              </>
+            )}
             <Campo
               etiqueta="Nombre"
               ayuda={
@@ -156,19 +220,30 @@ export function AltaDeSala({
                 className="w-full"
               />
             </Campo>
-            <Campo etiqueta="Sede">
-              <input
-                name="sede"
-                list="sedes-conocidas"
-                placeholder="Madrid"
-                className="w-full"
-              />
-              <datalist id="sedes-conocidas">
-                {sedes.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
-            </Campo>
+            {proyecto ? (
+              <Campo etiqueta="Sede" ayuda="Heredada del proyecto.">
+                <input
+                  value={proyecto.sede ?? '—'}
+                  readOnly
+                  disabled
+                  className="w-full"
+                />
+              </Campo>
+            ) : (
+              <Campo etiqueta="Sede">
+                <input
+                  name="sede"
+                  list="sedes-conocidas"
+                  placeholder="Madrid"
+                  className="w-full"
+                />
+                <datalist id="sedes-conocidas">
+                  {sedes.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </Campo>
+            )}
             <Campo etiqueta="Edificio">
               <input name="edificio" className="w-full" />
             </Campo>
@@ -324,6 +399,10 @@ export function AltaDeSala({
             <div className="flex justify-between gap-3">
               <dt className="t-etiqueta">Salas</dt>
               <dd className="tabular-nums">{copias}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="t-etiqueta">Proyecto</dt>
+              <dd className="text-right">{proyecto?.nombre ?? 'ninguno'}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="t-etiqueta">Plantilla</dt>

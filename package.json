@@ -15,7 +15,8 @@
     "db:migrate": "node scripts/db.mjs db/schema.sql",
     "db:seed": "node scripts/db.mjs db/seed.sql",
     "db:reset": "npm run db:up && npm run db:migrate && npm run db:seed",
-    "catalogo:normalizar": "node scripts/normalizar-catalogo.mjs"
+    "catalogo:normalizar": "node scripts/normalizar-catalogo.mjs",
+    "test:guardas-sala": "tsx scripts/verificar-guarda-equipos.mts"
   },
   "dependencies": {
     "next": "16.3.0",

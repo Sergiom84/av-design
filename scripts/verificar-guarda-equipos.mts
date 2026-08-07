@@ -1,35 +1,65 @@
 /**
- * Regresión del fallo P1: `guardarEquipo`, `ajustarCantidadEquipo` y
- * `borrarEquipo` comprobaban el cierre de la sala que mandaba el formulario
- * (`sala_id`), pero el `update`/`delete` de debajo iba solo por el `id` del
- * equipo. Un `sala_id` suplantado —de una sala abierta, o inventado— dejaba
- * pasar la guarda y escribía igual sobre un equipo de una sala cerrada.
+ * Regresión de las guardas de "proyecto cerrado" en `src/app/acciones.ts`:
+ * `guardarSala`, `anadirEquipo`, `guardarEquipo`, `ajustarCantidadEquipo` y
+ * `borrarEquipo` — el gate P1 completo, no solo el fallo de `sala_id`
+ * suplantado que lo motivó.
  *
  * No es parte de `npm test`: `npm test` es la lógica pura de `src/lib`
- * (AGENTS.md), y esto necesita Postgres real e importa `src/app/acciones.ts`
- * (código de servidor, no de librería pura). Se ejecuta a mano:
+ * (AGENTS.md), y esto necesita Postgres real e importa código de servidor.
+ * Se ejecuta con:
  *
- *   npx tsx scripts/verificar-guarda-equipos.mts
+ *   npm run test:guardas-sala
  *
- * Usa la base local de docker-compose (`DATABASE_URL` o el valor por
- * defecto de desarrollo). Crea sus propios datos de prueba (proyecto,
- * localización, dos salas y un equipo) y los borra al terminar, incluso si
- * una comprobación falla. `acciones.ts` importa `server-only`, que solo
- * resuelve dentro del bundler de Next: este script se planta un stub local
- * en `node_modules/server-only` antes de importar y lo retira al acabar.
+ * Qué comprueba, por acción:
+ * - Proyecto cerrado: la acción no escribe nada. (Negativo.)
+ * - Sala legado (sin `localizacion_id`, "legado válido" según AGENTS.md):
+ *   la acción SÍ escribe. Sin esto, una guarda rota que devolviera siempre
+ *   sin hacer nada pasaría igual la comprobación anterior — es el control
+ *   positivo que impide que las acciones se conviertan en no-op permanente.
+ * - Para `guardarEquipo`, `ajustarCantidadEquipo` y `borrarEquipo`: un
+ *   `sala_id` suplantado (una sala real, abierta, que no es la del equipo)
+ *   o inventado (no existe ninguna sala con ese id) no permite tocar un
+ *   equipo de la sala cerrada. Es el fallo original: la guarda comprobaba
+ *   el cierre de la sala que mandaba el formulario, no la del equipo.
+ *
+ * Reglas de esta prueba:
+ * - No escribe, sobrescribe ni borra `node_modules/server-only`. Sin
+ *   `"type": "module"` en `package.json`, `tsx` carga `src/app/acciones.ts`
+ *   como CommonJS, así que `import 'server-only'` de `src/lib/db.ts` llega a
+ *   `Module._load`, no al grafo ESM. Se intercepta ahí, en memoria, para el
+ *   único especificador `'server-only'`: la misma técnica que usan
+ *   `proxyquire`/`mock-require` para simular un módulo sin tocar el disco.
+ *   Nada se escribe en `node_modules` en ningún momento de esta prueba.
+ * - Solo se tolera un error: el `Invariant: static generation store
+ *   missing` que lanza `revalidatePath()` de Next fuera de una petición
+ *   real, y solo cuando aparece — es la señal de que la acción llegó más
+ *   allá de la guarda y escribió. Cualquier otro error hace fallar la
+ *   prueba entera (no se traga nada más).
+ * - La limpieza (`finally`) borra sus propios datos de prueba aunque una
+ *   comprobación falle, y nada más: un proyecto cerrado con su localización
+ *   y su sala, una sala legado aparte, y cascada de Postgres para todos los
+ *   equipos que se van creando por sub-caso.
  */
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import Module from 'node:module';
+import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 
 process.env.DATABASE_URL ??= 'postgres://av_design:av_design_local@localhost:5433/av_design';
 
-const RUTA_STUB = 'node_modules/server-only';
-mkdirSync(RUTA_STUB, { recursive: true });
-writeFileSync(`${RUTA_STUB}/package.json`, '{"name":"server-only","main":"index.js"}');
-writeFileSync(`${RUTA_STUB}/index.js`, 'module.exports = {};\n');
+// Intercepta únicamente 'server-only' en el `require()` de CommonJS, en
+// memoria, para el ciclo de vida de este proceso. No toca `node_modules`.
+type ModuloConLoad = { _load: (request: string, ...resto: unknown[]) => unknown };
+const moduloInterno = Module as unknown as ModuloConLoad;
+const cargarOriginal = moduloInterno._load;
+moduloInterno._load = (request, ...resto) => {
+  if (request === 'server-only') return {};
+  return cargarOriginal.call(Module, request, ...resto);
+};
 
 const sql = postgres(process.env.DATABASE_URL, { max: 1, ssl: false });
+
+const SEÑAL_REVALIDATE_FUERA_DE_PETICION = 'static generation store missing';
 
 let ok = true;
 const afirmar = (cond: boolean, mensaje: string) => {
@@ -37,118 +67,239 @@ const afirmar = (cond: boolean, mensaje: string) => {
   if (!cond) ok = false;
 };
 
-const proyectoId = crypto.randomUUID();
-const localizacionId = crypto.randomUUID();
-const salaCerradaId = crypto.randomUUID();
-const salaSenueloId = crypto.randomUUID();
-const equipoId = crypto.randomUUID();
+// ------------------------------------------------------------------ datos
+
+const proyectoId = randomUUID();
+const localizacionId = randomUUID();
+const salaCerradaId = randomUUID();
+const salaLegadoId = randomUUID();
 
 async function limpiar() {
-  await sql`delete from sala_equipos where id = ${equipoId}`;
-  await sql`delete from salas where id in (${salaCerradaId}, ${salaSenueloId})`;
+  // `sala_equipos` tiene `on delete cascade` desde `salas` (db/schema.sql):
+  // borrar las salas ya limpia sus equipos, altas incluidas.
+  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId})`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
   await sql`delete from localizaciones where id = ${localizacionId}`;
   await sql`delete from proyectos where id = ${proyectoId}`;
 }
 
-try {
+async function preparar() {
   await limpiar(); // por si quedó algo de una ejecución anterior interrumpida
 
   await sql`insert into proyectos (id, nombre) values (${proyectoId}, 'TEST-guarda-equipos')`;
-  await sql`insert into localizaciones (id, proyecto_id, nombre) values (${localizacionId}, ${proyectoId}, 'TEST')`;
+  await sql`insert into localizaciones (id, proyecto_id, nombre)
+            values (${localizacionId}, ${proyectoId}, 'TEST')`;
   await sql`insert into hitos_proyecto (proyecto_id, tipo, fecha) values (${proyectoId}, 'cierre', now())`;
   await sql`insert into salas (id, nombre, localizacion_id, largo_m, ancho_m, alto_m)
             values (${salaCerradaId}, 'TEST sala cerrada', ${localizacionId}, 3, 3, 3)`;
-  // Sala señuelo: existe, está abierta (sin proyecto), y es la que se manda
-  // como `sala_id` en el ataque en vez de la real.
+  // Sala legado: sin localizacion_id, como cualquier sala de antes de la
+  // jerarquía Proyecto → Localización → Sala. Sirve de control positivo
+  // (sigue editable) y de sala señuelo abierta para los ataques de
+  // sala_id suplantado.
   await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
-            values (${salaSenueloId}, 'TEST sala señuelo abierta', 3, 3, 3)`;
-  await sql`insert into sala_equipos (id, sala_id, nombre, cantidad, extremo, x_m, y_m, z_m)
-            values (${equipoId}, ${salaCerradaId}, 'TEST equipo', 1, 'pared', 0, 0, 0)`;
+            values (${salaLegadoId}, 'TEST sala legado', 3, 3, 3)`;
+}
 
-  const { guardarEquipo, ajustarCantidadEquipo, borrarEquipo } = await import(
-    '../src/app/acciones'
-  );
+/**
+ * Un equipo nuevo por sub-caso, no una fila compartida: `borrarEquipo`
+ * destruye la fila cuando la guarda falla, así que reutilizar el mismo
+ * equipo entre sub-casos de ataque encadenaría un falso OK (el segundo
+ * ataque "no cambia nada" porque el primero ya lo había borrado, no porque
+ * la guarda lo bloqueara). Cada sub-caso parte de un equipo propio.
+ */
+async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
+  const id = randomUUID();
+  await sql`
+    insert into sala_equipos (id, sala_id, nombre, cantidad, extremo, x_m, y_m, z_m)
+    values (${id}, ${salaId}, ${etiqueta}, 1, 'pared', 0, 0, 0)`;
+  return id;
+}
 
-  // Si la guarda fallara, la acción seguiría hasta `revalidatePath`, que
-  // fuera de una petición real de Next lanza un error propio (no de
-  // permisos). Se traga aquí para poder comprobar el estado de la fila de
-  // todas formas: lo que importa es qué quedó escrito, no si Next se quejó.
+// ---------------------------------------------------------------- ejecución
+
+try {
+  await preparar();
+
+  const { guardarSala, anadirEquipo, guardarEquipo, ajustarCantidadEquipo, borrarEquipo } =
+    await import('../src/app/acciones');
+
+  /**
+   * Invoca una acción tolerando solo la señal esperada de "llegó más allá
+   * de la guarda" (ver cabecera). Cualquier otro error se relanza: hace
+   * fallar el script entero, no una sola comprobación silenciosa.
+   */
   const invocar = async (accion: (d: FormData) => Promise<void>, datos: FormData) => {
     try {
       await accion(datos);
     } catch (e) {
-      console.log(`  (la acción llegó más allá de la guarda: ${(e as Error).message})`);
+      const mensaje = e instanceof Error ? e.message : String(e);
+      if (!mensaje.includes(SEÑAL_REVALIDATE_FUERA_DE_PETICION)) throw e;
+      console.log(`  (la acción llegó más allá de la guarda: ${mensaje})`);
     }
   };
 
-  const filaEquipo = async () => {
-    const [f] = await sql<Array<{ cantidad: number; nombre: string }>>`
-      select cantidad, nombre from sala_equipos where id = ${equipoId}`;
+  const filaSala = async (id: string) => {
+    const [f] = await sql<Array<{ nombre: string; largo_m: string }>>`
+      select nombre, largo_m from salas where id = ${id}`;
     return f;
   };
+  const filaEquipo = async (id: string) => {
+    const filas = await sql<Array<{ cantidad: number; nombre: string }>>`
+      select cantidad, nombre from sala_equipos where id = ${id}`;
+    return filas[0] ?? null;
+  };
+  const contarEquiposDeSala = async (salaId: string) => {
+    const [f] = await sql<Array<{ n: string }>>`
+      select count(*)::text as n from sala_equipos where sala_id = ${salaId}`;
+    return Number(f.n);
+  };
 
-  console.log('\n--- ataque: sala_id suplantado (sala señuelo abierta) ---');
+  // -------------------------------------------------------------- guardarSala
 
-  const original = await filaEquipo();
+  console.log('\n=== guardarSala ===');
+  {
+    const antes = await filaSala(salaCerradaId);
+    const fd = new FormData();
+    fd.set('id', salaCerradaId);
+    fd.set('nombre', 'NOMBRE-COLADO-SALA-CERRADA');
+    await invocar(guardarSala, fd);
+    const tras = await filaSala(salaCerradaId);
+    afirmar(
+      tras.nombre === antes.nombre,
+      `proyecto cerrado: no escribe (nombre "${antes.nombre}" → "${tras.nombre}")`,
+    );
+  }
+  {
+    const antes = await filaSala(salaLegadoId);
+    const fd = new FormData();
+    fd.set('id', salaLegadoId);
+    fd.set('nombre', antes.nombre);
+    fd.set('largo_m', '9.99');
+    await invocar(guardarSala, fd);
+    const tras = await filaSala(salaLegadoId);
+    afirmar(
+      tras.largo_m === '9.99' && tras.largo_m !== antes.largo_m,
+      `sala legado: sí escribe (largo_m "${antes.largo_m}" → "${tras.largo_m}")`,
+    );
+  }
 
-  const fdAjustar = new FormData();
-  fdAjustar.set('id', equipoId);
-  fdAjustar.set('sala_id', salaSenueloId); // suplantado
-  fdAjustar.set('paso', '1');
-  await invocar(ajustarCantidadEquipo, fdAjustar);
-  const tras1 = await filaEquipo();
-  afirmar(
-    tras1.cantidad === original.cantidad,
-    `ajustarCantidadEquipo con sala_id suplantado: cantidad ${original.cantidad} → ${tras1.cantidad}`,
-  );
+  // ------------------------------------------------------------- anadirEquipo
 
-  const fdGuardar = new FormData();
-  fdGuardar.set('id', equipoId);
-  fdGuardar.set('sala_id', salaSenueloId); // suplantado
-  fdGuardar.set('nombre', 'NOMBRE-COLADO');
-  await invocar(guardarEquipo, fdGuardar);
-  const tras2 = await filaEquipo();
-  afirmar(
-    tras2.nombre === original.nombre,
-    `guardarEquipo con sala_id suplantado: nombre "${original.nombre}" → "${tras2.nombre}"`,
-  );
+  console.log('\n=== anadirEquipo ===');
+  {
+    const antes = await contarEquiposDeSala(salaCerradaId);
+    const fd = new FormData();
+    fd.set('sala_id', salaCerradaId);
+    fd.set('nombre', 'TEST equipo colado en sala cerrada');
+    await invocar(anadirEquipo, fd);
+    const tras = await contarEquiposDeSala(salaCerradaId);
+    afirmar(tras === antes, `proyecto cerrado: no inserta (equipos ${antes} → ${tras})`);
+  }
+  {
+    const antes = await contarEquiposDeSala(salaLegadoId);
+    const fd = new FormData();
+    fd.set('sala_id', salaLegadoId);
+    fd.set('nombre', 'TEST equipo nuevo en sala legado');
+    await invocar(anadirEquipo, fd);
+    const tras = await contarEquiposDeSala(salaLegadoId);
+    afirmar(tras === antes + 1, `sala legado: sí inserta (equipos ${antes} → ${tras})`);
+  }
 
-  const fdBorrar = new FormData();
-  fdBorrar.set('id', equipoId);
-  fdBorrar.set('sala_id', salaSenueloId); // suplantado
-  await invocar(borrarEquipo, fdBorrar);
-  const [sigueAhi] = await sql`select id from sala_equipos where id = ${equipoId}`;
-  afirmar(Boolean(sigueAhi), 'borrarEquipo con sala_id suplantado: el equipo sigue existiendo');
+  // ------------------------------------------------------- guardarEquipo, etc.
 
-  console.log('\n--- ataque: sala_id inventado (no existe ninguna sala con ese id) ---');
-  const fdInventado = new FormData();
-  fdInventado.set('id', equipoId);
-  fdInventado.set('sala_id', crypto.randomUUID());
-  fdInventado.set('paso', '1');
-  await invocar(ajustarCantidadEquipo, fdInventado);
-  const tras3 = await filaEquipo();
-  afirmar(
-    tras3.cantidad === original.cantidad,
-    `ajustarCantidadEquipo con sala_id inventado: cantidad ${original.cantidad} → ${tras3.cantidad}`,
-  );
+  type FilaEquipo = { cantidad: number; nombre: string } | null;
 
-  console.log('\n--- control: sala_id real (la misma sala cerrada) sigue bloqueada ---');
-  const fdReal = new FormData();
-  fdReal.set('id', equipoId);
-  fdReal.set('sala_id', salaCerradaId);
-  fdReal.set('paso', '1');
-  await invocar(ajustarCantidadEquipo, fdReal);
-  const tras4 = await filaEquipo();
-  afirmar(
-    tras4.cantidad === original.cantidad,
-    `ajustarCantidadEquipo con sala_id real (cerrada): cantidad ${original.cantidad} → ${tras4.cantidad}`,
-  );
+  /**
+   * Las cuatro comprobaciones comunes a las tres acciones sobre un equipo
+   * ya existente: cerrado, sala_id suplantado, sala_id inventado y legado.
+   * Cada una parte de un equipo recién creado (ver `nuevoEquipo`): no
+   * comparten fila entre sí.
+   */
+  async function verificarAccionDeEquipo(opciones: {
+    etiqueta: string;
+    accion: (d: FormData) => Promise<void>;
+    /** Construye el FormData de ataque/control para un equipo y sala_id dados. */
+    datos: (equipoId: string, salaId: string) => FormData;
+    /** `true` si el estado cambió entre `antes` y `tras`. */
+    cambio: (antes: FilaEquipo, tras: FilaEquipo) => boolean;
+  }) {
+    console.log(`\n=== ${opciones.etiqueta} ===`);
+
+    {
+      const id = await nuevoEquipo(salaCerradaId, `${opciones.etiqueta} cerrado real`);
+      const antes = await filaEquipo(id);
+      await invocar(opciones.accion, opciones.datos(id, salaCerradaId));
+      const tras = await filaEquipo(id);
+      afirmar(!opciones.cambio(antes, tras), 'proyecto cerrado, sala_id real: no escribe');
+    }
+    {
+      const id = await nuevoEquipo(salaCerradaId, `${opciones.etiqueta} cerrado señuelo`);
+      const antes = await filaEquipo(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaEquipo(id);
+      afirmar(
+        !opciones.cambio(antes, tras),
+        'sala_id suplantado (sala legado abierta): no toca el equipo cerrado',
+      );
+    }
+    {
+      const id = await nuevoEquipo(salaCerradaId, `${opciones.etiqueta} cerrado inventado`);
+      const antes = await filaEquipo(id);
+      await invocar(opciones.accion, opciones.datos(id, randomUUID()));
+      const tras = await filaEquipo(id);
+      afirmar(!opciones.cambio(antes, tras), 'sala_id inventado: no toca el equipo cerrado');
+    }
+    {
+      const id = await nuevoEquipo(salaLegadoId, `${opciones.etiqueta} legado real`);
+      const antes = await filaEquipo(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaEquipo(id);
+      afirmar(opciones.cambio(antes, tras), 'sala legado, sala_id real: sí escribe');
+    }
+  }
+
+  await verificarAccionDeEquipo({
+    etiqueta: 'guardarEquipo',
+    accion: guardarEquipo,
+    datos: (equipoId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', equipoId);
+      fd.set('sala_id', salaId);
+      fd.set('nombre', `NOMBRE-COLADO-${randomUUID()}`);
+      return fd;
+    },
+    cambio: (antes, tras) => antes?.nombre !== tras?.nombre,
+  });
+
+  await verificarAccionDeEquipo({
+    etiqueta: 'ajustarCantidadEquipo',
+    accion: ajustarCantidadEquipo,
+    datos: (equipoId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', equipoId);
+      fd.set('sala_id', salaId);
+      fd.set('paso', '1');
+      return fd;
+    },
+    cambio: (antes, tras) => antes?.cantidad !== tras?.cantidad,
+  });
+
+  await verificarAccionDeEquipo({
+    etiqueta: 'borrarEquipo',
+    accion: borrarEquipo,
+    datos: (equipoId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', equipoId);
+      fd.set('sala_id', salaId);
+      return fd;
+    },
+    // Bloqueado: `tras` sigue igual que `antes`. Bypass: `tras` es null.
+    cambio: (antes, tras) => antes != null && tras == null,
+  });
 } finally {
   await limpiar();
   await sql.end();
-  rmSync(RUTA_STUB, { recursive: true, force: true });
 }
 
-console.log(ok ? '\nTodo bloqueado como se espera.' : '\nHay un fallo: revisar arriba.');
+console.log(ok ? '\nTodo se comporta como se espera.' : '\nHay un fallo: revisar arriba.');
 if (!ok) process.exitCode = 1;

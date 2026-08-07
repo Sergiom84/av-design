@@ -29,19 +29,23 @@ export default async function LogisticaSala({
 
   return (
     <div className="space-y-6 [&>*]:min-w-0">
+      {/* Orden operativo: necesario, lo ya reservado para esta obra, lo que
+          falta y su pedido, y por último la carga. Reservado va antes de
+          "qué falta" porque es lo primero que hay que mirar antes de
+          comprar: lo que ya está apartado no se pide otra vez. */}
       <MaterialAComprar material={material} canalizacion={canalizacion} />
       {falta && (
         <>
+          <ReservasDeSala
+            salaId={sala.id}
+            reservas={falta.reservas}
+            disponibilidad={falta.disponibilidad}
+          />
           <QueFalta
             salaId={sala.id}
             faltantes={falta.faltantes}
             grupos={falta.grupos}
             sinCatalogar={falta.sinCatalogar}
-          />
-          <ReservasDeSala
-            salaId={sala.id}
-            reservas={falta.reservas}
-            disponibilidad={falta.disponibilidad}
           />
           <CargasDeSala
             salaId={sala.id}

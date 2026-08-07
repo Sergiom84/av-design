@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { obtenerSalaCabecera } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { ContenedorTabla, Tarjeta } from '@/components/ui';
+import { Enlace, Estado, Tarjeta } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,32 +46,25 @@ export default async function DocumentosSala({
   ];
 
   return (
-    <Tarjeta
-      titulo="Entregables"
-      pie="El paquete exportable (PDF, Excel, ZIP) está en el roadmap: entrará aquí."
-    >
-      <ContenedorTabla etiqueta="Entregables">
-      <table className="datos">
-        <thead>
-          <tr>
-            <th>Documento</th>
-            <th>Qué contiene</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entregables.map((e) => (
-            <tr key={e.nombre}>
-              <td>
-                <Link href={e.href} className="enlace">
-                  {e.nombre}
-                </Link>
-              </td>
-              <td className="text-tinta-tenue">{e.detalle}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </ContenedorTabla>
+    <Tarjeta titulo="Entregables">
+      <div className="divide-y divide-linea-suave">
+        {entregables.map((e) => (
+          <div key={e.nombre} className="flex flex-wrap items-start justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <Enlace href={e.href}>{e.nombre}</Enlace>
+              <p className="text-tinta-tenue">{e.detalle}</p>
+            </div>
+            <Estado tono="listo">Disponible</Estado>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-start justify-between gap-3 py-3">
+          <div className="min-w-0">
+            <span className="font-medium">Paquete exportable</span>
+            <p className="text-tinta-tenue">PDF, Excel y ZIP con todo lo anterior.</p>
+          </div>
+          <Estado tono="neutro">Pendiente</Estado>
+        </div>
+      </div>
     </Tarjeta>
   );
 }

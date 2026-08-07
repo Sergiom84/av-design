@@ -681,18 +681,28 @@ const tecnicos = hayCsvTecnicos
 
 if (hayCsvTecnicos) {
   sql.push(`-- Técnicos: ${tecnicos.length} personas (data/tecnicos.csv)`);
-  sql.push('-- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.');
+  // Nunca se borra un técnico csv: los hitos lo referencian con `set null` y
+  // borrarlo y recrearlo con otro uuid dejaría la autoría histórica en nada.
+  // El upsert conserva el uuid; quien desaparece del CSV pasa a inactivo,
+  // que es exactamente lo que le pasó en la realidad.
+  sql.push('-- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.');
+  const nombresCsv = tecnicos.map((t) => txt(t.nombre)).join(', ');
+  sql.push(
+    `update tecnicos set activo = false where fuente = 'csv' and nombre not in (${nombresCsv});`,
+  );
+  for (const t of tecnicos) {
+    // El choque contra alguien dado de alta desde la app no lo pisa: ese manda.
+    sql.push(
+      `insert into tecnicos (nombre, fuente) values (${txt(t.nombre)}, 'csv') ` +
+        `on conflict (nombre) do update set activo = true ` +
+        `where tecnicos.fuente = 'csv';`,
+    );
+  }
+  // Los roles no tienen historia: se regeneran enteros para las filas csv.
   sql.push(
     "delete from tecnico_roles where tecnico_id in (select id from tecnicos where fuente = 'csv');",
   );
-  sql.push("delete from tecnicos where fuente = 'csv';");
   for (const t of tecnicos) {
-    // El único choque posible es contra alguien dado de alta desde la app.
-    // Ese manda, y sus roles tampoco se pisan.
-    sql.push(
-      `insert into tecnicos (nombre, fuente) values (${txt(t.nombre)}, 'csv') ` +
-        `on conflict (nombre) do nothing;`,
-    );
     for (const rol of t.roles) {
       sql.push(
         `insert into tecnico_roles (tecnico_id, rol)\n` +

@@ -1939,44 +1939,44 @@ from articulos a where coalesce(marca, '') = 'AMX' and modelo = 'HPX 1200' and c
 on conflict (articulo_id, nombre) do nothing;
 
 -- Técnicos: 8 personas (data/tecnicos.csv)
--- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.
+-- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.
+update tecnicos set activo = false where fuente = 'csv' and nombre not in ('Daniel', 'Elvin', 'Carlos', 'Diego', 'Roberto', 'Nacho', 'Miguel', 'Marcos');
+insert into tecnicos (nombre, fuente) values ('Daniel', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Elvin', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Carlos', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Diego', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Roberto', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Nacho', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Miguel', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
+insert into tecnicos (nombre, fuente) values ('Marcos', 'csv') on conflict (nombre) do update set activo = true where tecnicos.fuente = 'csv';
 delete from tecnico_roles where tecnico_id in (select id from tecnicos where fuente = 'csv');
-delete from tecnicos where fuente = 'csv';
-insert into tecnicos (nombre, fuente) values ('Daniel', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'inicio' from tecnicos where nombre = 'Daniel' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Elvin', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'inicio' from tecnicos where nombre = 'Elvin' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Carlos', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'inicio' from tecnicos where nombre = 'Carlos' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Diego', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'inicio' from tecnicos where nombre = 'Diego' and fuente = 'csv'
 on conflict do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'instalacion' from tecnicos where nombre = 'Diego' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Roberto', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'recepcion' from tecnicos where nombre = 'Roberto' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Nacho', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'recepcion' from tecnicos where nombre = 'Nacho' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Miguel', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'recepcion' from tecnicos where nombre = 'Miguel' and fuente = 'csv'
 on conflict do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'instalacion' from tecnicos where nombre = 'Miguel' and fuente = 'csv'
 on conflict do nothing;
-insert into tecnicos (nombre, fuente) values ('Marcos', 'csv') on conflict (nombre) do nothing;
 insert into tecnico_roles (tecnico_id, rol)
 select id, 'recepcion' from tecnicos where nombre = 'Marcos' and fuente = 'csv'
 on conflict do nothing;

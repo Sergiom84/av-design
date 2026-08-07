@@ -71,6 +71,7 @@ export async function crearLocalizacion(datos: FormData) {
     values (${proyectoId}, ${nombre})
     on conflict (proyecto_id, nombre) do nothing`;
   revalidatePath('/proyectos');
+  revalidatePath('/proyectos/[id]', 'page');
 }
 
 export async function renombrarLocalizacion(datos: FormData) {
@@ -79,6 +80,7 @@ export async function renombrarLocalizacion(datos: FormData) {
   if (!id || !nombre) return;
   await sql`update localizaciones set nombre = ${nombre} where id = ${id}`;
   revalidatePath('/proyectos');
+  revalidatePath('/proyectos/[id]', 'page');
   revalidatePath('/salas');
 }
 
@@ -118,6 +120,7 @@ export async function asignarSalaALocalizacion(datos: FormData) {
     await sql`update salas set localizacion_id = null where id = ${salaId}`;
   }
   revalidatePath('/proyectos');
+  revalidatePath('/proyectos/[id]', 'page');
   revalidatePath('/salas');
-  revalidatePath(`/salas/${salaId}`, 'layout');
+  revalidatePath('/salas/[id]', 'layout');
 }

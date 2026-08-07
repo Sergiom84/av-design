@@ -98,18 +98,23 @@ export async function hitosDeSala(salaId: string): Promise<HitoSala[]> {
 /**
  * Las recepciones que abastecieron a la sala, derivadas de los movimientos de
  * entrada de la recepción de pedidos. Nunca se teclean: son el rastro real.
+ *
+ * Límite conocido: el movimiento arrastra la sala que originó el pedido, así
+ * que un pedido de proyecto repartido entre varias salas solo aparece en la
+ * que lo pidió. Atribuir la recepción al reparto real exigiría cruzar las
+ * reservas, y eso es otro módulo.
  */
 export async function recepcionesDeSala(salaId: string): Promise<Recepcion[]> {
   return oVacio(async () =>
     (
       await sql<Fila[]>`
         select min(m.id::text) as id, m.motivo, m.quien,
-               min(m.creado_en)::date as fecha
+               m.creado_en::date as fecha
         from movimientos m
         where m.sala_id = ${salaId}
           and m.tipo = 'entrada'
           and m.motivo like 'Recepción de pedido%'
-        group by m.motivo, m.quien
+        group by m.motivo, m.quien, m.creado_en::date
         order by fecha`
     ).map((f) => ({
       pedido_id: String(f.id),

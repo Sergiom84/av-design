@@ -58,7 +58,7 @@ export async function crearVisita(datos: FormData) {
   });
 
   revalidatePath('/checkin');
-  revalidatePath(`/salas/${salaId}`, 'layout');
+  revalidatePath('/salas/[id]', 'layout');
   if (id) redirect(`/checkin/${id}`);
 }
 
@@ -123,6 +123,6 @@ export async function borrarVisita(datos: FormData) {
   if (!id) return;
   await borrarRevision(id);
   revalidatePath('/checkin');
-  if (salaId) revalidatePath(`/salas/${salaId}`, 'layout');
+  if (salaId) revalidatePath('/salas/[id]', 'layout');
   redirect('/checkin');
 }

@@ -131,9 +131,17 @@ export function AltaDeSala({
       setBorrador((b) => ({ ...b, [clave]: e.target.value }) as Borrador);
 
   return (
-    <form action={crearSala} className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start">
+    <>
+      <form
+        id="alta-sala"
+        action={crearSala}
+        className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-24 lg:pb-0"
+      >
       <div className="space-y-6 min-w-0">
-        <Tarjeta titulo="De dónde parte">
+        <Tarjeta
+          titulo="Origen y serie"
+          pie="Las 144 salas TP de aforo 8 del inventario son la misma sala repetida. Se crean de una vez y luego se corrige la que se salga."
+        >
           <Campo
             etiqueta="Plantilla"
             ayuda="Sin plantilla la sala nace vacía y el equipamiento se añade después."
@@ -154,6 +162,38 @@ export function AltaDeSala({
               ))}
             </select>
           </Campo>
+
+          <div className="flex flex-wrap items-end gap-3 mt-4">
+            <Campo etiqueta="Salas a crear">
+              <input
+                name="copias"
+                type="number"
+                min="1"
+                max={MAXIMO_COPIAS}
+                value={copias}
+                onChange={(e) =>
+                  setCopias(
+                    Math.min(
+                      MAXIMO_COPIAS,
+                      Math.max(1, Math.round(Number(e.target.value) || 1)),
+                    ),
+                  )
+                }
+                className="w-24 num"
+              />
+            </Campo>
+            {[3, 10, 144].map((n) => (
+              <Boton
+                key={n}
+                tipo="button"
+                variante="secundario"
+                aria-label={`Poner ${n} salas`}
+                onClick={() => setCopias(n)}
+              >
+                {n}
+              </Boton>
+            ))}
+          </div>
         </Tarjeta>
 
         <Tarjeta titulo="Identificación">
@@ -367,43 +407,6 @@ export function AltaDeSala({
             </Campo>
           </div>
         </Tarjeta>
-
-        <Tarjeta
-          titulo="Cuántas salas iguales"
-          pie="Las 144 salas TP de aforo 8 del inventario son la misma sala repetida. Se crean de una vez y luego se corrige la que se salga."
-        >
-          <div className="flex flex-wrap items-end gap-3">
-            <Campo etiqueta="Salas a crear">
-              <input
-                name="copias"
-                type="number"
-                min="1"
-                max={MAXIMO_COPIAS}
-                value={copias}
-                onChange={(e) =>
-                  setCopias(
-                    Math.min(
-                      MAXIMO_COPIAS,
-                      Math.max(1, Math.round(Number(e.target.value) || 1)),
-                    ),
-                  )
-                }
-                className="w-24 num"
-              />
-            </Campo>
-            {[3, 10, 144].map((n) => (
-              <Boton
-                key={n}
-                tipo="button"
-                variante="secundario"
-                aria-label={`Poner ${n} salas`}
-                onClick={() => setCopias(n)}
-              >
-                {n}
-              </Boton>
-            ))}
-          </div>
-        </Tarjeta>
       </div>
 
       {/* ------------------------------------------- qué se va a crear */}
@@ -476,6 +479,21 @@ export function AltaDeSala({
           </Tarjeta>
         )}
       </div>
-    </form>
+      </form>
+
+      {/* Barra de acción sticky en móvil/tablet (bajo el mismo punto en el
+          que la rejilla deja de tener dos columnas): el resumen "Se va a
+          crear" queda al final de una sola columna larga, y sin esto la
+          acción de enviar exige recorrer toda la página. Envía el mismo
+          <form> por id, no un segundo formulario ni una segunda acción. */}
+      <div
+        className="lg:hidden fixed inset-x-0 bottom-0 z-10 border-t border-linea-suave bg-superficie px-4 py-3"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
+        <Boton form="alta-sala" className="w-full min-h-11">
+          {copias === 1 ? 'Crear sala' : `Crear ${copias} salas`}
+        </Boton>
+      </div>
+    </>
   );
 }

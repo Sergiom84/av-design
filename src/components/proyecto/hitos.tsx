@@ -94,7 +94,7 @@ export function HitosDeProyecto({
             <input type="hidden" name="id" value={h.id} />
             <Boton variante="peligro">{etiqueta} definitivamente</Boton>
           </form>
-          <Link href={`/proyectos/${proyectoId}` as never} className="enlace">
+          <Link href={`/proyectos/${proyectoId}`} className="enlace">
             Cancelar
           </Link>
         </div>

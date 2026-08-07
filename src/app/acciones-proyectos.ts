@@ -97,6 +97,9 @@ export async function renombrarLocalizacion(datos: FormData) {
   const id = texto(datos.get('id'));
   const nombre = texto(datos.get('nombre'));
   if (!id || !nombre) return;
+  const [loc] = await sql<Array<{ proyecto_id: string }>>`
+    select proyecto_id from localizaciones where id = ${id}`;
+  if (!loc || (await proyectoCerrado(loc.proyecto_id))) return;
   await sql`update localizaciones set nombre = ${nombre} where id = ${id}`;
   revalidatePath('/proyectos');
   revalidatePath('/proyectos/[id]', 'page');
@@ -111,6 +114,7 @@ export async function renombrarLocalizacion(datos: FormData) {
 export async function borrarProyecto(datos: FormData) {
   const id = texto(datos.get('id'));
   if (!id) return;
+  if (await proyectoCerrado(id)) return;
   await sql`delete from proyectos where id = ${id}`;
   revalidatePath('/proyectos');
   revalidatePath('/salas');
@@ -123,9 +127,23 @@ export async function borrarProyecto(datos: FormData) {
  * proyecto de Barcelona no puede seguir diciendo Madrid. Al soltarla del
  * proyecto conserva la sede que tenía, que sigue siendo verdad.
  */
+async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
+  const [f] = await sql<Array<{ cerrado: boolean }>>`
+    select exists (
+      select 1 from hitos_proyecto h
+      join localizaciones l on l.proyecto_id = h.proyecto_id
+      join salas s on s.localizacion_id = l.id
+      where s.id = ${salaId} and h.tipo = 'cierre'
+    ) as cerrado`;
+  return Boolean(f?.cerrado);
+}
+
 export async function asignarSalaALocalizacion(datos: FormData) {
   const salaId = texto(datos.get('sala_id'));
   if (!salaId) return;
+  // La obra de origen también está cerrada de solo lectura: mover o soltar
+  // una sala de ella es tocar su estructura igual que borrarla.
+  if (await proyectoCerradoDeSala(salaId)) return;
   const localizacionId = texto(datos.get('localizacion_id'));
   if (localizacionId) {
     const [loc] = await sql<Array<{ proyecto_id: string }>>`

@@ -327,8 +327,22 @@ export async function guardarSala(datos: FormData) {
   revalidatePath('/salas');
 }
 
+/** Una obra cerrada es de solo lectura: sus salas no se borran sin reabrirla. */
+async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
+  const [f] = await sql<Array<{ cerrado: boolean }>>`
+    select exists (
+      select 1 from hitos_proyecto h
+      join localizaciones l on l.proyecto_id = h.proyecto_id
+      join salas s on s.localizacion_id = l.id
+      where s.id = ${salaId} and h.tipo = 'cierre'
+    ) as cerrado`;
+  return Boolean(f?.cerrado);
+}
+
 export async function borrarSala(datos: FormData) {
-  await sql`delete from salas where id = ${String(datos.get('id'))}`;
+  const id = String(datos.get('id'));
+  if (await proyectoCerradoDeSala(id)) return;
+  await sql`delete from salas where id = ${id}`;
   revalidatePath('/salas');
   redirect('/salas');
 }

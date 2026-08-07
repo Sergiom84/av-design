@@ -68,10 +68,12 @@ export default async function PortadaProyecto({
             {estado !== 'cerrado' && (
               <Enlace href={`/salas/nueva?proyecto=${proyecto.id}`}>Nueva sala</Enlace>
             )}
-            <form action={borrarProyecto}>
-              <input type="hidden" name="id" value={proyecto.id} />
-              <Boton variante="peligro">Borrar proyecto</Boton>
-            </form>
+            {estado !== 'cerrado' && (
+              <form action={borrarProyecto}>
+                <input type="hidden" name="id" value={proyecto.id} />
+                <Boton variante="peligro">Borrar proyecto</Boton>
+              </form>
+            )}
           </>
         }
       />

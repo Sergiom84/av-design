@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { obtenerSalaCabecera } from '@/lib/datos';
+import { hitosDeProyecto } from '@/lib/datos-ciclo';
+import { proyectoCerrado } from '@/lib/ciclo-vida';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Cabecera } from '@/components/ui';
 import { PestanasDeSala } from '@/components/sala/pestanas';
@@ -26,6 +28,9 @@ export default async function LayoutSala({
   if (!sala) notFound();
 
   const sinMedidas = !sala.largo_m || !sala.ancho_m || !sala.alto_m;
+  const obraCerrada = sala.proyecto_id
+    ? proyectoCerrado(await hitosDeProyecto(sala.proyecto_id))
+    : false;
 
   return (
     <>
@@ -42,10 +47,12 @@ export default async function LayoutSala({
           .filter(Boolean)
           .join(' · ')}
         acciones={
-          <form action={borrarSala}>
-            <input type="hidden" name="id" value={sala.id} />
-            <Boton variante="peligro">Borrar sala</Boton>
-          </form>
+          obraCerrada ? undefined : (
+            <form action={borrarSala}>
+              <input type="hidden" name="id" value={sala.id} />
+              <Boton variante="peligro">Borrar sala</Boton>
+            </form>
+          )
         }
       />
 

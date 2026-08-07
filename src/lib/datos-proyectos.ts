@@ -203,16 +203,33 @@ export async function listarSalasSinProyecto(): Promise<
   }));
 }
 
+/**
+ * Solo para el alta de sala: una obra cerrada no admite salas nuevas, así que
+ * no tiene sentido ofrecerla en el desplegable. Si la migración de hitos aún
+ * no llegó (42P01), degrada a la lista sin filtrar en vez de romper el alta.
+ */
 export async function listarProyectosConLocalizaciones(): Promise<
   ProyectoConLocalizaciones[]
 > {
-  const filas = await sql<Fila[]>`
+  const consulta = async (conCierre: boolean) => sql<Fila[]>`
     select p.id, p.nombre, sd.nombre as sede,
            l.id as localizacion_id, l.nombre as localizacion
     from proyectos p
     left join sedes sd on sd.id = p.sede_id
     left join localizaciones l on l.proyecto_id = p.id
+    ${
+      conCierre
+        ? sql`where not exists (
+            select 1 from hitos_proyecto h where h.proyecto_id = p.id and h.tipo = 'cierre'
+          )`
+        : sql``
+    }
     order by p.creado_en desc, l.nombre = ${LOCALIZACION_SIN_ASIGNAR}, l.nombre`;
+
+  const filas = await consulta(true).catch((e) => {
+    if ((e as { code?: string }).code !== '42P01') throw e;
+    return consulta(false);
+  });
 
   const porId = new Map<string, ProyectoConLocalizaciones>();
   for (const f of filas) {

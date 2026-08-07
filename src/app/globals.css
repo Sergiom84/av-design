@@ -102,15 +102,17 @@ h3 {
    min-width: 0 y max-width: 100% la sacan del cálculo de ancho intrínseco de
    sus hijos flex/grid: sin esto, una tarjeta con una tabla o un texto largo
    dentro empuja a sus hermanas y corta el layout a 1280 px.
-   overflow-wrap: break-word es heredable: cubre cabecera, cuerpo y pie sin
-   tener que repetirlo en cada texto. */
+   overflow-wrap: anywhere es heredable: cubre cabecera, cuerpo y pie sin
+   tener que repetirlo en cada texto. break-word no basta: no reduce el ancho
+   mínimo intrínseco que usa flexbox, así que una cadena sin espacios seguía
+   desbordando aunque visualmente "envolviera". */
 .tarjeta {
   background: var(--superficie);
   border-radius: 8px;
   box-shadow: var(--sombra-tarjeta);
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Scroll horizontal técnico deliberado: tabla de cables, inventario, diagramas.
@@ -131,15 +133,13 @@ video {
 }
 
 /* Tablas de datos: alineación tabular y filas legibles.
-   display: block + overflow-x: auto en la propia tabla es la salvaguarda: una
-   tabla ancha se desplaza dentro de su tarjeta en vez de ensancharla, sin
-   depender de que cada pantalla la envuelva en ContenedorTabla. */
+   El elemento se queda como tabla: display: block la sacaba del algoritmo de
+   tabla y las filas se encogían por debajo del ancho real del contenedor
+   (944px de tarjeta, 583px de filas, en /proyectos). El scroll horizontal
+   deliberado vive en `ContenedorTabla`, no en la tabla misma. */
 table.datos {
-  display: block;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }

@@ -159,11 +159,12 @@ export function Marco({ children }: { children: ReactNode }) {
         {/*
           min-w-0: sin esto un hijo con contenido ancho (tabla, texto sin
           cortar) estira `main` más allá del viewport y el documento entero
-          gana scroll horizontal. overflow-x-clip es la última barrera: el
-          scroll técnico deliberado vive dentro de .contenedor-tabla y
-          table.datos, nunca aquí.
+          gana scroll horizontal. El scroll técnico deliberado vive dentro de
+          `ContenedorTabla`; esto es solo la última barrera para lo que aún no
+          está migrado a esa primitiva. Se usa overflow-x-auto y no clip:
+          clip oculta el contenido sin avisar, auto lo deja alcanzable.
         */}
-        <main className="w-full max-w-[100rem] min-w-0 flex-1 overflow-x-clip px-4 py-6 sm:px-6">
+        <main className="w-full max-w-[100rem] min-w-0 flex-1 overflow-x-auto px-4 py-6 sm:px-6">
           {children}
         </main>
 

@@ -1,4 +1,4 @@
-import { Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import type { FilaCable } from '@/lib/cable-schedule';
 import { ETIQUETA_RUTA, ETIQUETA_SENAL } from '@/lib/tipos';
 import { ExportarCsv } from './exportar-csv';
@@ -41,6 +41,7 @@ export function TablaCables({
           Sin tiradas. Define qué puerto va a qué puerto en el bloque de conexiones.
         </Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Tabla de cables">
         <table className="datos">
           <thead>
             <tr>
@@ -104,6 +105,7 @@ export function TablaCables({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
     </Tarjeta>
   );

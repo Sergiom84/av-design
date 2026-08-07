@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import type { ProyectoResumen } from '@/lib/datos-proyectos';
 
 /**
@@ -31,6 +31,7 @@ export function ListaDeProyectos({
 
   return (
     <Tarjeta pie={pieSalasLegado}>
+      <ContenedorTabla etiqueta="Proyectos">
       <table className="datos">
         <thead>
           <tr>
@@ -80,6 +81,7 @@ export function ListaDeProyectos({
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

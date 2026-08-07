@@ -12,7 +12,7 @@ export function Cabecera({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-      <div className="max-w-2xl">
+      <div className="max-w-2xl min-w-0 [overflow-wrap:anywhere]">
         <h1 className="t-titulo">{titulo}</h1>
         {descripcion && <p className="text-tinta-tenue mt-1">{descripcion}</p>}
       </div>
@@ -43,13 +43,15 @@ export function Tarjeta({
     <section className="tarjeta">
       {(titulo || acciones) && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-linea-suave">
-          {titulo && <h2 className="t-subtitulo">{titulo}</h2>}
+          {titulo && (
+            <h2 className="t-subtitulo min-w-0 max-w-full [overflow-wrap:anywhere]">{titulo}</h2>
+          )}
           {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
         </div>
       )}
-      <div className="p-4 min-w-0">{children}</div>
+      <div className="p-4 min-w-0 max-w-full">{children}</div>
       {pie && (
-        <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue min-w-0">
+        <div className="px-4 py-3 border-t border-linea-suave text-tinta-tenue min-w-0 max-w-full">
           {pie}
         </div>
       )}

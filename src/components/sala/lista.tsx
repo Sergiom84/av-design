@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import type { Sala } from '@/lib/tipos';
 
 /**
@@ -35,6 +35,7 @@ export function ListaDeSalas({
           : `${salas.length} salas, todas con medidas.`
       }
     >
+      <ContenedorTabla etiqueta="Salas">
       <table className="datos">
         <thead>
           <tr>
@@ -90,6 +91,7 @@ export function ListaDeSalas({
           })}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

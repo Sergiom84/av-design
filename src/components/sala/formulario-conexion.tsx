@@ -182,7 +182,7 @@ export function FormularioConexion({
             name="articulo_cable_id"
             value={cableId}
             onChange={(e) => setCableId(e.target.value)}
-            className="min-w-[14rem]"
+            className="w-full min-w-0 sm:min-w-[14rem]"
           >
             <option value="">— sin asignar —</option>
             {cables.map((c) => (

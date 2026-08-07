@@ -1,5 +1,6 @@
 import 'server-only';
 import { sql } from './db';
+import { esUuid } from './uuid';
 import {
   Articulo,
   ArticuloElegible,
@@ -492,6 +493,7 @@ export async function listarSedes(): Promise<string[]> {
  * no van a pintar.
  */
 export async function obtenerSalaCabecera(id: string): Promise<Sala | null> {
+  if (!esUuid(id)) return null;
   const [fila] = await sql<Fila[]>`
     select s.*, sd.nombre as sede, l.nombre as localizacion,
            p.id as proyecto_id, p.nombre as proyecto
@@ -514,6 +516,7 @@ export interface SalaCompleta {
 }
 
 export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
+  if (!esUuid(id)) return null;
   const [fila] = await sql<Fila[]>`
     select s.*, sd.nombre as sede, l.nombre as localizacion,
            p.id as proyecto_id, p.nombre as proyecto

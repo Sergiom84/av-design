@@ -16,16 +16,27 @@ const fecha = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 
 /**
- * Lecturas de P1. Todas degradan con elegancia: si las tablas de técnicos e
- * hitos aún no existen en la base (un despliegue a medias), devuelven vacío
- * en vez de tirar la ficha entera.
+ * Lecturas de P1. Degradan con elegancia SOLO si la tabla aún no existe
+ * (42P01: un despliegue que llegó antes que su migración). Cualquier otro
+ * fallo de base de datos se propaga: presentarlo como "sin hitos" sería
+ * mentir.
  */
 async function oVacio<T>(consulta: () => Promise<T[]>): Promise<T[]> {
   try {
     return await consulta();
-  } catch {
-    return [];
+  } catch (e) {
+    if ((e as { code?: string }).code === '42P01') return [];
+    throw e;
   }
+}
+
+/** Para que la página avise cuando el despliegue llegó antes que la migración. */
+export async function tablasDeCicloListas(): Promise<boolean> {
+  const [f] = await sql<Fila[]>`
+    select to_regclass('public.hitos_proyecto') is not null
+       and to_regclass('public.hitos_sala') is not null
+       and to_regclass('public.tecnicos') is not null as ok`;
+  return Boolean(f?.ok);
 }
 
 export async function listarTecnicosConRoles(): Promise<{

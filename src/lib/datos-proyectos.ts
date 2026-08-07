@@ -1,5 +1,6 @@
 import 'server-only';
 import { sql } from '@/lib/db';
+import { esUuid } from '@/lib/uuid';
 
 type Fila = Record<string, unknown>;
 const s = (v: unknown): string | null => (v == null ? null : String(v));
@@ -31,6 +32,34 @@ export interface ProyectoConLocalizaciones {
 }
 
 export async function listarProyectos(): Promise<ProyectoResumen[]> {
+  try {
+    return await listarProyectosConEstado();
+  } catch (e) {
+    // 42P01: el código llegó antes que la migración de hitos. Se degrada a
+    // "sin iniciar" y la página lo avisa; cualquier otro error se propaga.
+    if ((e as { code?: string }).code !== '42P01') throw e;
+    const filas = await sql<Fila[]>`
+      select p.id, p.nombre, p.codigo, sd.nombre as sede,
+        (select count(*) from localizaciones l where l.proyecto_id = p.id) as n_localizaciones,
+        (select count(*) from salas sa
+          join localizaciones l on l.id = sa.localizacion_id
+          where l.proyecto_id = p.id) as n_salas
+      from proyectos p
+      left join sedes sd on sd.id = p.sede_id
+      order by p.creado_en desc`;
+    return filas.map((f) => ({
+      id: String(f.id),
+      nombre: String(f.nombre),
+      codigo: s(f.codigo),
+      sede: s(f.sede),
+      n_localizaciones: Number(f.n_localizaciones ?? 0),
+      n_salas: Number(f.n_salas ?? 0),
+      estado: 'sin_iniciar' as const,
+    }));
+  }
+}
+
+async function listarProyectosConEstado(): Promise<ProyectoResumen[]> {
   const filas = await sql<Fila[]>`
     select p.id, p.nombre, p.codigo, sd.nombre as sede,
       (select count(*) from localizaciones l where l.proyecto_id = p.id) as n_localizaciones,
@@ -80,6 +109,7 @@ export interface ProyectoCompleto {
 
 /** La portada: el proyecto con sus localizaciones, salas y pedidos. */
 export async function obtenerProyecto(id: string): Promise<ProyectoCompleto | null> {
+  if (!esUuid(id)) return null;
   const [fila] = await sql<Fila[]>`
     select p.id, p.nombre, p.codigo, p.notas, sd.nombre as sede
     from proyectos p
@@ -87,25 +117,35 @@ export async function obtenerProyecto(id: string): Promise<ProyectoCompleto | nu
     where p.id = ${id}`;
   if (!fila) return null;
 
-  const [localizaciones, salas, pedidos] = await Promise.all([
-    sql<Fila[]>`
-      select id, nombre from localizaciones where proyecto_id = ${id}`,
-    // El estado de cada sala en la portada es ligero a propósito: medidas,
-    // tiradas e hitos, agregables en una consulta. El semáforo completo de
-    // `revisarMontaje()` se mira en la ficha; rehacerlo aquí serían catorce
-    // consultas por sala.
-    sql<Fila[]>`
+  // El estado de cada sala en la portada es ligero a propósito: medidas,
+  // tiradas e hitos, agregables en una consulta. El semáforo completo de
+  // `revisarMontaje()` se mira en la ficha; rehacerlo aquí serían catorce
+  // consultas por sala. Si la migración de hitos aún no llegó (42P01), los
+  // hitos degradan a falso y la página lo avisa.
+  const consultaSalas = async (conHitos: boolean) => sql<Fila[]>`
       select s.id, s.nombre, s.codigo, s.localizacion_id,
              s.largo_m, s.ancho_m, s.alto_m,
              (select count(*) from conexiones c where c.sala_id = s.id) as n_conexiones,
-             exists (select 1 from hitos_sala h
+             ${
+               conHitos
+                 ? sql`exists (select 1 from hitos_sala h
                      where h.sala_id = s.id and h.tipo = 'instalacion') as instalada,
              exists (select 1 from hitos_sala h
-                     where h.sala_id = s.id and h.tipo = 'entrega') as entregada
+                     where h.sala_id = s.id and h.tipo = 'entrega') as entregada`
+                 : sql`false as instalada, false as entregada`
+             }
       from salas s
       join localizaciones l on l.id = s.localizacion_id
       where l.proyecto_id = ${id}
-      order by s.nombre`,
+      order by s.nombre`;
+
+  const [localizaciones, salas, pedidos] = await Promise.all([
+    sql<Fila[]>`
+      select id, nombre from localizaciones where proyecto_id = ${id}`,
+    consultaSalas(true).catch((e) => {
+      if ((e as { code?: string }).code !== '42P01') throw e;
+      return consultaSalas(false);
+    }),
     sql<Fila[]>`
       select pe.id, pe.referencia, pe.estado, pr.nombre as proveedor
       from pedidos pe

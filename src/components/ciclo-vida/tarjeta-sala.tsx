@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
 import { borrarHitoSala, registrarHitoSala } from '@/app/acciones-ciclo';
 import {
+  proyectoCerrado,
   resumenCicloVida,
   tecnicosDeRol,
   type AvisosDeEntrega,
@@ -15,6 +17,10 @@ import {
  * La línea de tiempo de la sala: inicio del proyecto (heredado), recepciones
  * (derivadas de los pedidos), instalación y entrega (sus hitos). El estado
  * del material se deriva; el hecho humano se registra aquí.
+ *
+ * Borrar un hito elimina autoría y fecha, así que pide confirmación, y por
+ * la dirección (`?borrar=<id>`), no con un diálogo del navegador: se puede
+ * cancelar con el botón de atrás.
  */
 export function CicloDeVidaSala({
   salaId,
@@ -24,6 +30,7 @@ export function CicloDeVidaSala({
   tecnicos,
   roles,
   avisosEntrega,
+  confirmarBorrado,
 }: {
   salaId: string;
   hitosProyecto: HitoProyecto[];
@@ -32,11 +39,14 @@ export function CicloDeVidaSala({
   tecnicos: Tecnico[];
   roles: TecnicoRol[];
   avisosEntrega: AvisosDeEntrega;
+  /** El hito cuyo borrado se está confirmando (`?borrar=<id>`). */
+  confirmarBorrado?: string;
 }) {
   const resumen = resumenCicloVida({ hitosProyecto, hitosSala, recepciones });
   const instaladores = tecnicosDeRol(tecnicos, roles, 'instalacion');
   const instalacion = hitosSala.find((h) => h.tipo === 'instalacion');
   const entrega = hitosSala.find((h) => h.tipo === 'entrega');
+  const cerrado = proyectoCerrado(hitosProyecto);
 
   const formularioHito = (
     tipo: 'instalacion' | 'entrega',
@@ -50,8 +60,10 @@ export function CicloDeVidaSala({
       <input type="hidden" name="sala_id" value={salaId} />
       <input type="hidden" name="tipo" value={tipo} />
       <Campo etiqueta="Quién">
-        <select name="tecnico_id" className="w-40">
-          <option value="">—</option>
+        <select name="tecnico_id" required className="w-40" defaultValue="">
+          <option value="" disabled>
+            Elegir técnico
+          </option>
           {instaladores.map((t) => (
             <option key={t.id} value={t.id}>
               {t.nombre}
@@ -68,6 +80,34 @@ export function CicloDeVidaSala({
       <Boton variante="secundario">{etiqueta}</Boton>
     </form>
   );
+
+  const borradoDeHito = (h: HitoSala, etiqueta: string) =>
+    confirmarBorrado === h.id ? (
+      <div className="space-y-2">
+        <Aviso tono="alerta">
+          Borrar la {h.tipo === 'instalacion' ? 'instalación' : 'entrega'} elimina quién
+          y cuándo ({[h.tecnico, h.fecha].filter(Boolean).join(' · ')}). No se puede
+          deshacer: se registraría de nuevo.
+        </Aviso>
+        <div className="flex gap-3 items-center">
+          <form action={borrarHitoSala}>
+            <input type="hidden" name="sala_id" value={salaId} />
+            <input type="hidden" name="id" value={h.id} />
+            <Boton variante="peligro">{etiqueta} definitivamente</Boton>
+          </form>
+          <Link href={`/salas/${salaId}`} className="enlace">
+            Cancelar
+          </Link>
+        </div>
+      </div>
+    ) : (
+      <Link
+        href={`/salas/${salaId}?borrar=${h.id}` as never}
+        className="boton boton-peligro"
+      >
+        {etiqueta}
+      </Link>
+    );
 
   return (
     <Tarjeta
@@ -93,40 +133,42 @@ export function CicloDeVidaSala({
         ))}
       </ol>
 
-      {!instalacion && formularioHito('instalacion', 'Registrar instalación', false)}
-
-      {!entrega && (
+      {cerrado ? (
+        <Aviso tono="neutro">
+          El proyecto está cerrado: sus hitos de sala no se tocan. Para corregir algo se
+          reabre la obra borrando el cierre desde su portada.
+        </Aviso>
+      ) : (
         <>
-          {avisosEntrega.avisos.length > 0 && (
-            <div className="mt-4 mb-3">
-              <Aviso tono={avisosEntrega.exigeNota ? 'alerta' : 'aviso'}>
-                {avisosEntrega.exigeNota
-                  ? 'El semáforo dice que la sala no está montable. Entregarla es una decisión consciente: la nota es obligatoria.'
-                  : 'La revisión de montaje tiene avisos. Se puede entregar igual.'}
-                <ul className="mt-1 list-disc pl-5">
-                  {avisosEntrega.avisos.slice(0, 5).map((a) => (
-                    <li key={a}>{a}</li>
-                  ))}
-                </ul>
-              </Aviso>
+          {!instalacion && formularioHito('instalacion', 'Registrar instalación', false)}
+
+          {!entrega && (
+            <>
+              {avisosEntrega.avisos.length > 0 && (
+                <div className="mt-4 mb-3">
+                  <Aviso tono={avisosEntrega.exigeNota ? 'alerta' : 'aviso'}>
+                    {avisosEntrega.exigeNota
+                      ? 'El semáforo dice que la sala no está montable. Entregarla es una decisión consciente: la nota es obligatoria.'
+                      : 'La revisión de montaje tiene avisos. Se puede entregar igual.'}
+                    <ul className="mt-1 list-disc pl-5">
+                      {avisosEntrega.avisos.slice(0, 5).map((a) => (
+                        <li key={a}>{a}</li>
+                      ))}
+                    </ul>
+                  </Aviso>
+                </div>
+              )}
+              {formularioHito('entrega', 'Registrar entrega', avisosEntrega.exigeNota)}
+            </>
+          )}
+
+          {(instalacion || entrega) && (
+            <div className="space-y-3 pt-3 border-t border-linea-suave">
+              {instalacion && borradoDeHito(instalacion, 'Borrar instalación')}
+              {entrega && borradoDeHito(entrega, 'Borrar entrega')}
             </div>
           )}
-          {formularioHito('entrega', 'Registrar entrega', avisosEntrega.exigeNota)}
         </>
-      )}
-
-      {(instalacion || entrega) && (
-        <div className="flex gap-3 pt-3 border-t border-linea-suave">
-          {[instalacion, entrega].filter(Boolean).map((h) => (
-            <form key={h!.id} action={borrarHitoSala}>
-              <input type="hidden" name="sala_id" value={salaId} />
-              <input type="hidden" name="id" value={h!.id} />
-              <Boton variante="secundario">
-                {h!.tipo === 'instalacion' ? 'Borrar instalación' : 'Borrar entrega'}
-              </Boton>
-            </form>
-          ))}
-        </div>
       )}
     </Tarjeta>
   );

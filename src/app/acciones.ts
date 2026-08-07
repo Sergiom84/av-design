@@ -85,12 +85,18 @@ export async function crearSala(datos: FormData) {
   let sede: string | null;
   let proyectoId: string | null = null;
   if (localizacionId) {
-    const [fila] = await sql<Array<{ proyecto_id: string; sede_id: string | null }>>`
-      select p.id as proyecto_id, p.sede_id
+    const [fila] = await sql<
+      Array<{ proyecto_id: string; sede_id: string | null; cerrado: boolean }>
+    >`
+      select p.id as proyecto_id, p.sede_id,
+             exists (select 1 from hitos_proyecto h
+                     where h.proyecto_id = p.id and h.tipo = 'cierre') as cerrado
       from localizaciones l
       join proyectos p on p.id = l.proyecto_id
       where l.id = ${localizacionId}`;
     if (!fila) return;
+    // En una obra cerrada no nacen salas: se reabre borrando el cierre.
+    if (fila.cerrado) return;
     proyectoId = fila.proyecto_id;
     sede = fila.sede_id;
   } else {

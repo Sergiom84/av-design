@@ -1,10 +1,14 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Boton, Cabecera, Dato, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, Cabecera, Dato, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { borrarProyecto } from '@/app/acciones-proyectos';
 import { listarSalasSinProyecto, obtenerProyecto } from '@/lib/datos-proyectos';
-import { hitosDeProyecto, listarTecnicosConRoles } from '@/lib/datos-ciclo';
+import {
+  hitosDeProyecto,
+  listarTecnicosConRoles,
+  tablasDeCicloListas,
+} from '@/lib/datos-ciclo';
 import { estadoDeProyecto, ETIQUETA_ESTADO_PROYECTO } from '@/lib/ciclo-vida';
 import { agruparSalasPorLocalizacion, resumenDeProyecto } from '@/lib/proyecto';
 import { HitosDeProyecto } from '@/components/proyecto/hitos';
@@ -25,17 +29,22 @@ const ETIQUETA_ESTADO_PEDIDO: Record<string, string> = {
  * estado agregado, los pedidos que la abastecen y sus hitos. Todo derivado;
  * lo único que se registra a mano aquí son los hitos.
  */
-export default async function PortadaProyecto({ params }: PageProps<'/proyectos/[id]'>) {
+export default async function PortadaProyecto({
+  params,
+  searchParams,
+}: PageProps<'/proyectos/[id]'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
+  const { borrar } = await searchParams;
   const proyecto = await obtenerProyecto(id);
   if (!proyecto) notFound();
 
-  const [hitos, { tecnicos, roles }, salasSueltas] = await Promise.all([
+  const [hitos, { tecnicos, roles }, salasSueltas, cicloListo] = await Promise.all([
     hitosDeProyecto(proyecto.id),
     listarTecnicosConRoles(),
     listarSalasSinProyecto(),
+    tablasDeCicloListas(),
   ]);
 
   const resumen = resumenDeProyecto({ salas: proyecto.salas, pedidos: proyecto.pedidos });
@@ -56,7 +65,9 @@ export default async function PortadaProyecto({ params }: PageProps<'/proyectos/
           .join(' · ')}
         acciones={
           <>
-            <Enlace href={`/salas/nueva`}>Nueva sala</Enlace>
+            {estado !== 'cerrado' && (
+              <Enlace href={`/salas/nueva?proyecto=${proyecto.id}`}>Nueva sala</Enlace>
+            )}
             <form action={borrarProyecto}>
               <input type="hidden" name="id" value={proyecto.id} />
               <Boton variante="peligro">Borrar proyecto</Boton>
@@ -64,6 +75,16 @@ export default async function PortadaProyecto({ params }: PageProps<'/proyectos/
           </>
         }
       />
+
+      {!cicloListo && (
+        <div className="mb-6">
+          <Aviso tono="alerta">
+            Faltan las tablas de técnicos e hitos: el despliegue llegó antes que su
+            migración (db/migraciones/2026-08-jerarquia-p1.sql). Los hitos y estados
+            de esta portada salen vacíos hasta aplicarla.
+          </Aviso>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="tarjeta p-4">
@@ -85,11 +106,17 @@ export default async function PortadaProyecto({ params }: PageProps<'/proyectos/
 
       <div className="grid xl:grid-cols-[1fr_24rem] gap-6 items-start [&>*]:min-w-0">
         <div className="space-y-6 min-w-0">
-          <LocalizacionesDelProyecto proyectoId={proyecto.id} grupos={grupos} />
-          <AdopcionDeSalas
-            localizaciones={proyecto.localizaciones}
-            salasSueltas={salasSueltas}
+          <LocalizacionesDelProyecto
+            proyectoId={proyecto.id}
+            grupos={grupos}
+            cerrado={estado === 'cerrado'}
           />
+          {estado !== 'cerrado' && (
+            <AdopcionDeSalas
+              localizaciones={proyecto.localizaciones}
+              salasSueltas={salasSueltas}
+            />
+          )}
         </div>
 
         <div className="space-y-6 min-w-0">
@@ -99,6 +126,7 @@ export default async function PortadaProyecto({ params }: PageProps<'/proyectos/
             tecnicos={tecnicos}
             roles={roles}
             salasSinEntregar={resumen.salas - resumen.entregadas}
+            confirmarBorrado={typeof borrar === 'string' ? borrar : undefined}
           />
 
           <Tarjeta

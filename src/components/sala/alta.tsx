@@ -67,18 +67,32 @@ function desdePlantilla(p: PlantillaConEquipamiento): Borrador {
  * es inequívoco. No bloquea el alta: una sala sin medir se crea igual y se
  * completa luego, porque lo que no puede pasar es que no se dé de alta.
  */
+/**
+ * Con una sola localización —la "Sin asignar" del nacimiento— se elige sola;
+ * con varias, se preselecciona "Sin asignar" y se corrige a mano.
+ */
+function localizacionPorDefecto(p: ProyectoConLocalizaciones | undefined): string {
+  if (!p) return '';
+  if (p.localizaciones.length === 1) return p.localizaciones[0].id;
+  return p.localizaciones.find((l) => l.nombre === 'Sin asignar')?.id ?? '';
+}
+
 export function AltaDeSala({
   plantillas,
   sedes,
   proyectos,
   plantillaInicial,
+  proyectoInicial,
 }: {
   plantillas: PlantillaConEquipamiento[];
   sedes: string[];
   proyectos: ProyectoConLocalizaciones[];
   plantillaInicial?: string;
+  /** Viniendo de la portada de una obra (`?proyecto=`), llega preseleccionada. */
+  proyectoInicial?: string;
 }) {
   const inicial = plantillas.find((p) => p.id === plantillaInicial);
+  const proyectoDePartida = proyectos.find((p) => p.id === proyectoInicial);
 
   const [plantillaId, setPlantillaId] = useState(inicial?.id ?? '');
   const [borrador, setBorrador] = useState<Borrador>(
@@ -87,16 +101,16 @@ export function AltaDeSala({
   const [nombre, setNombre] = useState('');
   const [codigo, setCodigo] = useState('');
   const [copias, setCopias] = useState(1);
-  const [proyectoId, setProyectoId] = useState('');
-  const [localizacionId, setLocalizacionId] = useState('');
+  const [proyectoId, setProyectoId] = useState(proyectoDePartida?.id ?? '');
+  const [localizacionId, setLocalizacionId] = useState(
+    localizacionPorDefecto(proyectoDePartida),
+  );
 
   const proyecto = proyectos.find((p) => p.id === proyectoId);
 
   const cambiarProyecto = (id: string) => {
     setProyectoId(id);
-    const p = proyectos.find((x) => x.id === id);
-    // Con una sola localización —la "Sin asignar" del nacimiento— se elige sola.
-    setLocalizacionId(p?.localizaciones.length === 1 ? p.localizaciones[0].id : '');
+    setLocalizacionId(localizacionPorDefecto(proyectos.find((x) => x.id === id)));
   };
 
   const plantilla = plantillas.find((p) => p.id === plantillaId);

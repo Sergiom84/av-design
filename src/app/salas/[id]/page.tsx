@@ -17,10 +17,14 @@ export const dynamic = 'force-dynamic';
  * La tarjeta de ciclo de vida (hitos de instalación y entrega) entra aquí
  * cuando exista P1.
  */
-export default async function ResumenSala({ params }: PageProps<'/salas/[id]'>) {
+export default async function ResumenSala({
+  params,
+  searchParams,
+}: PageProps<'/salas/[id]'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
+  const { borrar } = await searchParams;
   const ficha = await fichaConAlmacen(id);
   if (!ficha) notFound();
 
@@ -54,6 +58,7 @@ export default async function ResumenSala({ params }: PageProps<'/salas/[id]'>) 
           tecnicos={tecnicos}
           roles={roles}
           avisosEntrega={avisosDeEntrega(puntosMontaje)}
+          confirmarBorrado={typeof borrar === 'string' ? borrar : undefined}
         />
       </div>
     </div>

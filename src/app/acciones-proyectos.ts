@@ -10,6 +10,14 @@ const texto = (v: FormDataEntryValue | null): string | null => {
   return s === '' ? null : s;
 };
 
+/** Un proyecto cerrado es de solo lectura para su estructura. */
+async function proyectoCerrado(proyectoId: string): Promise<boolean> {
+  const [f] = await sql<Array<{ cerrado: boolean }>>`
+    select exists (select 1 from hitos_proyecto h
+                   where h.proyecto_id = ${proyectoId} and h.tipo = 'cierre') as cerrado`;
+  return Boolean(f?.cerrado);
+}
+
 /**
  * La obra. Nace con la localización "Sin asignar", como en XTEN-AV: así una
  * sala puede entrar al proyecto sin haber decidido todavía en qué edificio o
@@ -48,10 +56,20 @@ export async function crearProyecto(datos: FormData) {
     // registra una vez aquí, no veinte veces en veinte altas de sala.
     const tecnicoInicio = texto(datos.get('tecnico_inicio_id'));
     if (tecnicoInicio) {
-      await tx`
-        insert into hitos_proyecto (proyecto_id, tipo, tecnico_id)
-        values (${p.id}, 'inicio', ${tecnicoInicio})
-        on conflict (proyecto_id, tipo) do nothing`;
+      // Solo un técnico activo con rol de inicio puede firmar el hito; un
+      // POST manipulado con otro id no registra nada.
+      const [valido] = await tx<Array<{ ok: boolean }>>`
+        select exists (
+          select 1 from tecnicos t
+          join tecnico_roles r on r.tecnico_id = t.id
+          where t.id = ${tecnicoInicio} and t.activo and r.rol = 'inicio'
+        ) as ok`;
+      if (valido?.ok) {
+        await tx`
+          insert into hitos_proyecto (proyecto_id, tipo, tecnico_id)
+          values (${p.id}, 'inicio', ${tecnicoInicio})
+          on conflict (proyecto_id, tipo) do nothing`;
+      }
     }
 
     return p.id;
@@ -66,6 +84,7 @@ export async function crearLocalizacion(datos: FormData) {
   const proyectoId = texto(datos.get('proyecto_id'));
   const nombre = texto(datos.get('nombre'));
   if (!proyectoId || !nombre) return;
+  if (await proyectoCerrado(proyectoId)) return;
   await sql`
     insert into localizaciones (proyecto_id, nombre)
     values (${proyectoId}, ${nombre})
@@ -109,6 +128,9 @@ export async function asignarSalaALocalizacion(datos: FormData) {
   if (!salaId) return;
   const localizacionId = texto(datos.get('localizacion_id'));
   if (localizacionId) {
+    const [loc] = await sql<Array<{ proyecto_id: string }>>`
+      select proyecto_id from localizaciones where id = ${localizacionId}`;
+    if (!loc || (await proyectoCerrado(loc.proyecto_id))) return;
     await sql`
       update salas set
         localizacion_id = ${localizacionId},

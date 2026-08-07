@@ -1,4 +1,5 @@
-import { Boton, Campo, Tarjeta } from '@/components/ui';
+import Link from 'next/link';
+import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
 import { borrarHitoProyecto, registrarHitoProyecto } from '@/app/acciones-ciclo';
 import {
   tecnicosDeRol,
@@ -10,6 +11,7 @@ import {
 /**
  * Inicio y cierre de la obra. La recepción no está aquí a propósito: es por
  * pedido y vive en compras; la instalación y la entrega son de cada sala.
+ * Borrar un hito elimina autoría y fecha: pide confirmación por la dirección.
  */
 export function HitosDeProyecto({
   proyectoId,
@@ -17,12 +19,14 @@ export function HitosDeProyecto({
   tecnicos,
   roles,
   salasSinEntregar,
+  confirmarBorrado,
 }: {
   proyectoId: string;
   hitos: HitoProyecto[];
   tecnicos: Tecnico[];
   roles: TecnicoRol[];
   salasSinEntregar: number;
+  confirmarBorrado?: string;
 }) {
   const inicio = hitos.find((h) => h.tipo === 'inicio');
   const cierre = hitos.find((h) => h.tipo === 'cierre');
@@ -36,8 +40,10 @@ export function HitosDeProyecto({
       <input type="hidden" name="proyecto_id" value={proyectoId} />
       <input type="hidden" name="tipo" value={tipo} />
       <Campo etiqueta="Quién">
-        <select name="tecnico_id" className="w-40">
-          <option value="">—</option>
+        <select name="tecnico_id" required className="w-40" defaultValue="">
+          <option value="" disabled>
+            Elegir técnico
+          </option>
           {iniciadores.map((t) => (
             <option key={t.id} value={t.id}>
               {t.nombre}
@@ -78,6 +84,30 @@ export function HitosDeProyecto({
     </li>
   );
 
+  const borrado = (h: HitoProyecto, etiqueta: string, aviso: string) =>
+    confirmarBorrado === h.id ? (
+      <div className="space-y-2">
+        <Aviso tono="alerta">{aviso}</Aviso>
+        <div className="flex gap-3 items-center">
+          <form action={borrarHitoProyecto}>
+            <input type="hidden" name="proyecto_id" value={proyectoId} />
+            <input type="hidden" name="id" value={h.id} />
+            <Boton variante="peligro">{etiqueta} definitivamente</Boton>
+          </form>
+          <Link href={`/proyectos/${proyectoId}` as never} className="enlace">
+            Cancelar
+          </Link>
+        </div>
+      </div>
+    ) : (
+      <Link
+        href={`/proyectos/${proyectoId}?borrar=${h.id}` as never}
+        className="boton boton-peligro"
+      >
+        {etiqueta}
+      </Link>
+    );
+
   return (
     <Tarjeta
       titulo="Hitos del proyecto"
@@ -98,16 +128,25 @@ export function HitosDeProyecto({
       {!cierre && inicio && formulario('cierre', 'Registrar cierre')}
 
       {(inicio || cierre) && (
-        <div className="flex gap-3 pt-3 border-t border-linea-suave">
-          {[inicio, cierre].filter(Boolean).map((h) => (
-            <form key={h!.id} action={borrarHitoProyecto}>
-              <input type="hidden" name="proyecto_id" value={proyectoId} />
-              <input type="hidden" name="id" value={h!.id} />
-              <Boton variante="secundario">
-                {h!.tipo === 'inicio' ? 'Borrar inicio' : 'Borrar cierre'}
-              </Boton>
-            </form>
-          ))}
+        <div className="space-y-3 pt-3 border-t border-linea-suave">
+          {cierre &&
+            borrado(
+              cierre,
+              'Borrar cierre',
+              'Borrar el cierre reabre la obra: vuelve a admitir salas e hitos. Quién y cuándo la cerró se pierde.',
+            )}
+          {inicio &&
+            (cierre ? (
+              <p className="text-tinta-tenue">
+                El inicio no se puede borrar mientras la obra esté cerrada.
+              </p>
+            ) : (
+              borrado(
+                inicio,
+                'Borrar inicio',
+                'Borrar el inicio elimina quién y cuándo arrancó la obra. No se puede deshacer: se registraría de nuevo.',
+              )
+            ))}
         </div>
       )}
     </Tarjeta>

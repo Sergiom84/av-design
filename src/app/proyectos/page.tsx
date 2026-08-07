@@ -3,7 +3,8 @@ import { hayConfiguracion } from '@/lib/db';
 import { listarProyectos, contarSalasSinProyecto } from '@/lib/datos-proyectos';
 import { listarSedes } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Cabecera, Enlace } from '@/components/ui';
+import { Aviso, Cabecera, Enlace } from '@/components/ui';
+import { tablasDeCicloListas } from '@/lib/datos-ciclo';
 import { ListaDeProyectos } from '@/components/proyecto/lista';
 import { AltaDeProyecto } from '@/components/proyecto/alta';
 
@@ -20,10 +21,11 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
   const { nueva } = await searchParams;
   const abrirAlta = nueva === '1';
 
-  const [proyectos, salasSinProyecto, sedes] = await Promise.all([
+  const [proyectos, salasSinProyecto, sedes, cicloListo] = await Promise.all([
     listarProyectos(),
     contarSalasSinProyecto(),
     abrirAlta ? listarSedes() : Promise.resolve([]),
+    tablasDeCicloListas(),
   ]);
 
   return (
@@ -43,6 +45,13 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
       />
 
       <div className="space-y-6">
+        {!cicloListo && (
+          <Aviso tono="alerta">
+            Faltan las tablas de técnicos e hitos: el despliegue llegó antes que su
+            migración. Aplicar db/migraciones/2026-08-jerarquia-p1.sql; hasta
+            entonces los estados salen como &quot;sin iniciar&quot;.
+          </Aviso>
+        )}
         {abrirAlta && <AltaDeProyecto sedes={sedes} />}
         <ListaDeProyectos proyectos={proyectos} salasSinProyecto={salasSinProyecto} />
       </div>

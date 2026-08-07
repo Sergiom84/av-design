@@ -21,29 +21,30 @@ export default async function DocumentosSala({
   const sala = await obtenerSalaCabecera(id);
   if (!sala) notFound();
 
+  // Literales de plantilla sin cast: typedRoutes valida cada destino.
   const entregables = [
     {
       nombre: 'Croquis de la sala',
       detalle: 'Plano en planta con cotas, mesa y equipos. Se imprime desde el Resumen.',
-      href: `/salas/${sala.id}`,
+      href: `/salas/${sala.id}` as const,
     },
     {
       nombre: 'Tabla de cables',
       detalle:
         'El entregable de obra: identificador, extremos, puertos y metros. Con exportación CSV.',
-      href: `/salas/${sala.id}/cableado`,
+      href: `/salas/${sala.id}/cableado` as const,
     },
     {
       nombre: 'Esquema de conexiones',
       detalle: 'Los equipos y sus cables, con los identificadores de la tabla.',
-      href: `/salas/${sala.id}/cableado`,
+      href: `/salas/${sala.id}/cableado` as const,
     },
     {
       nombre: 'Lista de material',
       detalle: 'Cable y consumibles a comprar, con la canalización dimensionada.',
-      href: `/salas/${sala.id}/logistica`,
+      href: `/salas/${sala.id}/logistica` as const,
     },
-  ] as const;
+  ];
 
   return (
     <Tarjeta
@@ -61,7 +62,7 @@ export default async function DocumentosSala({
           {entregables.map((e) => (
             <tr key={e.nombre}>
               <td>
-                <Link href={e.href as never} className="enlace">
+                <Link href={e.href} className="enlace">
                   {e.nombre}
                 </Link>
               </td>

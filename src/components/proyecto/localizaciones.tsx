@@ -22,9 +22,12 @@ const CLASE_ESTADO: Record<string, string> = {
 export function LocalizacionesDelProyecto({
   proyectoId,
   grupos,
+  cerrado = false,
 }: {
   proyectoId: string;
   grupos: GrupoLocalizacion[];
+  /** Con la obra cerrada la estructura no se toca: sin alta de localización. */
+  cerrado?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -80,15 +83,17 @@ export function LocalizacionesDelProyecto({
         </Tarjeta>
       ))}
 
-      <Tarjeta titulo="Nueva localización">
-        <form action={crearLocalizacion} className="flex flex-wrap items-end gap-3">
-          <input type="hidden" name="proyecto_id" value={proyectoId} />
-          <Campo etiqueta="Nombre">
-            <input name="nombre" required placeholder="Edificio B · Planta 3" className="w-64" />
-          </Campo>
-          <Boton variante="secundario">Añadir</Boton>
-        </form>
-      </Tarjeta>
+      {!cerrado && (
+        <Tarjeta titulo="Nueva localización">
+          <form action={crearLocalizacion} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="proyecto_id" value={proyectoId} />
+            <Campo etiqueta="Nombre">
+              <input name="nombre" required placeholder="Edificio B · Planta 3" className="w-64" />
+            </Campo>
+            <Boton variante="secundario">Añadir</Boton>
+          </form>
+        </Tarjeta>
+      )}
     </div>
   );
 }

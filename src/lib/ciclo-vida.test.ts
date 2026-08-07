@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   avisosDeEntrega,
   estadoDeProyecto,
+  proyectoCerrado,
   resumenCicloVida,
+  tecnicoConRol,
   tecnicosDeRol,
   type HitoProyecto,
   type HitoSala,
@@ -82,6 +84,35 @@ describe('tecnicosDeRol', () => {
 
   test('sin nadie con el rol devuelve vacío', () => {
     assert.deepEqual(tecnicosDeRol(tecnicos, roles, 'inicio'), []);
+  });
+});
+
+describe('tecnicoConRol', () => {
+  const tecnicos = [tecnico('t1', 'Diego'), tecnico('t2', 'Ana', false)];
+  const roles: TecnicoRol[] = [
+    { tecnico_id: 't1', rol: 'instalacion' },
+    { tecnico_id: 't2', rol: 'instalacion' },
+  ];
+
+  test('activo y con el rol, vale', () => {
+    assert.ok(tecnicoConRol(tecnicos, roles, 't1', 'instalacion'));
+  });
+
+  test('inactivo no vale aunque tenga el rol', () => {
+    assert.ok(!tecnicoConRol(tecnicos, roles, 't2', 'instalacion'));
+  });
+
+  test('sin el rol o fuera de la lista, no vale', () => {
+    assert.ok(!tecnicoConRol(tecnicos, roles, 't1', 'recepcion'));
+    assert.ok(!tecnicoConRol(tecnicos, roles, 'tx', 'instalacion'));
+  });
+});
+
+describe('proyectoCerrado', () => {
+  test('cerrado solo con el hito de cierre', () => {
+    assert.ok(!proyectoCerrado([]));
+    assert.ok(!proyectoCerrado([hitoProyecto('inicio')]));
+    assert.ok(proyectoCerrado([hitoProyecto('inicio'), hitoProyecto('cierre')]));
   });
 });
 

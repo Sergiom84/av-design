@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function NuevaSala({ searchParams }: PageProps<'/salas/nueva'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
-  const { plantilla } = await searchParams;
+  const { plantilla, proyecto } = await searchParams;
   const [plantillas, sedes, proyectos] = await Promise.all([
     listarPlantillas(),
     listarSedes(),
@@ -35,6 +35,7 @@ export default async function NuevaSala({ searchParams }: PageProps<'/salas/nuev
         sedes={sedes}
         proyectos={proyectos}
         plantillaInicial={Array.isArray(plantilla) ? plantilla[0] : plantilla}
+        proyectoInicial={typeof proyecto === 'string' ? proyecto : undefined}
       />
     </>
   );

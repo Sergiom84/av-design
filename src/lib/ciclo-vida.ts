@@ -75,6 +75,20 @@ export function tecnicosDeRol(
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
+/**
+ * Un técnico vale para registrar un hecho si está en la lista, activo y con
+ * el rol del hecho. La columna sigue siendo nullable para los hitos
+ * históricos de gente que ya no está; una escritura nueva exige esto.
+ */
+export function tecnicoConRol(
+  tecnicos: Tecnico[],
+  roles: TecnicoRol[],
+  tecnicoId: string,
+  rol: RolTecnico,
+): boolean {
+  return tecnicosDeRol(tecnicos, roles, rol).some((t) => t.id === tecnicoId);
+}
+
 export type EstadoProyecto = 'sin_iniciar' | 'en_curso' | 'cerrado';
 
 export const ETIQUETA_ESTADO_PROYECTO: Record<EstadoProyecto, string> = {
@@ -88,6 +102,16 @@ export function estadoDeProyecto(hitos: HitoProyecto[]): EstadoProyecto {
   if (hitos.some((h) => h.tipo === 'cierre')) return 'cerrado';
   if (hitos.some((h) => h.tipo === 'inicio')) return 'en_curso';
   return 'sin_iniciar';
+}
+
+/**
+ * Un proyecto cerrado es de solo lectura para su estructura: no se crean ni
+ * adoptan salas, no se registran ni borran hitos de sus salas, y el inicio
+ * no se puede borrar mientras exista el cierre. Para tocar algo se borra
+ * primero el cierre, que es reabrir la obra con rastro.
+ */
+export function proyectoCerrado(hitos: HitoProyecto[]): boolean {
+  return estadoDeProyecto(hitos) === 'cerrado';
 }
 
 export interface PasoCiclo {

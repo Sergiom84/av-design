@@ -1,4 +1,4 @@
-import { Boton, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import { borrarConexion, guardarConexion } from '@/app/acciones';
 import { avisosDeConexion } from '@/lib/cable-schedule';
 import {
@@ -88,6 +88,7 @@ export function Conexiones({
             </form>
           ))}
 
+          <ContenedorTabla etiqueta="Conexiones">
           <table className="datos">
             <thead>
               <tr>
@@ -188,6 +189,7 @@ export function Conexiones({
               })}
             </tbody>
           </table>
+          </ContenedorTabla>
         </>
       )}
 

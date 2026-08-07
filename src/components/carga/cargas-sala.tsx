@@ -1,4 +1,4 @@
-import { Boton, Campo, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import { crearCargaDesdeReservas } from '@/app/acciones-almacen';
 import { ETIQUETA_CARGA } from '@/lib/tipos';
@@ -30,6 +30,7 @@ export function CargasDeSala({
       {cargas.length === 0 ? (
         <Vacio>Sin cargas preparadas para esta sala.</Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Carga de furgoneta">
         <table className="datos">
           <thead>
             <tr>
@@ -54,6 +55,7 @@ export function CargasDeSala({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       <form

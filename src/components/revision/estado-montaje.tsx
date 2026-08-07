@@ -1,4 +1,4 @@
-import { Aviso, Tarjeta } from '@/components/ui';
+import { Aviso, ContenedorTabla, Tarjeta } from '@/components/ui';
 import {
   ETIQUETA_SEMAFORO,
   resumirMontaje,
@@ -49,6 +49,7 @@ export function EstadoMontaje({ puntos }: { puntos: PuntoMontaje[] }) {
         )}
       </div>
 
+      <ContenedorTabla etiqueta="Revisión de montaje">
       <table className="datos">
         <thead>
           <tr>
@@ -67,6 +68,7 @@ export function EstadoMontaje({ puntos }: { puntos: PuntoMontaje[] }) {
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

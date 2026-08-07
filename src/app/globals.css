@@ -233,12 +233,16 @@ table.datos tbody tr:hover {
   color: var(--acento-fuerte);
 }
 
-/* Controles */
+/* Controles.
+   max-width: 100% es la salvaguarda: un <select> sin ancho propio se dimensiona
+   por la opción más larga (el nombre de una plantilla, un modelo de catálogo)
+   y sin este límite ensancha su fila y el documento entero. */
 input,
 select,
 textarea {
   font-family: inherit;
   font-size: inherit;
+  max-width: 100%;
   background: var(--superficie);
   border: 1px solid var(--linea);
   border-radius: 6px;

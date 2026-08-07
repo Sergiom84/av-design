@@ -1,4 +1,4 @@
-import { Aviso, Boton, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { crearPedidoDesdeFalta } from '@/app/acciones-almacen';
 import type { GrupoProveedor, LineaFaltante } from '@/lib/compras';
 
@@ -46,6 +46,7 @@ export function QueFalta({
           saldrá qué hay que comprar.
         </Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Qué falta">
         <table className="datos">
           <thead>
             <tr>
@@ -74,6 +75,7 @@ export function QueFalta({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       {hayFalta && (
@@ -116,6 +118,7 @@ export function QueFalta({
                 </Aviso>
               )}
 
+              <ContenedorTabla etiqueta={`Pedido ${g.proveedor ?? 'sin proveedor'}`}>
               <table className="datos">
                 <thead>
                   <tr>
@@ -151,6 +154,7 @@ export function QueFalta({
                   ))}
                 </tbody>
               </table>
+              </ContenedorTabla>
             </div>
           ))}
         </div>

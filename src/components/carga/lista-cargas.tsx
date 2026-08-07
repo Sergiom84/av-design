@@ -1,4 +1,4 @@
-import { Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { ETIQUETA_CARGA } from '@/lib/tipos';
 import type { CargaConResumen } from '@/lib/datos-almacen';
 
@@ -22,6 +22,7 @@ export function ListaCargas({
 
   return (
     <Tarjeta titulo={titulo}>
+      <ContenedorTabla etiqueta={titulo}>
       <table className="datos">
         <thead>
           <tr>
@@ -48,6 +49,7 @@ export function ListaCargas({
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

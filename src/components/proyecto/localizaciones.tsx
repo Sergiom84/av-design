@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import { crearLocalizacion } from '@/app/acciones-proyectos';
 import {
   estadoDeSalaEnPortada,
@@ -39,6 +39,7 @@ export function LocalizacionesDelProyecto({
           {g.salas.length === 0 ? (
             <Vacio>Sin salas todavía. Se eligen en el alta de sala o se adoptan abajo.</Vacio>
           ) : (
+            <ContenedorTabla etiqueta={g.nombre}>
             <table className="datos">
               <thead>
                 <tr>
@@ -79,6 +80,7 @@ export function LocalizacionesDelProyecto({
                 })}
               </tbody>
             </table>
+            </ContenedorTabla>
           )}
         </Tarjeta>
       ))}

@@ -1,4 +1,4 @@
-import { Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import { crearUbicacion } from '@/app/acciones-almacen';
 import type { Ubicacion } from '@/lib/tipos';
 
@@ -15,6 +15,7 @@ export function Ubicaciones({ ubicaciones }: { ubicaciones: Ubicacion[] }) {
       {ubicaciones.length === 0 ? (
         <Vacio>Sin ubicaciones. Añade la primera abajo.</Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Ubicaciones">
         <table className="datos">
           <thead>
             <tr>
@@ -35,6 +36,7 @@ export function Ubicaciones({ ubicaciones }: { ubicaciones: Ubicacion[] }) {
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       <form

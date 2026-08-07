@@ -1,4 +1,4 @@
-import { Tarjeta } from '@/components/ui';
+import { ContenedorTabla, Tarjeta } from '@/components/ui';
 import type { DimensionCanalizacion, LineaMaterialCable } from '@/lib/calculo-cable';
 
 /** Lo que hay que comprar: bobinas y latiguillos, no metros sueltos. */
@@ -20,6 +20,7 @@ export function MaterialAComprar({
           : undefined
       }
     >
+      <ContenedorTabla etiqueta="Material a comprar">
       <table className="datos">
         <thead>
           <tr>
@@ -46,6 +47,7 @@ export function MaterialAComprar({
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

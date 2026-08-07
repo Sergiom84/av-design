@@ -63,7 +63,7 @@ export function FichaDePlantilla({
         }
       >
         <div className="grid xl:grid-cols-[1fr_15rem] gap-8 items-start">
-          <div>
+          <div className="min-w-0 max-w-full">
             <div className="flex items-baseline justify-between gap-4 mb-2">
               <span className="t-etiqueta">Equipamiento estándar</span>
               <Link

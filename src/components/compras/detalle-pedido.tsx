@@ -1,4 +1,4 @@
-import { Aviso, Boton, Campo, Dato, Enlace, Tarjeta } from '@/components/ui';
+import { Aviso, Boton, Campo, ContenedorTabla, Dato, Enlace, Tarjeta } from '@/components/ui';
 import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import {
   borrarLineaPedido,
@@ -104,6 +104,7 @@ export function LineasPedido({
         </div>
       )}
 
+      <ContenedorTabla etiqueta="Líneas del pedido">
       <table className="datos">
         <thead>
           <tr>
@@ -185,6 +186,7 @@ export function LineasPedido({
           })}
         </tbody>
       </table>
+      </ContenedorTabla>
 
       {pendientes.length > 0 && pedido.estado !== 'borrador' && (
         <form

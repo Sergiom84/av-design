@@ -1,4 +1,4 @@
-import { Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import type { RevisionConResumen } from '@/lib/datos-checkin';
 
 /**
@@ -26,6 +26,7 @@ export function ListaVisitas({
 
   return (
     <Tarjeta titulo={titulo}>
+      <ContenedorTabla etiqueta={titulo}>
       <table className="datos">
         <thead>
           <tr>
@@ -56,6 +57,7 @@ export function ListaVisitas({
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

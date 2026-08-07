@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Aviso, Boton, Cabecera, Dato, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, Cabecera, ContenedorTabla, Dato, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { borrarProyecto } from '@/app/acciones-proyectos';
 import { listarSalasSinProyecto, obtenerProyecto } from '@/lib/datos-proyectos';
 import {
@@ -144,6 +144,7 @@ export default async function PortadaProyecto({
                 Sin pedidos. Se crean desde el qué falta de cada sala y heredan la obra.
               </Vacio>
             ) : (
+              <ContenedorTabla etiqueta="Pedidos del proyecto">
               <table className="datos">
                 <thead>
                   <tr>
@@ -164,6 +165,7 @@ export default async function PortadaProyecto({
                   ))}
                 </tbody>
               </table>
+              </ContenedorTabla>
             )}
           </Tarjeta>
         </div>

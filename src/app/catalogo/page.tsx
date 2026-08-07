@@ -31,12 +31,12 @@ export default async function Catalogo({ searchParams }: PageProps<'/catalogo'>)
         acciones={<Enlace href="/articulo/nuevo">Añadir referencia</Enlace>}
       />
 
-      <form className="flex items-end gap-3 mb-6">
+      <form className="flex flex-wrap items-end gap-3 mb-6">
         <input
           name="q"
           defaultValue={buscar}
           placeholder="Buscar marca"
-          className="min-w-[16rem]"
+          className="w-full min-w-0 sm:w-auto sm:min-w-[16rem]"
           aria-label="Buscar marca"
         />
         <span className="text-tinta-tenue">

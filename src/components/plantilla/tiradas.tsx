@@ -1,4 +1,4 @@
-import { Boton, Campo } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla } from '@/components/ui';
 import { anadirTiradaPlantilla, quitarTiradaPlantilla } from '@/app/acciones';
 import {
   ETIQUETA_RUTA,
@@ -46,6 +46,7 @@ export function TiradasDePlantilla({
           Sin tiradas tipo. Las salas nacerán sin tabla de cables.
         </p>
       ) : (
+        <ContenedorTabla etiqueta="Tiradas de la plantilla">
         <table className="datos mb-3">
           <thead>
             <tr>
@@ -75,6 +76,7 @@ export function TiradasDePlantilla({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       <form

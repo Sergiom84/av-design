@@ -1,4 +1,4 @@
-import { Aviso, Boton, Campo, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, Boton, Campo, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import {
   borrarReserva,
   crearReserva,
@@ -41,6 +41,7 @@ export function ReservasDeSala({
           él.
         </Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Material reservado">
         <table className="datos">
           <thead>
             <tr>
@@ -91,6 +92,7 @@ export function ReservasDeSala({
             })}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       {[...disponibilidad.values()].some((d) => d.sobre_reservado) && (

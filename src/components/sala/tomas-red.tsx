@@ -1,4 +1,4 @@
-import { Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import { anadirToma, borrarToma, guardarToma } from '@/app/acciones';
 import { UBICACIONES_TOMA, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
 
@@ -63,6 +63,7 @@ export function TomasDeRed({
             </form>
           ))}
 
+          <ContenedorTabla etiqueta="Tomas de red">
           <table className="datos">
             <thead>
               <tr>
@@ -133,6 +134,7 @@ export function TomasDeRed({
               ))}
             </tbody>
           </table>
+          </ContenedorTabla>
         </>
       )}
 

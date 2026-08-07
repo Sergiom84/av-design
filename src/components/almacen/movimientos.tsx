@@ -1,4 +1,4 @@
-import { Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { efectoMovimiento } from '@/lib/almacen';
 import { ETIQUETA_MOVIMIENTO } from '@/lib/tipos';
 import type { FilaMovimiento } from '@/lib/datos-almacen';
@@ -38,6 +38,7 @@ export function Movimientos({
 
   return (
     <Tarjeta titulo={titulo} pie={pie}>
+      <ContenedorTabla etiqueta={titulo}>
       <table className="datos">
         <thead>
           <tr>
@@ -75,6 +76,7 @@ export function Movimientos({
           })}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

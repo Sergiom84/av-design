@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { articulosConPuertos, listarArticulosDeMarca } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Cabecera, Enlace, Tarjeta } from '@/components/ui';
+import { Cabecera, ContenedorTabla, Enlace, Tarjeta } from '@/components/ui';
 import { ETIQUETA_SENAL, Senal } from '@/lib/tipos';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +43,7 @@ export default async function Seccion({
       />
 
       <Tarjeta>
+        <ContenedorTabla etiqueta={nombreCategoria}>
         <table className="datos">
           <thead>
             <tr>
@@ -89,6 +90,7 @@ export default async function Seccion({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       </Tarjeta>
     </>
   );

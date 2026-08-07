@@ -178,7 +178,7 @@ export function Campo({
   ayuda?: string;
 }) {
   return (
-    <label className="block">
+    <label className="block min-w-0 max-w-full">
       <span className="t-etiqueta block mb-1">{etiqueta}</span>
       {children}
       {ayuda && <span className="block text-tinta-tenue mt-1 text-[0.6875rem]">{ayuda}</span>}

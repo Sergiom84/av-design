@@ -1,4 +1,4 @@
-import { Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { ETIQUETA_PEDIDO } from '@/lib/tipos';
 import type { PedidoConTotales } from '@/lib/datos-almacen';
 
@@ -23,6 +23,7 @@ export function ListaPedidos({ pedidos }: { pedidos: PedidoConTotales[] }) {
 
   return (
     <Tarjeta titulo="Pedidos">
+      <ContenedorTabla etiqueta="Pedidos">
       <table className="datos">
         <thead>
           <tr>
@@ -66,6 +67,7 @@ export function ListaPedidos({ pedidos }: { pedidos: PedidoConTotales[] }) {
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

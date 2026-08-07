@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { obtenerSalaCabecera } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Tarjeta } from '@/components/ui';
+import { ContenedorTabla, Tarjeta } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +51,7 @@ export default async function DocumentosSala({
       titulo="Entregables"
       pie="El paquete exportable (PDF, Excel, ZIP) está en el roadmap: entrará aquí."
     >
+      <ContenedorTabla etiqueta="Entregables">
       <table className="datos">
         <thead>
           <tr>
@@ -71,6 +72,7 @@ export default async function DocumentosSala({
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

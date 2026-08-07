@@ -1,4 +1,4 @@
-import { Dato, Tarjeta, Vacio } from '@/components/ui';
+import { ContenedorTabla, Dato, Tarjeta, Vacio } from '@/components/ui';
 import type { ResultadoCable } from '@/lib/calculo-cable';
 import { ETIQUETA_RUTA } from '@/lib/tipos';
 
@@ -36,6 +36,7 @@ export function ResultadoDelCable({
             />
           </div>
 
+          <ContenedorTabla etiqueta="Cable necesario">
           <table className="datos">
             <thead>
               <tr>
@@ -71,6 +72,7 @@ export function ResultadoDelCable({
               ))}
             </tbody>
           </table>
+          </ContenedorTabla>
         </>
       )}
     </Tarjeta>

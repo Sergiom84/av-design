@@ -1,4 +1,4 @@
-import { Tarjeta } from '@/components/ui';
+import { ContenedorTabla, Tarjeta } from '@/components/ui';
 import type { PlantillaSala } from '@/lib/tipos';
 
 /**
@@ -28,6 +28,7 @@ export function PrioridadDePlantillas({ plantillas }: { plantillas: PlantillaSal
       titulo="Por dónde empezar"
       pie={`Con medidas: ${conMedidas.length} de ${plantillas.length} plantillas, que cubren ${cubiertas} de las ${total} salas representadas (${porcentaje} %).`}
     >
+      <ContenedorTabla etiqueta="Por dónde empezar">
       <table className="datos">
         <thead>
           <tr>
@@ -65,6 +66,7 @@ export function PrioridadDePlantillas({ plantillas }: { plantillas: PlantillaSal
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

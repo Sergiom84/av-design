@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { crearSala } from '@/app/acciones';
-import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
+import { Aviso, Boton, Campo, ContenedorTabla, Tarjeta } from '@/components/ui';
 import { MAXIMO_COPIAS, resumirSerie, serieDeNombres } from '@/lib/nombres-serie';
 import {
   ETIQUETA_RUTA,
@@ -463,6 +463,7 @@ export function AltaDeSala({
                 La plantilla no tiene equipamiento estándar definido.
               </p>
             ) : (
+              <ContenedorTabla etiqueta="Equipamiento heredado">
               <table className="datos">
                 <thead>
                   <tr>
@@ -482,6 +483,7 @@ export function AltaDeSala({
                   ))}
                 </tbody>
               </table>
+              </ContenedorTabla>
             )}
           </Tarjeta>
         )}

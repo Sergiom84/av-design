@@ -1,7 +1,7 @@
 import { hayConfiguracion } from '@/lib/db';
 import { listarParametros } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Boton, Cabecera, Tarjeta } from '@/components/ui';
+import { Boton, Cabecera, ContenedorTabla, Tarjeta } from '@/components/ui';
 import { guardarParametros } from '../acciones';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +21,7 @@ export default async function Parametros() {
       <div className="max-w-3xl">
         <Tarjeta pie="La holgura de pantalla la habéis fijado entre 20 y 50 cm; el valor por defecto es el punto medio. La de proyector, unos 10 cm.">
           <form action={guardarParametros}>
+            <ContenedorTabla etiqueta="Parámetros">
             <table className="datos">
               <thead>
                 <tr>
@@ -54,6 +55,7 @@ export default async function Parametros() {
                 ))}
               </tbody>
             </table>
+            </ContenedorTabla>
             <div className="mt-4">
               <Boton>Guardar parámetros</Boton>
             </div>

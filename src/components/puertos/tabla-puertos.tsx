@@ -1,6 +1,6 @@
 import type { Puerto } from '@/lib/tipos';
 import { ETIQUETA_SENAL, ETIQUETA_SENTIDO } from '@/lib/tipos';
-import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
+import { Aviso, Boton, Campo, ContenedorTabla, Tarjeta } from '@/components/ui';
 import { anadirPuerto, borrarPuerto, guardarPuerto } from '@/app/acciones';
 
 /**
@@ -53,6 +53,7 @@ export function TablaPuertos({
             </form>
           ))}
 
+          <ContenedorTabla etiqueta="Puertos">
           <table className="datos">
             <thead>
               <tr>
@@ -164,6 +165,7 @@ export function TablaPuertos({
               ))}
             </tbody>
           </table>
+          </ContenedorTabla>
         </>
       )}
 

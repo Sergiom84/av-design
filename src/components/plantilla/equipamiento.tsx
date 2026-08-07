@@ -1,4 +1,4 @@
-import { Boton, Campo } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla } from '@/components/ui';
 import { anadirLineaPlantilla, operarLineaPlantilla } from '@/app/acciones';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 import { ETIQUETA_EXTREMO, type LineaPlantilla } from '@/lib/tipos';
@@ -30,6 +30,7 @@ export function EquipamientoDePlantilla({
       {lineas.length === 0 ? (
         <p className="text-tinta-tenue mb-3">Sin equipamiento definido.</p>
       ) : (
+        <ContenedorTabla etiqueta="Equipamiento de la plantilla">
         <table className="datos mb-3">
           <thead>
             <tr>
@@ -151,6 +152,7 @@ export function EquipamientoDePlantilla({
             })}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       <form

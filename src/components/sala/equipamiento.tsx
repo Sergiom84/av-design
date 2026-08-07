@@ -1,4 +1,4 @@
-import { Boton, Campo, Tarjeta, Vacio } from '@/components/ui';
+import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import {
   ajustarCantidadEquipo,
   anadirEquipo,
@@ -41,6 +41,7 @@ export function Equipamiento({
       {equipos.length === 0 ? (
         <Vacio>Sin equipos. Añade el primero abajo.</Vacio>
       ) : (
+        <ContenedorTabla etiqueta="Equipos en la sala">
         <table className="datos">
           <thead>
             <tr>
@@ -134,6 +135,7 @@ export function Equipamiento({
             ))}
           </tbody>
         </table>
+        </ContenedorTabla>
       )}
 
       <form

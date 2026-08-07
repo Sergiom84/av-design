@@ -1,4 +1,4 @@
-import { Aviso, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import type { FilaAlmacen } from '@/lib/datos-almacen';
 
 /**
@@ -53,6 +53,7 @@ export function Existencias({ filas }: { filas: FilaAlmacen[] }) {
         </div>
       )}
 
+      <ContenedorTabla etiqueta="Existencias">
       <table className="datos">
         <thead>
           <tr>
@@ -96,6 +97,7 @@ export function Existencias({ filas }: { filas: FilaAlmacen[] }) {
           ))}
         </tbody>
       </table>
+      </ContenedorTabla>
     </Tarjeta>
   );
 }

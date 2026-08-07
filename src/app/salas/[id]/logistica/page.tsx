@@ -41,6 +41,7 @@ export default async function LogisticaSala({
             reservas={falta.reservas}
             disponibilidad={falta.disponibilidad}
             necesidad={falta.faltantes}
+            reservadoAqui={falta.reservadoAqui}
           />
           <QueFalta
             salaId={sala.id}

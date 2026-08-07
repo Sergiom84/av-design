@@ -10,11 +10,29 @@ import { useEffect, useRef, useState } from 'react';
  * JavaScript. El segmento activo lo da el propio App Router.
  *
  * En móvil la barra desborda: la pestaña activa se lleva a la vista al
- * entrar, recargar, navegar o volver atrás, y un degradado discreto en cada
+ * entrar, recargar, navegar o volver atrás, y una flecha discreta en cada
  * lado avisa de que hay más pestañas cuando el desbordamiento existe en esa
- * dirección — nunca los dos gratis por defecto. Todo esto es mejora
- * progresiva sobre enlaces que ya funcionan sin JavaScript.
+ * dirección — nunca las dos gratis por defecto. Es un icono SVG en línea
+ * (`design-system/MASTER.md`: sin fuente de iconos, sin gradientes), no una
+ * mancha decorativa. Todo esto es mejora progresiva sobre enlaces que ya
+ * funcionan sin JavaScript.
  */
+function Flecha({ direccion }: { direccion: 'izquierda' | 'derecha' }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={direccion === 'izquierda' ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} />
+    </svg>
+  );
+}
 const PESTANAS = [
   { segmento: null, etiqueta: 'Resumen' },
   { segmento: 'equipamiento', etiqueta: 'Equipamiento' },
@@ -63,8 +81,10 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
       {desborde.izquierda && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-fondo to-transparent"
-        />
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-fondo pr-1 text-tinta-tenue"
+        >
+          <Flecha direccion="izquierda" />
+        </span>
       )}
       <nav
         ref={contenedorRef}
@@ -95,8 +115,10 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
       {desborde.derecha && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-fondo to-transparent"
-        />
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-fondo pl-1 text-tinta-tenue"
+        >
+          <Flecha direccion="derecha" />
+        </span>
       )}
     </div>
   );

@@ -10,14 +10,21 @@ import { ETIQUETA_EXTREMO, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
 
 type Catalogo = Map<string, { marca: string | null; modelo: string; categoria: string }>;
 
-/** La referencia real del artículo si está en catálogo, o el aviso de que no lo está. */
+/**
+ * El estado de catálogo del equipo, en texto explícito ("En catálogo" /
+ * "Fuera de catálogo"): no puede depender solo del color del badge. La
+ * referencia real va aparte, junto al estado.
+ */
 function Referencia({ equipo, catalogo }: { equipo: EquipoEnSala; catalogo: Catalogo }) {
   const articulo = equipo.articulo_id ? catalogo.get(equipo.articulo_id) : undefined;
   if (!articulo) return <Estado tono="aviso">Fuera de catálogo</Estado>;
   return (
-    <Estado tono="informacion">
-      {[articulo.marca, articulo.modelo].filter(Boolean).join(' ')}
-    </Estado>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <Estado tono="listo">En catálogo</Estado>
+      <span className="text-tinta-tenue">
+        {[articulo.marca, articulo.modelo].filter(Boolean).join(' ')}
+      </span>
+    </span>
   );
 }
 

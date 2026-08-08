@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import postgres from 'postgres';
+import { instalarCapturaRed } from './captura-red';
+
+instalarCapturaRed('flujo-guardas');
 
 const sql = postgres('postgres://av_design:av_design_local@localhost:5433/av_design_e2e_a', { max: 1 });
 
@@ -107,6 +110,23 @@ test('atrás/adelante conserva la pestaña de sala', async ({ page }) => {
   await shot(page, '07b_pestanas_atras_adelante');
 });
 
+test('activa una pestaña de sala con Tab + Enter', async ({ page }) => {
+  await page.goto(`/salas/${salaId}`, { waitUntil: 'networkidle' });
+  const enlaceEquipamiento = page.getByRole('link', { name: 'Equipamiento' });
+  // Se llega al enlace por teclado de verdad: Tab repetido hasta que el foco
+  // cae sobre él, no un .focus() programático que se saltaría la navegación
+  // real por tabulación.
+  let intentos = 0;
+  while (!(await enlaceEquipamiento.evaluate((el) => el === document.activeElement).catch(() => false))) {
+    await page.keyboard.press('Tab');
+    intentos++;
+    if (intentos > 30) throw new Error('Tab no alcanzó el enlace "Equipamiento" en 30 pulsaciones');
+  }
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/\/equipamiento$/);
+  await expect(enlaceEquipamiento).toHaveAttribute('aria-current', 'page');
+});
+
 test('cierra el proyecto (registrar cierre)', async ({ page }) => {
   await page.goto(`/proyectos/${proyectoId}`, { waitUntil: 'networkidle' });
   const formCierre = page.locator('form', { hasText: 'Registrar cierre' });
@@ -199,6 +219,42 @@ test('con proyecto cerrado: anadirConexion no escribe desde la UI', async ({ pag
   await shot(page, '11_conexion_bloqueada_no_escribe');
 });
 
+test('con proyecto cerrado: guardarConexion no escribe desde la UI', async ({ page }) => {
+  await page.goto(`/salas/${salaId}/cableado`, { waitUntil: 'networkidle' });
+  const [{ senal: senalAntes }] = await sql`select senal::text from conexiones where sala_id = ${salaId} limit 1`;
+  const nuevaSenal = senalAntes === 'hdmi' ? 'red' : 'hdmi';
+  // Los controles de cada fila referencian su <form id="conexion-{id}"> por el
+  // atributo HTML `form=`, no por anidamiento en el DOM — el select y los
+  // botones viven en la <tr>, el <form> es un elemento hermano y vacío. Por
+  // eso se localiza la fila (tr), no el form.
+  const filaConexion = page.getByRole('group', { name: 'Conexiones' }).locator('tbody tr').first();
+  await expect(filaConexion, 'debe existir la conexión creada en el paso previo').toBeVisible();
+  await filaConexion.locator('select[name="senal"]').selectOption(nuevaSenal);
+  await filaConexion.getByRole('button', { name: 'Guardar' }).click();
+  await page.waitForLoadState('networkidle');
+  const [{ n }] = await sql`select count(*)::int as n from conexiones where sala_id = ${salaId} and senal::text = ${nuevaSenal}`;
+  expect(n, 'verificación en BD: guardarConexion no debe cambiar la señal con proyecto cerrado').toBe(0);
+  await shot(page, '11b_conexion_edicion_bloqueada');
+});
+
+test('con proyecto cerrado: borrarConexion no escribe desde la UI', async ({ page }) => {
+  await page.goto(`/salas/${salaId}/cableado`, { waitUntil: 'networkidle' });
+  const [{ n: antesBd }] = await sql`select count(*)::int as n from conexiones where sala_id = ${salaId}`;
+  const antes = await page.getByRole('group', { name: 'Conexiones' }).locator('tbody tr').count();
+  await page
+    .getByRole('group', { name: 'Conexiones' })
+    .locator('tbody tr')
+    .first()
+    .getByRole('button', { name: 'Quitar' })
+    .click();
+  await page.waitForLoadState('networkidle');
+  const despues = await page.getByRole('group', { name: 'Conexiones' }).locator('tbody tr').count();
+  expect(despues, 'borrarConexion no debe eliminar la fila con proyecto cerrado').toBe(antes);
+  const [{ n: despuesBd }] = await sql`select count(*)::int as n from conexiones where sala_id = ${salaId}`;
+  expect(despuesBd, 'verificación en BD: borrarConexion no debe eliminar con proyecto cerrado').toBe(antesBd);
+  await shot(page, '11c_conexion_borrado_bloqueado');
+});
+
 test('reabre el proyecto borrando el cierre', async ({ page }) => {
   await page.goto(`/proyectos/${proyectoId}`, { waitUntil: 'networkidle' });
   await page.getByRole('link', { name: 'Borrar cierre' }).click();
@@ -220,6 +276,56 @@ test('con proyecto reabierto: anadirToma vuelve a escribir', async ({ page }) =>
   const despues = await page.getByRole('group', { name: 'Tomas de red' }).locator('tbody tr').count();
   expect(despues, 'anadirToma sí debe escribir con proyecto reabierto (control positivo)').toBe(antes + 1);
   await shot(page, '13_toma_reabierta_si_escribe');
+});
+
+test('con proyecto reabierto: guardarConexion vuelve a escribir (control positivo)', async ({ page }) => {
+  await page.goto(`/salas/${salaId}/cableado`, { waitUntil: 'networkidle' });
+  const [{ senal: senalAntes }] = await sql`select senal::text from conexiones where sala_id = ${salaId} limit 1`;
+  const nuevaSenal = senalAntes === 'hdmi' ? 'red' : 'hdmi';
+  const filaConexion = page.getByRole('group', { name: 'Conexiones' }).locator('tbody tr').first();
+  await filaConexion.locator('select[name="senal"]').selectOption(nuevaSenal);
+  await filaConexion.getByRole('button', { name: 'Guardar' }).click();
+  await page.waitForLoadState('networkidle');
+  let n = 0;
+  for (let intento = 0; intento < 10 && n === 0; intento++) {
+    [{ n }] = await sql`select count(*)::int as n from conexiones where sala_id = ${salaId} and senal::text = ${nuevaSenal}`;
+    if (n === 0) await page.waitForTimeout(200);
+  }
+  expect(n, 'verificación en BD: guardarConexion sí debe cambiar la señal con proyecto reabierto').toBe(1);
+  await shot(page, '14_conexion_reabierta_si_escribe');
+});
+
+// Se coloca al final a propósito: usa expect.soft para no abortar en modo
+// serial el resto de la evidencia (guardas, control positivo) si falla, y
+// porque en la práctica SÍ falla — ver hallazgo E2E-VIS-004 en el consolidado.
+test('pestaña activa a 320px con motion normal y reducido', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(`/salas/${salaId}/equipamiento`, { waitUntil: 'networkidle' });
+  let overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect.soft(
+    overflow.scrollWidth,
+    `overflow a 320px, motion normal: ${JSON.stringify(overflow)} — ver E2E-VIS-004`,
+  ).toBeLessThanOrEqual(overflow.clientWidth + 1);
+  await shot(page, '07c_pestana_320_motion_normal');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload({ waitUntil: 'networkidle' });
+  overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect.soft(
+    overflow.scrollWidth,
+    `overflow a 320px, motion reducido: ${JSON.stringify(overflow)} — ver E2E-VIS-004`,
+  ).toBeLessThanOrEqual(overflow.clientWidth + 1);
+  await shot(page, '07d_pestana_320_motion_reducido');
+
+  await page.setViewportSize({ width: 1280, height: 800 });
 });
 
 test.afterAll(async () => {

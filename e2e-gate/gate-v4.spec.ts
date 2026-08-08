@@ -1,10 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
+import { instalarCapturaRed } from './captura-red';
+
+instalarCapturaRed('gate-v4');
 
 const PREFIJO = 'E2E-20260808-1300-PLAYWRIGHT';
 
 const VIEWPORTS = [
   { nombre: '1440x900', width: 1440, height: 900 },
   { nombre: '1280x800', width: 1280, height: 800 },
+  { nombre: '1024x768', width: 1024, height: 768 },
   { nombre: '768x1024', width: 768, height: 1024 },
   { nombre: '390x844', width: 390, height: 844 },
   { nombre: '320x568', width: 320, height: 568 },
@@ -28,31 +32,6 @@ async function overflowDeDocumento(page: Page) {
   }));
 }
 
-const consolaGlobal: string[] = [];
-const redFallidaGlobal: string[] = [];
-
-test.beforeEach(async ({ page }) => {
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') consolaGlobal.push(`[${page.url()}] ${msg.text()}`);
-  });
-  page.on('response', (res) => {
-    if (res.status() >= 500) redFallidaGlobal.push(`[${res.status()}] ${res.url()}`);
-  });
-  page.on('pageerror', (err) => consolaGlobal.push(`[pageerror ${page.url()}] ${err.message}`));
-});
-
-test.afterAll(async () => {
-  const fs = await import('node:fs');
-  fs.writeFileSync(
-    '../output/e2e/20260808-1300/consola.txt',
-    consolaGlobal.join('\n') || '(sin errores de consola)',
-  );
-  fs.writeFileSync(
-    '../output/e2e/20260808-1300/red-fallida.txt',
-    redFallidaGlobal.join('\n') || '(sin respuestas 5xx)',
-  );
-});
-
 test.describe('VISUAL — overflow por viewport', () => {
   for (const ruta of RUTAS_VISUAL) {
     for (const vp of VIEWPORTS) {
@@ -72,42 +51,62 @@ test.describe('VISUAL — overflow por viewport', () => {
   }
 });
 
-test.describe('VISUAL — zoom 200% real (CDP)', () => {
-  for (const ruta of ['/proyectos', '/catalogo']) {
-    test(`${ruta} a zoom 200%`, async ({ page, context, browserName }) => {
-      test.skip(browserName !== 'chromium', 'zoom real via CDP solo en chromium');
+test.describe('VISUAL — zoom 200% real', () => {
+  // El parámetro `scale` de CDP Emulation.setDeviceMetricsOverride escala la
+  // IMAGEN capturada, no el layout (https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setDeviceMetricsOverride) —
+  // no reproduce el zoom de página. El zoom de navegador (Ctrl++) sí reduce el
+  // viewport CSS efectivo a la mitad a 200%: un desktop de 1280×800 pasa a
+  // reflowar como si el viewport fuera 640×400. Se emula así, verificando
+  // primero que el viewport efectivo cambió de verdad, y solo entonces se
+  // afirma la ausencia de overflow — igual que a 320/390.
+  for (const ruta of RUTAS_VISUAL) {
+    test(`${ruta} a zoom 200% (viewport efectivo a la mitad)`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 });
       await page.goto(ruta, { waitUntil: 'networkidle' });
-      const cdp = await context.newCDPSession(page);
-      // Zoom real de navegador: scale 2 sobre un viewport lógico igual al real,
-      // equivalente a Ctrl++ al 200%, no un transform CSS.
-      await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width: 1280,
-        height: 800,
-        deviceScaleFactor: 1,
-        mobile: false,
-        scale: 2,
-      });
-      await page.waitForTimeout(300);
+      const clientWidthAntes = await page.evaluate(() => document.documentElement.clientWidth);
+
+      await page.setViewportSize({ width: 640, height: 400 });
+      const clientWidthDespues = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(
+        clientWidthDespues,
+        'el viewport efectivo debe reducirse a la mitad — si no cambia, el zoom no se aplicó',
+      ).toBeLessThan(clientWidthAntes);
+
+      const { scrollWidth, clientWidth } = await overflowDeDocumento(page);
       await page.screenshot({
         path: `../output/e2e/20260808-1300/capturas/zoom200_${ruta.replace(/\//g, '_')}.png`,
+        fullPage: true,
       });
-      await cdp.send('Emulation.clearDeviceMetricsOverride');
+      expect(
+        scrollWidth,
+        `overflow a zoom 200% en ${ruta}: scrollWidth=${scrollWidth} clientWidth=${clientWidth}`,
+      ).toBeLessThanOrEqual(clientWidth + 1);
     });
   }
 });
 
 test.describe('A11Y — motion', () => {
-  test('reduced-motion no rompe /proyectos', async ({ page }) => {
+  // `.boton` declara `transition: ... 0.15s ease` en globals.css — un elemento
+  // sin transición propia (como <body>) tiene duration inicial "0s" en ambos
+  // modos y no distingue nada. Se mide sobre un botón real de la página.
+  test('reduced-motion colapsa la transición de .boton en /proyectos', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/proyectos', { waitUntil: 'networkidle' });
-    await expect(page.locator('body')).toBeVisible();
+    const boton = page.locator('.boton').first();
+    await expect(boton).toBeVisible();
+    // getComputedStyle normaliza a segundos con notación científica
+    // (parseFloat lo entiende igual: "1e-05s" -> 0.00001).
+    const transicion = await boton.evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
+    expect(transicion, 'globals.css debe forzar transition-duration a ~0 con reduced-motion').toBeLessThan(0.001);
     await page.screenshot({ path: '../output/e2e/20260808-1300/capturas/motion_reduce_proyectos.png' });
   });
-  test('motion normal /proyectos', async ({ page }) => {
+  test('motion normal /proyectos conserva la transición declarada de .boton', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/proyectos', { waitUntil: 'networkidle' });
-    await expect(page.locator('body')).toBeVisible();
+    const boton = page.locator('.boton').first();
+    await expect(boton).toBeVisible();
+    const transicion = await boton.evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
+    expect(transicion, 'sin reduced-motion la transición de .boton debe seguir en 0.15s').toBeCloseTo(0.15, 2);
     await page.screenshot({ path: '../output/e2e/20260808-1300/capturas/motion_normal_proyectos.png' });
   });
 });

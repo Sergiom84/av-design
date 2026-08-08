@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import postgres from 'postgres';
+import { instalarCapturaRed } from './captura-red';
+
+instalarCapturaRed('checkin');
 
 const sql = postgres('postgres://av_design:av_design_local@localhost:5433/av_design_e2e_a', { max: 1 });
 

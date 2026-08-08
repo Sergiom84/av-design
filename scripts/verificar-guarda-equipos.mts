@@ -1,11 +1,12 @@
 /**
  * Regresión de las guardas de "proyecto cerrado" en `src/app/acciones.ts`:
  * `guardarSala`, `borrarSala`, `anadirEquipo`, `guardarEquipo`,
- * `ajustarCantidadEquipo`, `borrarEquipo`, `anadirToma`, `guardarToma` y
- * `borrarToma` — el gate P1 completo, no solo el fallo de `sala_id`
- * suplantado que lo motivó. Tomas de red se añadió tras el E2E de cierre de
- * V4 (agente FLUJO, hallazgo E2E-FLU-001): mismo bug que ya se había
- * corregido en equipos, sin corregir todavía en tomas.
+ * `ajustarCantidadEquipo`, `borrarEquipo`, `anadirToma`, `guardarToma`,
+ * `borrarToma`, `anadirConexion`, `guardarConexion` y `borrarConexion` — el
+ * gate P1 completo, no solo el fallo de `sala_id` suplantado que lo motivó.
+ * Tomas de red y conexiones se añadieron tras el E2E de cierre de V4
+ * (agentes FLUJO y BORDES, hallazgos E2E-FLU-001 y E2E-BOR-001): mismo bug
+ * que ya se había corregido en equipos, sin corregir todavía ahí.
  *
  * No es parte de `npm test`: `npm test` es la lógica pura de `src/lib`
  * (AGENTS.md), y esto necesita Postgres real e importa código de servidor.
@@ -147,6 +148,21 @@ async function nuevaToma(salaId: string, etiqueta: string): Promise<string> {
   return id;
 }
 
+/**
+ * Misma razón que `nuevoEquipo`: una conexión propia por sub-caso. `origen_id`
+ * y `destino_id` son `not null` contra `sala_equipos`, así que cada conexión
+ * arrastra sus dos equipos propios (no se comparten entre sub-casos).
+ */
+async function nuevaConexion(salaId: string, etiqueta: string): Promise<string> {
+  const origenId = await nuevoEquipo(salaId, `${etiqueta}-origen`);
+  const destinoId = await nuevoEquipo(salaId, `${etiqueta}-destino`);
+  const id = randomUUID();
+  await sql`
+    insert into conexiones (id, sala_id, origen_id, destino_id, senal)
+    values (${id}, ${salaId}, ${origenId}, ${destinoId}, 'hdmi')`;
+  return id;
+}
+
 // ---------------------------------------------------------------- ejecución
 
 try {
@@ -162,6 +178,9 @@ try {
     anadirToma,
     guardarToma,
     borrarToma,
+    anadirConexion,
+    guardarConexion,
+    borrarConexion,
   } = await import('../src/app/acciones');
 
   /**
@@ -205,6 +224,16 @@ try {
   const contarTomasDeSala = async (salaId: string) => {
     const [f] = await sql<Array<{ n: string }>>`
       select count(*)::text as n from tomas_red where sala_id = ${salaId}`;
+    return Number(f.n);
+  };
+  const filaConexion = async (id: string) => {
+    const filas = await sql<Array<{ senal: string }>>`
+      select senal from conexiones where id = ${id}`;
+    return filas[0] ?? null;
+  };
+  const contarConexionesDeSala = async (salaId: string) => {
+    const [f] = await sql<Array<{ n: string }>>`
+      select count(*)::text as n from conexiones where sala_id = ${salaId}`;
     return Number(f.n);
   };
 
@@ -438,6 +467,105 @@ try {
     datos: (tomaId, salaId) => {
       const fd = new FormData();
       fd.set('id', tomaId);
+      fd.set('sala_id', salaId);
+      return fd;
+    },
+    cambio: (antes, tras) => antes != null && tras == null,
+  });
+
+  // ------------------------------------------------------------ anadirConexion
+
+  console.log('\n=== anadirConexion ===');
+  {
+    const antes = await contarConexionesDeSala(salaCerradaId);
+    const origenId = await nuevoEquipo(salaCerradaId, 'anadirConexion-cerrado-origen');
+    const destinoId = await nuevoEquipo(salaCerradaId, 'anadirConexion-cerrado-destino');
+    const fd = new FormData();
+    fd.set('sala_id', salaCerradaId);
+    fd.set('origen_id', origenId);
+    fd.set('destino_id', destinoId);
+    await invocar(anadirConexion, fd);
+    const tras = await contarConexionesDeSala(salaCerradaId);
+    afirmar(tras === antes, `proyecto cerrado: no inserta (conexiones ${antes} → ${tras})`);
+  }
+  {
+    const antes = await contarConexionesDeSala(salaLegadoId);
+    const origenId = await nuevoEquipo(salaLegadoId, 'anadirConexion-legado-origen');
+    const destinoId = await nuevoEquipo(salaLegadoId, 'anadirConexion-legado-destino');
+    const fd = new FormData();
+    fd.set('sala_id', salaLegadoId);
+    fd.set('origen_id', origenId);
+    fd.set('destino_id', destinoId);
+    await invocar(anadirConexion, fd);
+    const tras = await contarConexionesDeSala(salaLegadoId);
+    afirmar(tras === antes + 1, `sala legado: sí inserta (conexiones ${antes} → ${tras})`);
+  }
+
+  // ----------------------------------------------------- guardarConexion, etc.
+
+  type FilaConexion = { senal: string } | null;
+
+  /** Mismas cuatro comprobaciones que `verificarAccionDeEquipo`, para conexiones. */
+  async function verificarAccionDeConexion(opciones: {
+    etiqueta: string;
+    accion: (d: FormData) => Promise<void>;
+    datos: (conexionId: string, salaId: string) => FormData;
+    cambio: (antes: FilaConexion, tras: FilaConexion) => boolean;
+  }) {
+    console.log(`\n=== ${opciones.etiqueta} ===`);
+
+    {
+      const id = await nuevaConexion(salaCerradaId, `${opciones.etiqueta}-cerrado-real`);
+      const antes = await filaConexion(id);
+      await invocar(opciones.accion, opciones.datos(id, salaCerradaId));
+      const tras = await filaConexion(id);
+      afirmar(!opciones.cambio(antes, tras), 'proyecto cerrado, sala_id real: no escribe');
+    }
+    {
+      const id = await nuevaConexion(salaCerradaId, `${opciones.etiqueta}-cerrado-señuelo`);
+      const antes = await filaConexion(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaConexion(id);
+      afirmar(
+        !opciones.cambio(antes, tras),
+        'sala_id suplantado (sala legado abierta): no toca la conexión cerrada',
+      );
+    }
+    {
+      const id = await nuevaConexion(salaCerradaId, `${opciones.etiqueta}-cerrado-inventado`);
+      const antes = await filaConexion(id);
+      await invocar(opciones.accion, opciones.datos(id, randomUUID()));
+      const tras = await filaConexion(id);
+      afirmar(!opciones.cambio(antes, tras), 'sala_id inventado: no toca la conexión cerrada');
+    }
+    {
+      const id = await nuevaConexion(salaLegadoId, `${opciones.etiqueta}-legado-real`);
+      const antes = await filaConexion(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaConexion(id);
+      afirmar(opciones.cambio(antes, tras), 'sala legado, sala_id real: sí escribe');
+    }
+  }
+
+  await verificarAccionDeConexion({
+    etiqueta: 'guardarConexion',
+    accion: guardarConexion,
+    datos: (conexionId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', conexionId);
+      fd.set('sala_id', salaId);
+      fd.set('senal', 'red');
+      return fd;
+    },
+    cambio: (antes, tras) => antes?.senal !== tras?.senal,
+  });
+
+  await verificarAccionDeConexion({
+    etiqueta: 'borrarConexion',
+    accion: borrarConexion,
+    datos: (conexionId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', conexionId);
       fd.set('sala_id', salaId);
       return fd;
     },

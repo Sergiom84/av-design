@@ -494,6 +494,7 @@ export async function anadirConexion(datos: FormData) {
   const origen = String(datos.get('origen_id'));
   const destino = String(datos.get('destino_id'));
   if (!origen || !destino || origen === destino) return;
+  if (await proyectoCerradoDeSala(salaId)) return;
 
   const ruta = texto(datos.get('ruta'));
   await sql`
@@ -510,13 +511,22 @@ export async function anadirConexion(datos: FormData) {
   revalidatePath('/salas/[id]', 'layout');
 }
 
+/** La sala real de una conexión, leída de la fila, no del `sala_id` del formulario: mismo criterio que `salaIdDeEquipo`. */
+async function salaIdDeConexion(conexionId: string): Promise<string | null> {
+  const [f] = await sql<Array<{ sala_id: string }>>`
+    select sala_id from conexiones where id = ${conexionId}`;
+  return f ? String(f.sala_id) : null;
+}
+
 /**
  * Detallar una conexión que ya existe. Hace falta porque hay tiradas dadas de
  * alta antes de que hubiera catálogo de puertos: se les añaden ahora sin
  * volver a crearlas, que cambiaría su identificador de cable.
  */
 export async function guardarConexion(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeConexion(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
   await sql`
     update conexiones set
       articulo_cable_id = ${texto(datos.get('articulo_cable_id'))},
@@ -525,13 +535,15 @@ export async function guardarConexion(datos: FormData) {
       longitud_manual_m = ${numero(datos.get('longitud_manual_m'))},
       puerto_origen_id  = ${texto(datos.get('puerto_origen_id'))},
       puerto_destino_id = ${texto(datos.get('puerto_destino_id'))}
-    where id = ${String(datos.get('id'))}`;
+    where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 
 export async function borrarConexion(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
-  await sql`delete from conexiones where id = ${String(datos.get('id'))}`;
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeConexion(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
+  await sql`delete from conexiones where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 

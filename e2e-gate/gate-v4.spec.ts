@@ -51,7 +51,7 @@ test.describe('VISUAL — overflow por viewport', () => {
   }
 });
 
-test.describe('VISUAL — zoom 200% real', () => {
+test.describe('VISUAL — reflow equivalente a zoom 200%', () => {
   // El parámetro `scale` de CDP Emulation.setDeviceMetricsOverride escala la
   // IMAGEN capturada, no el layout (https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setDeviceMetricsOverride) —
   // no reproduce el zoom de página. El zoom de navegador (Ctrl++) sí reduce el
@@ -60,7 +60,7 @@ test.describe('VISUAL — zoom 200% real', () => {
   // primero que el viewport efectivo cambió de verdad, y solo entonces se
   // afirma la ausencia de overflow — igual que a 320/390.
   for (const ruta of RUTAS_VISUAL) {
-    test(`${ruta} a zoom 200% (viewport efectivo a la mitad)`, async ({ page }) => {
+    test(`${ruta} — reflow equivalente a 200% (viewport CSS a la mitad)`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 });
       await page.goto(ruta, { waitUntil: 'networkidle' });
       const clientWidthAntes = await page.evaluate(() => document.documentElement.clientWidth);
@@ -79,7 +79,7 @@ test.describe('VISUAL — zoom 200% real', () => {
       });
       expect(
         scrollWidth,
-        `overflow a zoom 200% en ${ruta}: scrollWidth=${scrollWidth} clientWidth=${clientWidth}`,
+        `overflow con reflow equivalente a 200% en ${ruta}: scrollWidth=${scrollWidth} clientWidth=${clientWidth}`,
       ).toBeLessThanOrEqual(clientWidth + 1);
     });
   }

@@ -144,7 +144,7 @@ export function Equipamiento({
         <div className="divide-y divide-linea-suave">
           {equipos.map((e) => (
             <div key={e.id} className="flex flex-wrap items-end gap-3 py-3">
-              <span className="self-center shrink-0">
+              <span className="self-center min-w-0 max-w-full">
                 <Referencia equipo={e} catalogo={catalogo} />
               </span>
               <span className="inline-flex items-center gap-1 shrink-0">

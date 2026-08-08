@@ -232,6 +232,16 @@ test('con proyecto cerrado: guardarConexion no escribe desde la UI', async ({ pa
   await filaConexion.locator('select[name="senal"]').selectOption(nuevaSenal);
   await filaConexion.getByRole('button', { name: 'Guardar' }).click();
   await page.waitForLoadState('networkidle');
+  await page.reload({ waitUntil: 'networkidle' });
+  const valorTrasReload = await page
+    .getByRole('group', { name: 'Conexiones' })
+    .locator('tbody tr')
+    .first()
+    .locator('select[name="senal"]')
+    .inputValue();
+  expect(valorTrasReload, 'verificación en DOM: guardarConexion no debe cambiar la señal con proyecto cerrado').toBe(
+    senalAntes,
+  );
   const [{ n }] = await sql`select count(*)::int as n from conexiones where sala_id = ${salaId} and senal::text = ${nuevaSenal}`;
   expect(n, 'verificación en BD: guardarConexion no debe cambiar la señal con proyecto cerrado').toBe(0);
   await shot(page, '11b_conexion_edicion_bloqueada');
@@ -292,6 +302,17 @@ test('con proyecto reabierto: guardarConexion vuelve a escribir (control positiv
     if (n === 0) await page.waitForTimeout(200);
   }
   expect(n, 'verificación en BD: guardarConexion sí debe cambiar la señal con proyecto reabierto').toBe(1);
+  await page.reload({ waitUntil: 'networkidle' });
+  const valorTrasReload = await page
+    .getByRole('group', { name: 'Conexiones' })
+    .locator('tbody tr')
+    .first()
+    .locator('select[name="senal"]')
+    .inputValue();
+  expect(
+    valorTrasReload,
+    'verificación en DOM: guardarConexion sí debe reflejar la nueva señal con proyecto reabierto',
+  ).toBe(nuevaSenal);
   await shot(page, '14_conexion_reabierta_si_escribe');
 });
 

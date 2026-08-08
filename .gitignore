@@ -52,3 +52,7 @@ next-env.d.ts
 
 # ficheros de trabajo: volcados, informes intermedios, copias de la base
 /.tmp/
+
+# artefactos del E2E multiagente (docs/09-plan-visual-y-e2e.md, apartado 7.6): capturas,
+# consola y trazas de cada corrida, fuera del commit a propósito
+/output/

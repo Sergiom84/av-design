@@ -1,8 +1,11 @@
 /**
  * Regresión de las guardas de "proyecto cerrado" en `src/app/acciones.ts`:
- * `guardarSala`, `anadirEquipo`, `guardarEquipo`, `ajustarCantidadEquipo` y
- * `borrarEquipo` — el gate P1 completo, no solo el fallo de `sala_id`
- * suplantado que lo motivó.
+ * `guardarSala`, `borrarSala`, `anadirEquipo`, `guardarEquipo`,
+ * `ajustarCantidadEquipo`, `borrarEquipo`, `anadirToma`, `guardarToma` y
+ * `borrarToma` — el gate P1 completo, no solo el fallo de `sala_id`
+ * suplantado que lo motivó. Tomas de red se añadió tras el E2E de cierre de
+ * V4 (agente FLUJO, hallazgo E2E-FLU-001): mismo bug que ya se había
+ * corregido en equipos, sin corregir todavía en tomas.
  *
  * No es parte de `npm test`: `npm test` es la lógica pura de `src/lib`
  * (AGENTS.md), y esto necesita Postgres real e importa código de servidor.
@@ -136,13 +139,30 @@ async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
   return id;
 }
 
+/** Misma razón que `nuevoEquipo`: una toma propia por sub-caso, no compartida. */
+async function nuevaToma(salaId: string, etiqueta: string): Promise<string> {
+  const id = randomUUID();
+  await sql`
+    insert into tomas_red (id, sala_id, codigo) values (${id}, ${salaId}, ${etiqueta})`;
+  return id;
+}
+
 // ---------------------------------------------------------------- ejecución
 
 try {
   await preparar();
 
-  const { guardarSala, anadirEquipo, guardarEquipo, ajustarCantidadEquipo, borrarEquipo, borrarSala } =
-    await import('../src/app/acciones');
+  const {
+    guardarSala,
+    anadirEquipo,
+    guardarEquipo,
+    ajustarCantidadEquipo,
+    borrarEquipo,
+    borrarSala,
+    anadirToma,
+    guardarToma,
+    borrarToma,
+  } = await import('../src/app/acciones');
 
   /**
    * Invoca una acción tolerando solo la señal esperada de "llegó más allá
@@ -175,6 +195,16 @@ try {
   const contarEquiposDeSala = async (salaId: string) => {
     const [f] = await sql<Array<{ n: string }>>`
       select count(*)::text as n from sala_equipos where sala_id = ${salaId}`;
+    return Number(f.n);
+  };
+  const filaToma = async (id: string) => {
+    const filas = await sql<Array<{ codigo: string; notas: string | null }>>`
+      select codigo, notas from tomas_red where id = ${id}`;
+    return filas[0] ?? null;
+  };
+  const contarTomasDeSala = async (salaId: string) => {
+    const [f] = await sql<Array<{ n: string }>>`
+      select count(*)::text as n from tomas_red where sala_id = ${salaId}`;
     return Number(f.n);
   };
 
@@ -318,6 +348,99 @@ try {
       return fd;
     },
     // Bloqueado: `tras` sigue igual que `antes`. Bypass: `tras` es null.
+    cambio: (antes, tras) => antes != null && tras == null,
+  });
+
+  // ---------------------------------------------------------------- anadirToma
+
+  console.log('\n=== anadirToma ===');
+  {
+    const antes = await contarTomasDeSala(salaCerradaId);
+    const fd = new FormData();
+    fd.set('sala_id', salaCerradaId);
+    fd.set('codigo', `TEST-COLADO-${randomUUID()}`);
+    await invocar(anadirToma, fd);
+    const tras = await contarTomasDeSala(salaCerradaId);
+    afirmar(tras === antes, `proyecto cerrado: no inserta (tomas ${antes} → ${tras})`);
+  }
+  {
+    const antes = await contarTomasDeSala(salaLegadoId);
+    const fd = new FormData();
+    fd.set('sala_id', salaLegadoId);
+    fd.set('codigo', `TEST-NUEVA-${randomUUID()}`);
+    await invocar(anadirToma, fd);
+    const tras = await contarTomasDeSala(salaLegadoId);
+    afirmar(tras === antes + 1, `sala legado: sí inserta (tomas ${antes} → ${tras})`);
+  }
+
+  // ------------------------------------------------------- guardarToma, etc.
+
+  type FilaToma = { codigo: string; notas: string | null } | null;
+
+  /** Mismas cuatro comprobaciones que `verificarAccionDeEquipo`, para tomas de red. */
+  async function verificarAccionDeToma(opciones: {
+    etiqueta: string;
+    accion: (d: FormData) => Promise<void>;
+    datos: (tomaId: string, salaId: string) => FormData;
+    cambio: (antes: FilaToma, tras: FilaToma) => boolean;
+  }) {
+    console.log(`\n=== ${opciones.etiqueta} ===`);
+
+    {
+      const id = await nuevaToma(salaCerradaId, `${opciones.etiqueta}-cerrado-real-${randomUUID()}`);
+      const antes = await filaToma(id);
+      await invocar(opciones.accion, opciones.datos(id, salaCerradaId));
+      const tras = await filaToma(id);
+      afirmar(!opciones.cambio(antes, tras), 'proyecto cerrado, sala_id real: no escribe');
+    }
+    {
+      const id = await nuevaToma(salaCerradaId, `${opciones.etiqueta}-cerrado-señuelo-${randomUUID()}`);
+      const antes = await filaToma(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaToma(id);
+      afirmar(
+        !opciones.cambio(antes, tras),
+        'sala_id suplantado (sala legado abierta): no toca la toma cerrada',
+      );
+    }
+    {
+      const id = await nuevaToma(salaCerradaId, `${opciones.etiqueta}-cerrado-inventado-${randomUUID()}`);
+      const antes = await filaToma(id);
+      await invocar(opciones.accion, opciones.datos(id, randomUUID()));
+      const tras = await filaToma(id);
+      afirmar(!opciones.cambio(antes, tras), 'sala_id inventado: no toca la toma cerrada');
+    }
+    {
+      const id = await nuevaToma(salaLegadoId, `${opciones.etiqueta}-legado-real-${randomUUID()}`);
+      const antes = await filaToma(id);
+      await invocar(opciones.accion, opciones.datos(id, salaLegadoId));
+      const tras = await filaToma(id);
+      afirmar(opciones.cambio(antes, tras), 'sala legado, sala_id real: sí escribe');
+    }
+  }
+
+  await verificarAccionDeToma({
+    etiqueta: 'guardarToma',
+    accion: guardarToma,
+    datos: (tomaId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', tomaId);
+      fd.set('sala_id', salaId);
+      fd.set('codigo', `NOMBRE-COLADO-${randomUUID()}`);
+      return fd;
+    },
+    cambio: (antes, tras) => antes?.codigo !== tras?.codigo,
+  });
+
+  await verificarAccionDeToma({
+    etiqueta: 'borrarToma',
+    accion: borrarToma,
+    datos: (tomaId, salaId) => {
+      const fd = new FormData();
+      fd.set('id', tomaId);
+      fd.set('sala_id', salaId);
+      return fd;
+    },
     cambio: (antes, tras) => antes != null && tras == null,
   });
 

@@ -438,10 +438,18 @@ export async function borrarEquipo(datos: FormData) {
 // normaliza a minúsculas aquí para que no acaben conviviendo "Suelo", "suelo" y
 // "SUELO", que es exactamente lo que ensució el inventario de partida.
 
+/** La sala real de una toma, leída de la fila, no del `sala_id` del formulario: mismo criterio que `salaIdDeEquipo`. */
+async function salaIdDeToma(tomaId: string): Promise<string | null> {
+  const [f] = await sql<Array<{ sala_id: string }>>`
+    select sala_id from tomas_red where id = ${tomaId}`;
+  return f ? String(f.sala_id) : null;
+}
+
 export async function anadirToma(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   const codigo = texto(datos.get('codigo'));
   if (!salaId || !codigo) return;
+  if (await proyectoCerradoDeSala(salaId)) return;
 
   await sql`
     insert into tomas_red (sala_id, codigo, ubicacion, x_m, y_m, z_m, notas)
@@ -456,7 +464,9 @@ export async function anadirToma(datos: FormData) {
 }
 
 export async function guardarToma(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeToma(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
   await sql`
     update tomas_red set
       codigo    = ${texto(datos.get('codigo')) ?? 'sin código'},
@@ -465,14 +475,16 @@ export async function guardarToma(datos: FormData) {
       y_m       = ${numero(datos.get('y_m'))},
       z_m       = ${numero(datos.get('z_m'))},
       notas     = ${texto(datos.get('notas'))}
-    where id = ${String(datos.get('id'))}`;
+    where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 
 /** Los equipos que pinchaban en ella se quedan sin toma, no se borran. */
 export async function borrarToma(datos: FormData) {
-  const salaId = String(datos.get('sala_id'));
-  await sql`delete from tomas_red where id = ${String(datos.get('id'))}`;
+  const id = String(datos.get('id'));
+  const salaId = await salaIdDeToma(id);
+  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
+  await sql`delete from tomas_red where id = ${id} and sala_id = ${salaId}`;
   revalidatePath('/salas/[id]', 'layout');
 }
 

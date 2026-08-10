@@ -18,6 +18,7 @@ de una sala.
 | Jerarquía de obra | Proyecto → Localización → Sala, portada operativa, pedidos por obra (7-8-2026) |
 | Ficha en pestañas | Resumen · Diagrama · Equipamiento · Cableado · Logística · Documentos, rutas anidadas (7-8-2026) |
 | R4 · Editor del plano | Pestaña `Diagrama`: medidas, mesa, equipos y rosetas se colocan arrastrando o con números (10-8-2026) |
+| R5 · Mobiliario y origen | Sillas y mesas como objetos propios, rotación de todo y elección `Desde cero` / `Plantilla` (10-8-2026) |
 | Despliegue | Neon + Render, `av-design.onrender.com`, autodeploy desde `main` |
 
 ## Lo que queda, por módulos
@@ -154,9 +155,38 @@ Decisiones que fija esta pieza y no conviene reabrir sin motivo:
   pantalla va a ras de pared.
 - No se guarda imagen, ni SVG final, ni JSON de lienzo.
 
-Queda para después: rotación por equipo, tamaño físico por artículo,
-alineación y distribución, editor visual propio para plantillas, historial de
-versiones y exportación del plano a PDF.
+Queda para después: tamaño físico por artículo, alineación y distribución,
+editor visual propio para plantillas, historial de versiones y exportación del
+plano a PDF.
+
+### R5 · Mobiliario, altas y rotación — HECHO (10-8-2026)
+
+Amplía R4 con lo que pedía `docs/12-diagrama-mobilario-equipamiento`. Una sala
+se prepara desde cero o desde una plantilla, y dentro del editor se añade
+mobiliario y equipamiento buscándolo, se arrastra al plano y se gira.
+
+Lo que fija esta pieza:
+
+- El mobiliario NO entra en `articulos`. Vive en `catalogo_mobiliario` con
+  `data/mobiliario.csv` como fuente editable, y las instancias en
+  `sala_mobiliario`. Meter una silla en el catálogo AV la haría aparecer entre
+  los cables y los consumibles de cada obra.
+- Una silla física es una fila. Ocho sillas son ocho instancias arrastrables y
+  rotables: el `cantidad ×N` vale para cuatro micrófonos que cuelgan del mismo
+  punto, no para sillas que están en ocho sitios distintos.
+- `salas.sillas_modo` garantiza una sola fuente de sillas. Las derivadas del
+  aforo se materializan con la MISMA `sillasAlrededor()` del croquis, no con
+  una geometría paralela, y a partir de ahí manda la fila.
+- Rotación en mesa, mobiliario y equipamiento, con un solo `ControlRotacion`.
+  Sustituye la decisión de R4 de no rotar equipos.
+- El origen del plano se pregunta una vez (`salas.diagrama_iniciado_en`).
+  Aplicar una plantilla distinta sobre una sala con equipos se bloquea; no hay
+  merge, porque equivocarse borra tiradas medidas.
+- De un alta solo se cree el identificador: el servidor relee el artículo y
+  exige activo y `tipo = 'equipo'`.
+
+Queda para después: mobiliario con más referencias (atriles, armarios) cuando
+el departamento las mida, y arrastre múltiple.
 
 ### R3 · Diagrama de conexiones editable
 

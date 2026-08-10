@@ -239,6 +239,15 @@ try {
     'el mobiliario vuelve con sus medidas, su sitio y su giro, y lo no colocado sigue sin colocar',
   );
 
+  // Con mobiliario heredado no puede quedar la fuente derivada activa: el
+  // croquis dibujaría las sillas del aforo Y las de la plantilla.
+  const [modo] = await sql<Array<{ sillas_modo: string }>>`
+    select sillas_modo from salas where id = ${recreada.id}`;
+  afirmar(
+    modo.sillas_modo === 'manuales',
+    'la sala recreada tiene una sola fuente de sillas',
+  );
+
   if (JSON.stringify(antes) !== JSON.stringify(despues)) {
     console.log('\n  antes:  ', JSON.stringify(antes));
     console.log('  después:', JSON.stringify(despues));

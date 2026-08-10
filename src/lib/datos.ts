@@ -9,6 +9,7 @@ import {
   Extremo,
   LineaPlantilla,
   MuebleCatalogo,
+  MuebleEnSala,
   ParametrosCable,
   PARAMETROS_POR_DEFECTO,
   PlantillaSala,
@@ -706,6 +707,8 @@ export async function obtenerSalaCabecera(id: string): Promise<Sala | null> {
 export interface SalaCompleta {
   sala: Sala;
   equipos: EquipoEnSala[];
+  /** Sillas y mesas de la sala. El croquis las dibuja igual que el editor. */
+  muebles: MuebleEnSala[];
   conexiones: Conexion[];
   /** Rosetas del edificio en esta sala. */
   tomas: TomaRed[];
@@ -733,11 +736,33 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasTomas] = await Promise.all([
+  const [filasEquipos, filasConexiones, filasTomas, filasMuebles] = await Promise.all([
     sql<Fila[]>`select * from sala_equipos where sala_id = ${id} order by nombre`,
     sql<Fila[]>`select * from conexiones where sala_id = ${id} order by creado_en, id`,
     sql<Fila[]>`select * from tomas_red where sala_id = ${id} order by codigo`,
+    // El mobiliario viene aquí y no solo en `datos-plano.ts` porque el croquis
+    // de Resumen tiene que dibujar exactamente lo mismo que el editor. Sin
+    // esto, las sillas se veían en Diagrama y desaparecían en Resumen.
+    sql<Fila[]>`select * from sala_mobiliario where sala_id = ${id} order by orden, creado_en`,
   ]);
+
+  const muebles: MuebleEnSala[] = filasMuebles.map((f) => ({
+    id: String(f.id),
+    sala_id: String(f.sala_id),
+    mobiliario_id: s(f.mobiliario_id),
+    nombre: String(f.nombre),
+    forma: f.forma === 'circulo' ? 'circulo' : 'rectangulo',
+    largo_m: n(f.largo_m),
+    ancho_m: n(f.ancho_m),
+    alto_m: n(f.alto_m),
+    x_m: n(f.x_m),
+    y_m: n(f.y_m),
+    z_m: n(f.z_m),
+    rotacion_grados: Number(f.rotacion_grados ?? 0),
+    posicion_confirmada: f.posicion_confirmada === true,
+    origen_plantilla_mobiliario_id: s(f.origen_plantilla_mobiliario_id),
+    orden: Number(f.orden ?? 100),
+  }));
 
   const equipos: EquipoEnSala[] = filasEquipos.map((f) => ({
     id: String(f.id),
@@ -772,6 +797,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
   return {
     sala: aSala(fila),
     equipos,
+    muebles,
     conexiones: filasConexiones.map((f) => ({
       id: String(f.id),
       sala_id: String(f.sala_id),

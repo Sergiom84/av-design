@@ -862,6 +862,16 @@ try {
     afirmar(Number(c1.muebles) === 1, 'y su mobiliario');
     afirmar(Number(c1.conexiones) === 1, 'y su tirada');
 
+    // Con mobiliario heredado, las sillas de la sala ya son filas reales: el
+    // aforo deja de repartir nada. Sin esto el croquis dibujaba las derivadas
+    // del aforo MÁS las de la plantilla, y cada silla salía dos veces.
+    const [modo] = await sql<Array<{ sillas_modo: string }>>`
+      select sillas_modo from salas where id = ${salaVaciaId}`;
+    afirmar(
+      modo.sillas_modo === 'manuales',
+      'una plantilla con mobiliario deja la sala con una sola fuente de sillas',
+    );
+
     const [medida] = await sql<Array<{ largo_m: string; mesa_rotacion_grados: string }>>`
       select largo_m, mesa_rotacion_grados from salas where id = ${salaVaciaId}`;
     afirmar(Number(medida.largo_m) === 6, 'y las medidas de la tipología');

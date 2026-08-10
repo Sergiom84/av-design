@@ -26,7 +26,7 @@ export async function fichaDeSala(id: string) {
   const completa = await obtenerSala(id);
   if (!completa) return null;
 
-  const { sala, equipos, conexiones, tomas, puertos } = completa;
+  const { sala, equipos, muebles, conexiones, tomas, puertos } = completa;
   const [articulos, parametros] = await Promise.all([
     listarArticulos(),
     obtenerParametros(),
@@ -64,6 +64,7 @@ export async function fichaDeSala(id: string) {
   return {
     sala,
     equipos,
+    muebles,
     conexiones,
     tomas,
     puertos,

@@ -46,7 +46,7 @@ export default async function ResumenSala({
   const ficha = await fichaConAlmacen(id);
   if (!ficha) notFound();
 
-  const { sala, equipos, conexiones, tomas, resultados, puntosMontaje } = ficha;
+  const { sala, equipos, muebles, conexiones, tomas, resultados, puntosMontaje } = ficha;
 
   const [ciclo, { tecnicos, roles }] = await Promise.all([
     cicloDeSala(sala.id, sala.proyecto_id ?? null),
@@ -101,6 +101,7 @@ export default async function ResumenSala({
           equipos={equipos}
           conexiones={conexiones}
           tomas={tomas}
+          muebles={muebles}
           metrosPorConexion={
             new Map(resultados.map((r) => [r.conexion_id, r.longitud_m]))
           }

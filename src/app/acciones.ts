@@ -215,11 +215,20 @@ export async function crearSala(datos: FormData) {
 
         // Nacer de una plantilla ya contesta a «de dónde sale el plano»: la
         // pestaña Diagrama abre el editor en vez de volver a preguntarlo.
+        //
+      // Si la plantilla trae mobiliario, las sillas de esta sala ya son filas
+      // reales y el aforo deja de repartir nada: sin esto el croquis dibujaba
+      // las ocho derivadas del aforo MÁS las de la plantilla, dos fuentes
+      // activas y cada silla dos veces. Se vio en el navegador con una sala
+      // recién creada desde plantilla.
         await tx`
           update salas set
             diagrama_iniciado_en  = now(),
             diagrama_origen       = 'plantilla',
-            diagrama_plantilla_id = ${plantillaId}
+            diagrama_plantilla_id = ${plantillaId},
+            sillas_modo = case
+              when exists (select 1 from sala_mobiliario m where m.sala_id = ${sala.id})
+              then 'manuales' else sillas_modo end
           where id = ${sala.id}`;
       }
 

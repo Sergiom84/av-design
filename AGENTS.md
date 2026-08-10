@@ -86,7 +86,8 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   `typedRoutes` está activado y `next build` caza los enlaces rotos.
 - **El plano se edita donde vive, y no se guarda como imagen.** La pestaña
   `Diagrama` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
-  medidas, mesa, posiciones de equipo y rosetas: los mismos datos que alimentan
+  medidas, mesa, mobiliario, posiciones de equipo y rosetas: los mismos datos
+  que alimentan
   el croquis de Resumen y el cálculo de cable. No hay PNG, ni SVG final, ni
   JSON de lienzo en la base. El lienzo pinta la misma `GeometriaPlano` que el
   croquis, para que una posición confirmada dé el mismo dibujo en los dos
@@ -102,6 +103,37 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   (`src/app/acciones-diagrama.ts`) es una transacción con `diagrama_version`
   optimista: dos pestañas no se pisan en silencio, la segunda recibe conflicto
   y decide. Se comprueba contra Postgres real con `npm run test:diagrama`.
+- **Se pregunta una vez de dónde sale el plano.** La primera entrada a Diagrama
+  ofrece `Desde cero` o `Plantilla` y lo deja escrito en
+  `salas.diagrama_iniciado_en`; después abre el editor directamente, porque un
+  peaje diario multiplicado por 390 salas es un peaje. `Desde cero` no borra
+  nada. `Plantilla` copia medidas, mesa, mobiliario, equipos, giros y tiradas,
+  y solo si la sala está vacía: aplicar otra plantilla sobre una sala con
+  equipos se bloquea y se explica, porque el merge sería adivinar a qué equipo
+  corresponde cada línea y equivocarse borra trabajo medido.
+- **De un alta solo se cree el identificador.** Un equipo añadido desde el
+  plano manda su `articulo_id`; el nombre, la categoría y el extremo los relee
+  el servidor del catálogo, exigiendo activo y `tipo = 'equipo'`. Los ids
+  temporales los inventa el navegador y no se escriben nunca: cada alta recibe
+  su uuid y la acción devuelve el mapa.
+- **El mobiliario no es catálogo AV.** Una silla no se pide a un proveedor de
+  audiovisuales, no tiene puertos y no entra en ninguna tirada: vive en
+  `catalogo_mobiliario` con su fuente editable `data/mobiliario.csv`, y las
+  instancias en `sala_mobiliario`. Una silla física es una fila —ocho sillas
+  son ocho filas arrastrables, no una línea con `cantidad = 8`— y sus medidas
+  son un snapshot del catálogo, para que corregirlo mañana no deforme los
+  planos ya dibujados.
+- **Las sillas tienen una sola fuente activa.** `salas.sillas_modo` decide:
+  `derivadas` = las reparte el croquis desde el aforo; `manuales` = mandan las
+  filas de `sala_mobiliario` y el aforo vuelve a ser solo la capacidad.
+  Copiar una plantilla con mobiliario pasa la sala a `manuales`. Con las dos
+  fuentes vivas el croquis dibujaba cada silla dos veces.
+- **Todo lo que se coloca puede girar; lo que no se nota girado, no.** Mesa,
+  mobiliario y equipamiento tienen `rotacion_grados` normalizado a `[0,360)` y
+  comparten `ControlRotacion`. Girar no mueve: el SVG rota alrededor del ancla
+  y x, y, z se quedan. La sala no gira, y una roseta cuyo símbolo es un círculo
+  tampoco: un control que no cambia nada deja a quien lo pulsa buscando el
+  cambio.
 - **El dominio se escribe en español.** Tablas, columnas, tipos, funciones y
   variables usan el vocabulario del departamento: sala, tipología, aforo, caja
   de conexiones, canaleta, falso techo, tirada, holgura, bobina, latiguillo.
@@ -148,9 +180,11 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   veces.
 - **La plantilla trae el montaje, no solo la lista de material.** Además de qué
   equipos lleva la sala, guarda dónde va cada uno (`plantilla_articulos.x_m`) y
-  qué conecta con qué (`plantilla_conexiones`). Crear una sala copia las dos
-  cosas, así que nace con croquis medido y tabla de cables. Colocar un equipo
-  una vez o colocarlo 144 veces es la diferencia.
+  qué conecta con qué (`plantilla_conexiones`), y qué muebles lleva y dónde
+  (`plantilla_mobiliario`). Crear una sala copia las tres cosas, así que nace
+  con croquis medido, mobiliario puesto y tabla de cables. Colocar una silla
+  una vez o colocarla 144 veces es la diferencia. El giro viaja en los dos
+  sentidos y lo comprueba `npm run test:plantillas`.
 - **Un equipo sin coordenadas se coloca donde suele ir, y se marca.** La
   pantalla al testero, la caja de conexiones en la mesa, el rack a una esquina.
   Sale con trazo discontinuo: sirve para orientarse, no para taladrar. Sin esto

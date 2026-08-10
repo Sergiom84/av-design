@@ -703,7 +703,12 @@ export function extremoPorCategoria(categoria: string): Extremo {
   if (c.includes('PANTALLA') || c.includes('MONITOR') || c.includes('VIDEOWALL'))
     return 'pantalla';
   if (c.includes('PROYECTOR')) return 'proyector';
-  if (c.includes('CAJA CONEXIONES')) return 'caja_conexiones';
+  // «CAJA» y «CONEXIONES» por separado: el catálogo las escribe `CAJA DE
+  // CONEXIONES` y buscar `CAJA CONEXIONES` no casaba nunca. Se notaba poco
+  // porque la plantilla suele traer el extremo escrito, pero un equipo
+  // añadido desde el plano caía en `pared` y se le dejaba 0,30 m de holgura
+  // en vez de los 0,50 de una caja de mesa.
+  if (c.includes('CAJA') && c.includes('CONEXIONES')) return 'caja_conexiones';
   if (c.includes('ALTAVOZ') || c.includes('CAMARA') || c.includes('CÁMARA'))
     return 'techo';
   if (c.includes('PANEL') || c.includes('MICROFONO') || c.includes('MICRÓFONO'))

@@ -25,6 +25,7 @@ const equipo = (id: string, nombre: string, articulo_id: string): EquipoEnSala =
   cantidad: 1,
   extremo: 'mesa',
   posicion: { x_m: 0, y_m: 0, z_m: 0 },
+  posicion_confirmada: false,
 });
 
 const puerto = (

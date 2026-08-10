@@ -108,6 +108,13 @@ export interface Sala {
   /** Centro de la mesa desde la esquina inferior izquierda. Nulo = centrada. */
   mesa_x_m: number | null;
   mesa_y_m: number | null;
+  /** Giro de la mesa sobre su centro, en grados antihorarios. 0 = alineada. */
+  mesa_rotacion_grados: number;
+  /**
+   * Sube uno en cada guardado del plano. El editor manda la que leyó y el
+   * servidor rechaza la obsoleta: dos pestañas no se pisan en silencio.
+   */
+  diagrama_version: number;
 }
 
 export interface PlantillaSala {
@@ -126,6 +133,10 @@ export interface PlantillaSala {
   mesa_largo_m: number | null;
   mesa_ancho_m: number | null;
   mesa_alto_cm: number | null;
+  /** Dónde va la mesa en la sala tipo. Nulo = centrada. */
+  mesa_x_m: number | null;
+  mesa_y_m: number | null;
+  mesa_rotacion_grados: number | null;
 }
 
 /**
@@ -152,6 +163,11 @@ export interface LineaPlantilla {
   x_m: number | null;
   y_m: number | null;
   z_m: number | null;
+  /**
+   * Nulo = sin colocar. No se convierte en `(0,0,0)` al copiar a la sala: la
+   * ausencia se propaga como ausencia y el croquis la deduce del extremo.
+   */
+  posicion_confirmada: boolean | null;
 }
 
 /**
@@ -269,6 +285,14 @@ export interface EquipoEnSala {
   cantidad: number;
   extremo: Extremo;
   posicion: Punto;
+  /**
+   * Alguien colocó o midió el equipo, aunque haya quedado en `(0,0,0)`.
+   *
+   * El triple cero significaba a la vez "sin colocar" y la esquina de la sala,
+   * que es justo donde va el rack. Con el editor visual la ambigüedad deja de
+   * ser teórica: se arrastra un equipo a la esquina y tiene que quedarse ahí.
+   */
+  posicion_confirmada: boolean;
   /** En qué roseta de la sala pincha este equipo, si pincha en alguna. */
   toma_red_id?: string | null;
 }

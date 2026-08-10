@@ -84,6 +84,8 @@ function aSala(f: Fila): Sala {
     mesa_alto_cm: n(f.mesa_alto_cm),
     mesa_x_m: n(f.mesa_x_m),
     mesa_y_m: n(f.mesa_y_m),
+    mesa_rotacion_grados: Number(f.mesa_rotacion_grados ?? 0),
+    diagrama_version: Number(f.diagrama_version ?? 0),
   };
 }
 
@@ -382,7 +384,8 @@ export async function listarPlantillas(): Promise<
                  'extremo', pa.extremo,
                  'x_m', pa.x_m,
                  'y_m', pa.y_m,
-                 'z_m', pa.z_m
+                 'z_m', pa.z_m,
+                 'posicion_confirmada', pa.posicion_confirmada
                )
                order by pa.opcional, pa.categoria
              ) filter (where pa.id is not null),
@@ -409,6 +412,9 @@ export async function listarPlantillas(): Promise<
     mesa_largo_m: n(f.mesa_largo_m),
     mesa_ancho_m: n(f.mesa_ancho_m),
     mesa_alto_cm: n(f.mesa_alto_cm),
+    mesa_x_m: n(f.mesa_x_m),
+    mesa_y_m: n(f.mesa_y_m),
+    mesa_rotacion_grados: n(f.mesa_rotacion_grados),
     lineas: (f.lineas as LineaPlantilla[]).map((l) => ({
       id: String(l.id),
       articulo_id: l.articulo_id ?? null,
@@ -420,6 +426,7 @@ export async function listarPlantillas(): Promise<
       x_m: n(l.x_m),
       y_m: n(l.y_m),
       z_m: n(l.z_m),
+      posicion_confirmada: l.posicion_confirmada ?? null,
     })),
   }));
 }
@@ -621,6 +628,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       y_m: Number(f.y_m ?? 0),
       z_m: Number(f.z_m ?? 0),
     },
+    posicion_confirmada: f.posicion_confirmada === true,
     toma_red_id: s(f.toma_red_id),
   }));
 

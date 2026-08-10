@@ -29,6 +29,19 @@ export interface Rectangulo {
   ancho_m: number;
 }
 
+/**
+ * La mesa en planta. Es un rectángulo más su giro sobre el centro: una mesa de
+ * junta puesta en travesía no está alineada con las paredes, y dibujarla
+ * alineada convierte el plano en una mentira medible.
+ *
+ * El centro va aparte de la esquina a propósito: es lo que se gira, lo que se
+ * arrastra en el editor y lo que se guarda en `salas.mesa_x_m`/`mesa_y_m`.
+ */
+export interface MesaCroquis extends Rectangulo {
+  centro: { x_m: number; y_m: number };
+  rotacion_grados: number;
+}
+
 export interface SillaCroquis {
   x_m: number;
   y_m: number;
@@ -83,7 +96,7 @@ export interface CotaCroquis {
 export interface EscenaCroquis {
   titulo: string;
   sala: Rectangulo;
-  mesa: Rectangulo | null;
+  mesa: MesaCroquis | null;
   sillas: SillaCroquis[];
   equipos: EquipoCroquis[];
   tomas: TomaCroquis[];
@@ -124,10 +137,10 @@ const SIMBOLO_POR_DEFECTO = { largo_m: 0.3, ancho_m: 0.2 };
 function posicionPorDefecto(
   extremo: Extremo,
   sala: Sala,
-  mesa: Rectangulo | null,
+  mesa: MesaCroquis | null,
 ): { x_m: number; y_m: number; z_m: number } {
   const centroMesa = mesa
-    ? { x: mesa.x_m + mesa.largo_m / 2, y: mesa.y_m + mesa.ancho_m / 2 }
+    ? { x: mesa.centro.x_m, y: mesa.centro.y_m }
     : { x: sala.largo_m / 2, y: sala.ancho_m / 2 };
 
   switch (extremo) {
@@ -149,28 +162,61 @@ function posicionPorDefecto(
   }
 }
 
-/** Una posición sin tocar: los tres ejes a cero es el valor por defecto de la tabla. */
-const sinColocar = (e: EquipoEnSala): boolean =>
-  e.posicion.x_m === 0 && e.posicion.y_m === 0 && e.posicion.z_m === 0;
+/**
+ * Una posición que nadie ha puesto.
+ *
+ * Antes se deducía del triple cero, que significaba a la vez "sin colocar" y la
+ * esquina de la sala. Ahora lo dice la fila: `posicion_confirmada`. El relleno
+ * de la migración marcó como confirmado justo lo que no era triple cero, así
+ * que el croquis de todo lo que ya existía sale idéntico.
+ */
+const sinColocar = (e: EquipoEnSala): boolean => !e.posicion_confirmada;
+
+/** Gira un punto alrededor de un centro. Grados antihorarios, como el editor. */
+function rotar(
+  punto: { x_m: number; y_m: number },
+  centro: { x_m: number; y_m: number },
+  grados: number,
+): { x_m: number; y_m: number } {
+  if (!grados) return punto;
+  const rad = (grados * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sen = Math.sin(rad);
+  const dx = punto.x_m - centro.x_m;
+  const dy = punto.y_m - centro.y_m;
+  return {
+    x_m: redondear(centro.x_m + dx * cos - dy * sen),
+    y_m: redondear(centro.y_m + dx * sen + dy * cos),
+  };
+}
 
 /**
  * La mesa del plano. Si no tiene centro escrito va centrada en la sala, que es
  * el caso de casi todas: una mesa de reuniones se pone en medio.
  */
-export function mesaDeLaSala(sala: Sala): Rectangulo | null {
+export function mesaDeLaSala(sala: Sala): MesaCroquis | null {
   const largo = sala.mesa_largo_m;
   const ancho = sala.mesa_ancho_m;
   if (!largo || !ancho) return null;
 
-  const cx = sala.mesa_x_m ?? sala.largo_m / 2;
-  const cy = sala.mesa_y_m ?? sala.ancho_m / 2;
+  const cx = redondear(sala.mesa_x_m ?? sala.largo_m / 2);
+  const cy = redondear(sala.mesa_y_m ?? sala.ancho_m / 2);
 
   return {
     x_m: redondear(cx - largo / 2),
     y_m: redondear(cy - ancho / 2),
     largo_m: largo,
     ancho_m: ancho,
+    centro: { x_m: cx, y_m: cy },
+    rotacion_grados: normalizarGrados(sala.mesa_rotacion_grados),
   };
+}
+
+/** Un giro se guarda siempre en [0, 360): −90 y 270 son la misma mesa. */
+export function normalizarGrados(grados: number | null | undefined): number {
+  if (grados == null || !Number.isFinite(grados)) return 0;
+  const g = grados % 360;
+  return redondear(g < 0 ? g + 360 : g);
 }
 
 /**
@@ -181,7 +227,7 @@ export function mesaDeLaSala(sala: Sala): Rectangulo | null {
  * Con aforo 2 o 3 no hay cabeceras: se sienta uno enfrente de otro, que es como
  * se usa una sala de dos.
  */
-export function sillasAlrededor(mesa: Rectangulo, aforo: number): SillaCroquis[] {
+export function sillasAlrededor(mesa: MesaCroquis, aforo: number): SillaCroquis[] {
   if (aforo <= 0) return [];
 
   const cabeceras = aforo >= 4 ? Math.min(2, aforo) : 0;
@@ -218,7 +264,11 @@ export function sillasAlrededor(mesa: Rectangulo, aforo: number): SillaCroquis[]
     });
   }
 
-  return sillas;
+  // Las sillas se reparten sobre la mesa sin girar y se giran con ella: quien
+  // se sienta en la cabecera sigue en la cabecera cuando la mesa se pone en
+  // travesía. Con giro 0 `rotar` devuelve el mismo punto y no toca nada.
+  if (!mesa.rotacion_grados) return sillas;
+  return sillas.map((s) => ({ ...rotar(s, mesa.centro, mesa.rotacion_grados), radio_m: s.radio_m }));
 }
 
 export interface EntradaCroquis {
@@ -326,7 +376,7 @@ export function construirEscena({
     tomas: tomasDibujadas,
     tiradas,
     cotas: cotasDeLaEscena(sala, rectSala, mesa, dibujados),
-    anotaciones: anotacionesDeLaEscena(sala, dibujados),
+    anotaciones: anotacionesDeLaEscena(sala, mesa, dibujados),
     avisos,
   };
 }
@@ -379,7 +429,7 @@ function separarAmontonados(equipos: EquipoCroquis[]): void {
 function cotasDeLaEscena(
   sala: Sala,
   rect: Rectangulo,
-  mesa: Rectangulo | null,
+  mesa: MesaCroquis | null,
   equipos: EquipoCroquis[],
 ): CotaCroquis[] {
   const cotas: CotaCroquis[] = [];
@@ -403,7 +453,10 @@ function cotasDeLaEscena(
     });
   }
 
-  if (mesa) {
+  // Con la mesa girada, una cota horizontal sobre su borde mediría la
+  // proyección y no la mesa: se pondría 2,08 donde la mesa mide 2,40. Se
+  // omiten las dos y las medidas se leen en las anotaciones, que no engañan.
+  if (mesa && !mesa.rotacion_grados) {
     cotas.push({
       clave: 'mesa_largo',
       desde: { x_m: mesa.x_m, y_m: mesa.y_m + mesa.ancho_m },
@@ -448,7 +501,11 @@ function cotasDeLaEscena(
  * Lo que no cabe en una planta: alturas. El plano es en dos dimensiones y la
  * altura de la pantalla y de la mesa son datos de montaje que hay que llevar.
  */
-function anotacionesDeLaEscena(sala: Sala, equipos: EquipoCroquis[]): string[] {
+function anotacionesDeLaEscena(
+  sala: Sala,
+  mesa: MesaCroquis | null,
+  equipos: EquipoCroquis[],
+): string[] {
   const notas: string[] = [];
 
   if (sala.alto_m) notas.push(`Alto de la sala ${metros(sala.alto_m)} m`);
@@ -456,6 +513,12 @@ function anotacionesDeLaEscena(sala: Sala, equipos: EquipoCroquis[]): string[] {
     notas.push(`Falso techo a ${metros(sala.alto_falso_techo_m)} m`);
   }
   if (sala.mesa_alto_cm) notas.push(`Altura de la mesa ${entero(sala.mesa_alto_cm)} cm`);
+  // Las cotas de la mesa girada no se dibujan; sus medidas se leen aquí.
+  if (mesa && mesa.rotacion_grados) {
+    notas.push(
+      `Mesa ${metros(mesa.largo_m)} × ${metros(mesa.ancho_m)} m girada ${entero(mesa.rotacion_grados)}°`,
+    );
+  }
 
   for (const e of equipos) {
     if (e.extremo === 'pantalla' && e.z_m > 0) {

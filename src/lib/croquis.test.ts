@@ -4,9 +4,10 @@ import { describe, it } from 'node:test';
 import {
   construirEscena,
   mesaDeLaSala,
+  normalizarGrados,
   proyectar,
   sillasAlrededor,
-  type Rectangulo,
+  type MesaCroquis,
 } from './croquis';
 import type { Conexion, EquipoEnSala, Sala } from './tipos';
 
@@ -40,6 +41,8 @@ const SALA_BATERIA: Sala = {
   mesa_alto_cm: 73,
   mesa_x_m: null,
   mesa_y_m: null,
+  mesa_rotacion_grados: 0,
+  diagrama_version: 0,
 };
 
 const equipo = (
@@ -47,6 +50,7 @@ const equipo = (
   nombre: string,
   extremo: EquipoEnSala['extremo'],
   posicion = { x_m: 0, y_m: 0, z_m: 0 },
+  posicion_confirmada = posicion.x_m !== 0 || posicion.y_m !== 0 || posicion.z_m !== 0,
 ): EquipoEnSala => ({
   id,
   sala_id: 'sala-1',
@@ -55,6 +59,10 @@ const equipo = (
   cantidad: 1,
   extremo,
   posicion,
+  // Por defecto se confirma lo que tiene alguna coordenada escrita: es lo que
+  // hizo el relleno de la migracion sobre el historico, y deja el croquis de
+  // todo lo que ya existia igual que antes de separar el triple cero.
+  posicion_confirmada,
 });
 
 const conexion = (id: string, origen: string, destino: string): Conexion => ({
@@ -89,10 +97,85 @@ describe('la mesa del croquis', () => {
     assert.equal(mesa.x_m, 1.8);
     assert.equal(mesa.y_m, 0.4);
   });
+
+  it('lleva su centro, que es lo que se arrastra y lo que gira', () => {
+    assert.deepEqual(mesaDeLaSala(SALA_BATERIA)!.centro, { x_m: 2.35, y_m: 1.25 });
+    assert.deepEqual(
+      mesaDeLaSala({ ...SALA_BATERIA, mesa_x_m: 3, mesa_y_m: 1 })!.centro,
+      { x_m: 3, y_m: 1 },
+    );
+  });
+
+  it('el giro se normaliza: −90 y 270 son la misma mesa', () => {
+    assert.equal(mesaDeLaSala({ ...SALA_BATERIA, mesa_rotacion_grados: -90 })!.rotacion_grados, 270);
+    assert.equal(mesaDeLaSala({ ...SALA_BATERIA, mesa_rotacion_grados: 450 })!.rotacion_grados, 90);
+    assert.equal(normalizarGrados(360), 0);
+    assert.equal(normalizarGrados(Number.NaN), 0);
+    assert.equal(normalizarGrados(null), 0);
+  });
+});
+
+describe('la mesa girada', () => {
+  const girada = (grados: number) =>
+    construirEscena({
+      sala: { ...SALA_BATERIA, mesa_rotacion_grados: grados },
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+    });
+
+  it('gira las sillas con ella: quien va en cabecera sigue en cabecera', () => {
+    const recta = girada(0);
+    const noventa = girada(90);
+    assert.equal(recta.sillas.length, noventa.sillas.length);
+
+    // Se comparan coordenadas, no distancias al centro: la distancia es
+    // invariante al giro y una prueba sobre ella pasaría igual con las sillas
+    // sin girar, que es justo el fallo que se quiere cazar.
+    const c = recta.mesa!.centro;
+    const clave = (ss: { x_m: number; y_m: number }[]) =>
+      ss.map((s) => `${s.x_m.toFixed(2)},${s.y_m.toFixed(2)}`).sort().join(' | ');
+
+    // Giro de 90° a mano: (x, y) → (cx − (y − cy), cy + (x − cx)).
+    const aMano = recta.sillas.map((s) => ({
+      x_m: c.x_m - (s.y_m - c.y_m),
+      y_m: c.y_m + (s.x_m - c.x_m),
+    }));
+
+    assert.equal(clave(noventa.sillas), clave(aMano));
+    assert.notEqual(clave(noventa.sillas), clave(recta.sillas));
+  });
+
+  it('no dibuja las cotas de la mesa: medirían la proyección, no la mesa', () => {
+    assert.ok(girada(0).cotas.some((c) => c.clave === 'mesa_largo'));
+    assert.ok(!girada(30).cotas.some((c) => c.clave === 'mesa_largo'));
+    assert.ok(!girada(30).cotas.some((c) => c.clave === 'mesa_ancho'));
+  });
+
+  it('las medidas de la mesa girada se leen en las anotaciones', () => {
+    assert.ok(
+      girada(30).anotaciones.some((a) => a === 'Mesa 2,40 × 1,21 m girada 30°'),
+    );
+    assert.ok(!girada(0).anotaciones.some((a) => a.includes('girada')));
+  });
+
+  it('las cotas de la sala no dependen del giro de la mesa', () => {
+    assert.equal(
+      girada(30).cotas.find((c) => c.clave === 'sala_largo')?.texto,
+      girada(0).cotas.find((c) => c.clave === 'sala_largo')?.texto,
+    );
+  });
 });
 
 describe('las sillas alrededor de la mesa', () => {
-  const mesa: Rectangulo = { x_m: 1.15, y_m: 0.65, largo_m: 2.4, ancho_m: 1.21 };
+  const mesa: MesaCroquis = {
+    x_m: 1.15,
+    y_m: 0.65,
+    largo_m: 2.4,
+    ancho_m: 1.21,
+    centro: { x_m: 2.35, y_m: 1.255 },
+    rotacion_grados: 0,
+  };
 
   it('aforo 8 se sienta 3 + 3 + 1 + 1, como en el croquis de mano', () => {
     const sillas = sillasAlrededor(mesa, 8);
@@ -230,6 +313,39 @@ describe('la escena completa', () => {
 
     const panel = escena.equipos.find((e) => e.id === 'panel')!;
     assert.equal(panel.x_m, 2.35, 'una posición medida no se toca');
+  });
+
+  it('el origen confirmado es una medida, no un hueco', () => {
+    // Es la brecha que cerró el editor: (0,0,0) significaba a la vez "sin
+    // colocar" y la esquina de la sala, que es justo donde va el rack. Sin
+    // esto, arrastrar un equipo a la esquina y guardar lo devolvía estimado.
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [equipo('rack', 'Rack', 'rack', { x_m: 0, y_m: 0, z_m: 0 }, true)],
+      conexiones: [],
+      tomas: [],
+    });
+
+    const rack = escena.equipos[0];
+    assert.equal(rack.estimada, false);
+    assert.equal(rack.x_m, 0);
+    assert.equal(rack.y_m, 0);
+    assert.ok(!escena.avisos.some((a) => a.includes('posición')));
+  });
+
+  it('sin confirmar, unas coordenadas escritas no valen: manda la marca', () => {
+    // El caso simétrico. Sin él, `estimada` podría seguir deduciéndose del
+    // triple cero y esta prueba pasaría igual.
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [equipo('tv', 'Pantalla', 'pantalla', { x_m: 3, y_m: 2, z_m: 1 }, false)],
+      conexiones: [],
+      tomas: [],
+    });
+
+    const tv = escena.equipos[0];
+    assert.equal(tv.estimada, true);
+    assert.equal(tv.x_m, 0, 'se recoloca en el testero');
   });
 
   it('la posición escrita manda y no se marca como estimada', () => {

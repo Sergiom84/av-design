@@ -77,12 +77,20 @@ function Mesa({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
   const mesa = escena.mesa;
   if (!mesa) return null;
 
+  // El giro es antihorario en la sala y el eje y del SVG va al revés, así que
+  // en pantalla se pinta con el signo cambiado. Gira sobre el centro de la
+  // mesa, que es el punto que se guarda y el que se arrastra en el editor.
+  const giro = mesa.rotacion_grados
+    ? `rotate(${-mesa.rotacion_grados} ${p.x(mesa.centro.x_m)} ${p.y(mesa.centro.y_m)})`
+    : undefined;
+
   return (
     <rect
       x={p.x(mesa.x_m)}
       y={p.y(mesa.y_m + mesa.ancho_m)}
       width={p.d(mesa.largo_m)}
       height={p.d(mesa.ancho_m)}
+      transform={giro}
       fill="var(--superficie-hundida)"
       stroke="var(--tinta)"
       strokeWidth={1.25}

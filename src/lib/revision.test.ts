@@ -39,6 +39,8 @@ const sala = (extra: Partial<Sala> = {}): Sala => ({
   mesa_alto_cm: 73,
   mesa_x_m: null,
   mesa_y_m: null,
+  mesa_rotacion_grados: 0,
+  diagrama_version: 0,
   ...extra,
 });
 
@@ -50,6 +52,7 @@ const equipo = (id: string, extra: Partial<EquipoEnSala> = {}): EquipoEnSala => 
   cantidad: 1,
   extremo: 'pantalla',
   posicion: { x_m: 0, y_m: 0, z_m: 0 },
+  posicion_confirmada: false,
   toma_red_id: null,
   ...extra,
 });

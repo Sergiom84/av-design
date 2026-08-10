@@ -103,6 +103,17 @@ export async function crearSala(datos: FormData) {
     sede = await sedeId(texto(datos.get('sede')));
   }
 
+  // Dónde va la mesa en esta tipología. No viene del formulario porque no es
+  // una medida que se compruebe en obra al dar de alta la sala: es el montaje
+  // estándar, y sin copiarlo la sala nueva nacía con la mesa centrada por
+  // implícito y perdía la colocación real de la plantilla.
+  const [plantilla] = plantillaId
+    ? await sql<
+        Array<{ mesa_x_m: string | null; mesa_y_m: string | null; mesa_rotacion_grados: string | null }>
+      >`select mesa_x_m, mesa_y_m, mesa_rotacion_grados
+        from plantillas_sala where id = ${plantillaId}`
+    : [];
+
   const comun = {
     sede_id: sede,
     localizacion_id: localizacionId,
@@ -120,6 +131,9 @@ export async function crearSala(datos: FormData) {
     mesa_largo_m: numero(datos.get('mesa_largo_m')),
     mesa_ancho_m: numero(datos.get('mesa_ancho_m')),
     mesa_alto_cm: numero(datos.get('mesa_alto_cm')),
+    mesa_x_m: plantilla?.mesa_x_m == null ? null : Number(plantilla.mesa_x_m),
+    mesa_y_m: plantilla?.mesa_y_m == null ? null : Number(plantilla.mesa_y_m),
+    mesa_rotacion_grados: Number(plantilla?.mesa_rotacion_grados ?? 0),
     ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
   };
 
@@ -138,9 +152,10 @@ export async function crearSala(datos: FormData) {
             x_m: string | null;
             y_m: string | null;
             z_m: string | null;
+            posicion_confirmada: boolean | null;
           }>
         >`select id, articulo_id, categoria, cantidad, modelo_texto,
-                 extremo, x_m, y_m, z_m
+                 extremo, x_m, y_m, z_m, posicion_confirmada
           from plantilla_articulos
           where plantilla_id = ${plantillaId} and not opcional`
       : [];
@@ -181,12 +196,21 @@ export async function crearSala(datos: FormData) {
       const equipoDeLinea = new Map<string, string>();
 
       for (const l of lineas) {
+        // La ausencia se propaga como ausencia: una línea sin colocar da un
+        // equipo sin colocar, y el croquis lo deduce del extremo y lo dibuja
+        // discontinuo. Convertirla aquí en un (0,0,0) "confirmado" plantaría
+        // los cuatro equipos en la esquina y los daría por medidos.
+        const colocada =
+          l.posicion_confirmada ??
+          (Number(l.x_m ?? 0) !== 0 || Number(l.y_m ?? 0) !== 0 || Number(l.z_m ?? 0) !== 0);
+
         const [equipo] = await tx<Array<{ id: string }>>`
-          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m)
+          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m, posicion_confirmada)
           values (${sala.id}, ${l.articulo_id}, ${l.modelo_texto ?? l.categoria},
                   ${Math.max(1, Math.round(Number(l.cantidad) || 1))},
                   ${l.extremo ?? extremoPorCategoria(l.categoria)}::extremo_cable,
-                  ${Number(l.x_m ?? 0)}, ${Number(l.y_m ?? 0)}, ${Number(l.z_m ?? 0)})
+                  ${Number(l.x_m ?? 0)}, ${Number(l.y_m ?? 0)}, ${Number(l.z_m ?? 0)},
+                  ${colocada})
           returning id`;
         equipoDeLinea.set(l.id, equipo.id);
       }
@@ -264,6 +288,16 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
           ancho_m: medida(sala.ancho_m),
           alto_m: medida(sala.alto_m),
           alto_falso_techo_m: medida(sala.alto_falso_techo_m),
+          // El montaje entero, no solo la lista de material: la mesa con su
+          // sitio y su giro, y más abajo las posiciones y las tiradas. Sin
+          // esto, guardar una sala terminada como plantilla y volver a crearla
+          // daba una sala distinta.
+          mesa_largo_m: medida(sala.mesa_largo_m),
+          mesa_ancho_m: medida(sala.mesa_ancho_m),
+          mesa_alto_cm: medida(sala.mesa_alto_cm),
+          mesa_x_m: sala.mesa_x_m == null ? null : Number(sala.mesa_x_m),
+          mesa_y_m: sala.mesa_y_m == null ? null : Number(sala.mesa_y_m),
+          mesa_rotacion_grados: Number(sala.mesa_rotacion_grados ?? 0),
           ruta_por_defecto: (sala.ruta_por_defecto as string) ?? 'falso_techo',
           notas: `Guardada desde la sala ${String(sala.nombre)}.`,
         })}
@@ -277,18 +311,72 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
     // sección sale del catálogo cuando el equipo viene de él; si se escribió a
     // mano, no hay de dónde sacarla.
     const equipos = await tx<
-      Array<{ articulo_id: string | null; nombre: string; cantidad: number; categoria: string | null }>
-    >`select e.articulo_id, e.nombre, e.cantidad, a.categoria
+      Array<{
+        id: string;
+        articulo_id: string | null;
+        nombre: string;
+        cantidad: number;
+        categoria: string | null;
+        extremo: string;
+        x_m: string;
+        y_m: string;
+        z_m: string;
+        posicion_confirmada: boolean;
+      }>
+    >`select e.id, e.articulo_id, e.nombre, e.cantidad, a.categoria,
+             e.extremo, e.x_m, e.y_m, e.z_m, e.posicion_confirmada
       from sala_equipos e
       left join articulos a on a.id = e.articulo_id
       where e.sala_id = ${salaId}
       order by e.nombre`;
 
+    // De qué equipo de la sala salió cada línea: es lo que permite copiar
+    // después las tiradas, que apuntan a equipos y tienen que acabar
+    // apuntando a líneas.
+    const lineaDeEquipo = new Map<string, string>();
+
     for (const e of equipos) {
-      await tx`
-        insert into plantilla_articulos (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional)
+      // Un equipo sin colocar entra sin coordenadas, no como (0,0,0): la
+      // ausencia se propaga como ausencia en los dos sentidos del viaje.
+      const [linea] = await tx<Array<{ id: string }>>`
+        insert into plantilla_articulos
+          (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+           extremo, x_m, y_m, z_m, posicion_confirmada)
         values (${id}, ${e.articulo_id}, ${e.categoria ?? 'SIN CATEGORIA'},
-                ${e.nombre}, ${Math.max(1, Math.round(Number(e.cantidad) || 1))}, false)`;
+                ${e.nombre}, ${Math.max(1, Math.round(Number(e.cantidad) || 1))}, false,
+                ${e.extremo}::extremo_cable,
+                ${e.posicion_confirmada ? Number(e.x_m) : null},
+                ${e.posicion_confirmada ? Number(e.y_m) : null},
+                ${e.posicion_confirmada ? Number(e.z_m) : null},
+                ${e.posicion_confirmada})
+        returning id`;
+      lineaDeEquipo.set(String(e.id), linea.id);
+    }
+
+    // Las tiradas de la sala pasan a ser las tiradas tipo de la plantilla.
+    const conexiones = await tx<
+      Array<{
+        origen_id: string;
+        destino_id: string;
+        articulo_cable_id: string | null;
+        senal: string;
+        ruta: string | null;
+        notas: string | null;
+      }>
+    >`select origen_id, destino_id, articulo_cable_id, senal, ruta, notas
+      from conexiones where sala_id = ${salaId} order by creado_en, id`;
+
+    let orden = 0;
+    for (const c of conexiones) {
+      const origen = lineaDeEquipo.get(String(c.origen_id));
+      const destino = lineaDeEquipo.get(String(c.destino_id));
+      if (!origen || !destino) continue;
+      await tx`
+        insert into plantilla_conexiones
+          (plantilla_id, origen_linea_id, destino_linea_id, articulo_cable_id, senal, ruta, notas, orden)
+        values (${id}, ${origen}, ${destino}, ${c.articulo_cable_id},
+                ${c.senal}::senal, ${c.ruta}::ruta_cable, ${c.notas}, ${orden})`;
+      orden += 1;
     }
 
     return id;

@@ -80,10 +80,28 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   nota, no bloquea. La recepción es por pedido (`movimientos.quien`), no un
   hito. Los técnicos y sus roles se siembran de `data/tecnicos.csv` con la
   convención `fuente` csv/app.
-- **La ficha de sala son cinco pestañas por ruta** (`salas/[id]`,
+- **La ficha de sala son seis pestañas por ruta** (`salas/[id]`, `/diagrama`,
   `/equipamiento`, `/cableado`, `/logistica`, `/documentos`) con layout
   compartido. Las acciones que tocan la sala revalidan con alcance `layout`;
   `typedRoutes` está activado y `next build` caza los enlaces rotos.
+- **El plano se edita donde vive, y no se guarda como imagen.** La pestaña
+  `Diagrama` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
+  medidas, mesa, posiciones de equipo y rosetas: los mismos datos que alimentan
+  el croquis de Resumen y el cálculo de cable. No hay PNG, ni SVG final, ni
+  JSON de lienzo en la base. El lienzo pinta la misma `GeometriaPlano` que el
+  croquis, para que una posición confirmada dé el mismo dibujo en los dos
+  sitios. En código el plano en planta se llama `plano-editor`: `diagrama` a
+  secas ya es el esquema de conexiones de Cableado.
+- **Colocado y estimado son cosas distintas.** `sala_equipos.posicion_confirmada`
+  las separa, porque `(0,0,0)` significaba a la vez «sin colocar» y la esquina
+  de la sala, que es justo donde va el rack. Un equipo sin confirmar se dibuja
+  discontinuo y se deduce del extremo; uno confirmado es una medida aunque
+  valga cero. La ausencia se propaga como ausencia en el viaje a la plantilla y
+  de vuelta: no se convierte en `(0,0,0)`.
+- **El plano se guarda entero o no se guarda.** `guardarDiagramaSala`
+  (`src/app/acciones-diagrama.ts`) es una transacción con `diagrama_version`
+  optimista: dos pestañas no se pisan en silencio, la segunda recibe conflicto
+  y decide. Se comprueba contra Postgres real con `npm run test:diagrama`.
 - **El dominio se escribe en español.** Tablas, columnas, tipos, funciones y
   variables usan el vocabulario del departamento: sala, tipología, aforo, caja
   de conexiones, canaleta, falso techo, tirada, holgura, bobina, latiguillo.
@@ -205,7 +223,7 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 |---|---|
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Compilación de producción (también valida tipos) |
-| `npm test` | Pruebas de la lógica pura: cable, tabla de cables, almacén, compras y carga |
+
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |

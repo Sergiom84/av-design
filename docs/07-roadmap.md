@@ -16,7 +16,8 @@ de una sala.
 | M6 | La plantilla trae el montaje: posiciones y tiradas tipo, sala nace montada |
 | Acceso | Clave de departamento con huella SHA-256, cookie firmada, middleware |
 | Jerarquía de obra | Proyecto → Localización → Sala, portada operativa, pedidos por obra (7-8-2026) |
-| Ficha en pestañas | Resumen · Equipamiento · Cableado · Logística · Documentos, rutas anidadas (7-8-2026) |
+| Ficha en pestañas | Resumen · Diagrama · Equipamiento · Cableado · Logística · Documentos, rutas anidadas (7-8-2026) |
+| R4 · Editor del plano | Pestaña `Diagrama`: medidas, mesa, equipos y rosetas se colocan arrastrando o con números (10-8-2026) |
 | Despliegue | Neon + Render, `av-design.onrender.com`, autodeploy desde `main` |
 
 ## Lo que queda, por módulos
@@ -125,13 +126,50 @@ el servidor, sin JavaScript, como el croquis.
 No se dibuja aparte: es presentación de datos existentes, misma regla que el
 croquis.
 
-### R3 · Diagrama editable
+### R4 · Editor del plano en planta — HECHO (10-8-2026)
 
-Encima de R2: arrastrar bloques, trazar una línea de puerto a puerto y que eso
-dé de alta la conexión. Requiere librería de diagramas en cliente (React Flow o
-equivalente) y es la primera pieza con estado interactivo pesado. No se empieza
-hasta que R2 esté en uso: puede que con el diagrama en lectura y el alta por
-formulario baste.
+La pestaña `Diagrama` de la ficha de sala. Plan completo en
+`docs/11-plan-editor-diagrama-sala.md`.
+
+Implementado: `src/lib/plano-editor.ts` (lógica pura, con pruebas) y
+`src/components/plano-editor/` (barra, lienzo, lista de objetos, cuatro
+inspectores, panel inferior móvil). El lienzo pinta la misma `GeometriaPlano`
+que el croquis de Resumen y solo añade rejilla debajo y zonas de agarre
+encima; el zoom y la panorámica mueven el `viewBox` del propio SVG. Se guarda
+con `guardarDiagramaSala` (`src/app/acciones-diagrama.ts`), una transacción
+con `diagrama_version` optimista y guardas de pertenencia y obra cerrada.
+
+Decisiones que fija esta pieza y no conviene reabrir sin motivo:
+
+- Sala rectangular. Paredes libres o varios recintos obligarían a rediseñar
+  `calculo-cable.ts` y el perímetro de sala.
+- Elementos del MVP: sala, mesa, equipos, rosetas y sillas derivadas del
+  aforo. Puertas, ventanas y columnas quedan para después, en tablas
+  separadas (`elementos_sala`), nunca metidas entre los equipos.
+- Una línea con `cantidad > 1` es un ancla y una marca `×N`. Para colocar las
+  unidades por separado hay que separarlas en líneas: las conexiones apuntan a
+  la fila agregada y repartirlas automáticamente asignaría cables a la unidad
+  equivocada.
+- El ancla cae dentro del rectángulo; el símbolo puede sobresalir. Una
+  pantalla va a ras de pared.
+- No se guarda imagen, ni SVG final, ni JSON de lienzo.
+
+Queda para después: rotación por equipo, tamaño físico por artículo,
+alineación y distribución, editor visual propio para plantillas, historial de
+versiones y exportación del plano a PDF.
+
+### R3 · Diagrama de conexiones editable
+
+Encima de R2, y **distinto de R4**: R4 edita el plano en planta (dónde está
+cada equipo); R3 editaría el esquema de conexiones (qué puerto va a qué
+puerto). Arrastrar bloques, trazar una línea de puerto a puerto y que eso dé
+de alta la conexión. Es la pieza con estado interactivo más pesado. No se
+empieza hasta que R2 esté en uso: puede que con el esquema en lectura y el
+alta por formulario baste.
+
+Nota tras R4: el editor del plano se hizo con SVG propio y sin librería de
+diagramación, y cubre el MVP de sobra. Antes de meter React Flow para R3 hay
+que demostrar que el SVG existente no llega, no suponerlo.
 
 ### P1 · Personas y ciclo de vida de la sala — HECHO 7-8-2026
 
@@ -271,6 +309,7 @@ frena las instalaciones. Cuando se retome, el criterio está en
    traiga. Luego **M2** (croquis), que necesita M1.
 6. **R1d–R1f**: resto de pantallas al aspecto nuevo.
 7. **M3 y M4**, independientes entre sí.
-8. **R3** solo si el diagrama en lectura se queda corto.
+8. **R3** solo si el esquema de conexiones en lectura se queda corto. R4, el
+   editor del plano en planta, ya está hecho (10-8-2026).
 9. Verificación de recorrido completo: crear una sala de telepresencia desde la
    plantilla, recibir material, cargarla, instalarla y entregarla.

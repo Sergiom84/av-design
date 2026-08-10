@@ -26,7 +26,11 @@ export function PanelMovil({
       onToggle={(ev) => setAbierto((ev.currentTarget as HTMLDetailsElement).open)}
       className="lg:hidden border-t border-linea"
     >
-      <summary className="flex items-center justify-between gap-3 px-4 py-3 min-h-[44px] cursor-pointer select-none">
+      {/* El foco visible se pone aquí y no en `globals.css`: la regla global
+          cubre input, select, textarea, a y button, y `summary` no es
+          ninguno de los cinco. Sin esto, quien navega con teclado en móvil
+          abre el panel a ciegas. */}
+      <summary className="flex items-center justify-between gap-3 px-4 py-3 min-h-[44px] cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento">
         <span className="min-w-0 [overflow-wrap:anywhere]">{resumen}</span>
         <span className="text-acento font-medium whitespace-nowrap">
           {abierto ? 'Cerrar' : 'Editar'}

@@ -9,7 +9,7 @@ import { PestanasDeSala } from '@/components/sala/pestanas';
 export const dynamic = 'force-dynamic';
 
 /**
- * La ficha de sala son cinco pestañas por ruta: Resumen, Equipamiento,
+ * La ficha de sala son seis pestañas por ruta: Resumen, Diagrama, Equipamiento,
  * Cableado, Logística y ciclo de vida, y Documentos. El layout paga solo la
  * cabecera; cada pestaña carga y calcula lo suyo. Las acciones que tocan la
  * sala revalidan con alcance `layout` para refrescar todas a la vez.

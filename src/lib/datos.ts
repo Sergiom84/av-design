@@ -8,6 +8,7 @@ import {
   EquipoEnSala,
   Extremo,
   LineaPlantilla,
+  MuebleCatalogo,
   ParametrosCable,
   PARAMETROS_POR_DEFECTO,
   PlantillaSala,
@@ -112,6 +113,124 @@ export async function listarArticulos(tipo?: Articulo['tipo']): Promise<Articulo
 
 /** Cuántas referencias devuelve como mucho una búsqueda del catálogo. */
 export const MAXIMO_SUGERENCIAS = 20;
+
+/**
+ * Buscar un mueble para el plano.
+ *
+ * Catálogo aparte del AV y consulta aparte: teclear «mesa» en el buscador de
+ * equipamiento no puede sacar la mesa de reuniones, ni teclear «silla» sacar
+ * un soporte. Son dos listas y dos cajas de búsqueda.
+ *
+ * Misma mecánica que `buscarArticulos()`: los términos se cruzan con Y
+ * —«mesa redonda» exige las dos palabras—, `%` y `_` se escapan porque el
+ * técnico los teclea como texto, y no salen más de veinte.
+ */
+export async function buscarMobiliario(
+  consulta: string,
+  categoria?: string,
+): Promise<MuebleCatalogo[]> {
+  const terminos = consulta
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((t) => t.replace(/[\\%_]/g, (c) => `\\${c}`));
+
+  const filas = await sql<Fila[]>`
+    select id, clave, nombre, categoria, palabras_clave, forma,
+           largo_m_defecto, ancho_m_defecto, alto_m_defecto
+    from catalogo_mobiliario
+    where activo
+      and (${categoria ?? null}::text is null or categoria = ${categoria ?? null})
+      and coalesce((
+        select bool_and(
+          concat_ws(' ', nombre, categoria, palabras_clave) ilike '%' || t || '%'
+        )
+        from unnest(${terminos}::text[]) as t
+      ), true)
+    order by orden, nombre
+    limit ${MAXIMO_SUGERENCIAS}`;
+
+  return filas.map((f) => ({
+    id: String(f.id),
+    clave: String(f.clave),
+    nombre: String(f.nombre),
+    categoria: String(f.categoria),
+    palabras_clave: s(f.palabras_clave),
+    forma: f.forma === 'circulo' ? 'circulo' : 'rectangulo',
+    largo_m_defecto: n(f.largo_m_defecto),
+    ancho_m_defecto: n(f.ancho_m_defecto),
+    alto_m_defecto: n(f.alto_m_defecto),
+  }));
+}
+
+/**
+ * Lo que hace falta para elegir una plantilla con criterio: cómo se llama, de
+ * qué tipología es, cuánto mide y qué trae dentro.
+ *
+ * Los recuentos van en la misma consulta porque son la previsualización: una
+ * plantilla con cero conexiones y una con doce no se eligen igual, y saberlo
+ * después de aplicarla ya no sirve.
+ */
+export interface PlantillaElegible {
+  id: string;
+  nombre: string;
+  tipologia: string;
+  largo_m: number | null;
+  ancho_m: number | null;
+  alto_m: number | null;
+  muebles: number;
+  lineas: number;
+  conexiones: number;
+}
+
+export async function buscarPlantillas(consulta: string): Promise<PlantillaElegible[]> {
+  const terminos = consulta
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((t) => t.replace(/[\\%_]/g, (c) => `\\${c}`));
+
+  const filas = await sql<Fila[]>`
+    select p.id, p.nombre, p.tipologia, p.largo_m, p.ancho_m, p.alto_m,
+           (select count(*) from plantilla_mobiliario m where m.plantilla_id = p.id) as muebles,
+           (select count(*) from plantilla_articulos a where a.plantilla_id = p.id) as lineas,
+           (select count(*) from plantilla_conexiones c where c.plantilla_id = p.id) as conexiones
+    from plantillas_sala p
+    where coalesce((
+      select bool_and(concat_ws(' ', p.nombre, p.tipologia) ilike '%' || t || '%')
+      from unnest(${terminos}::text[]) as t
+    ), true)
+    order by p.n_salas_reales desc nulls last, p.nombre
+    limit ${MAXIMO_SUGERENCIAS}`;
+
+  return filas.map((f) => ({
+    id: String(f.id),
+    nombre: String(f.nombre),
+    tipologia: String(f.tipologia),
+    largo_m: n(f.largo_m),
+    ancho_m: n(f.ancho_m),
+    alto_m: n(f.alto_m),
+    muebles: Number(f.muebles ?? 0),
+    lineas: Number(f.lineas ?? 0),
+    conexiones: Number(f.conexiones ?? 0),
+  }));
+}
+
+/** Cómo se llama la plantilla de la que salió el plano. Para el rótulo `Base:`. */
+export async function nombreDePlantilla(id: string | null | undefined): Promise<string | null> {
+  if (!id || !esUuid(id)) return null;
+  const [f] = await sql<Fila[]>`select nombre from plantillas_sala where id = ${id}`;
+  return f ? String(f.nombre) : null;
+}
+
+/** Las categorías que hay hoy en el catálogo de mobiliario, para el filtro. */
+export async function categoriasDeMobiliario(): Promise<string[]> {
+  const filas = await sql<Fila[]>`
+    select distinct categoria from catalogo_mobiliario where activo order by categoria`;
+  return filas.map((f) => String(f.categoria));
+}
 
 /**
  * Busca referencias del catálogo por marca, modelo, referencia o sección.

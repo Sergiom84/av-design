@@ -1,7 +1,7 @@
 'use client';
 
 import { ETIQUETA_EXTREMO } from '@/lib/tipos';
-import type { BorradorPlano, Seleccion } from '@/lib/plano-editor';
+import { estadoDelMueble, type BorradorPlano, type MuebleBorrador, type Seleccion } from '@/lib/plano-editor';
 
 /**
  * Los objetos de la sala, en una lista de botones de verdad.
@@ -9,6 +9,10 @@ import type { BorradorPlano, Seleccion } from '@/lib/plano-editor';
  * Es la vía accesible para seleccionar —Tab y Enter llegan a todo— y también
  * la práctica: dos equipos deducidos al centro de la mesa se tapan en el
  * dibujo y aquí no. No es un duplicado del lienzo, es su índice.
+ *
+ * El mobiliario y el equipamiento se parten en `Por colocar` y `Colocados`.
+ * Añadir ocho sillas y no volver a saber cuáles faltan por poner es
+ * exactamente el momento en el que se pierde la cuenta.
  */
 export function ListaObjetos({
   borrador,
@@ -51,6 +55,27 @@ export function ListaObjetos({
           </li>
         ) : null}
 
+        {grupos(borrador.mobiliario).map(({ titulo, muebles }) => (
+          <li key={titulo}>
+            <p className="px-3 pt-3 pb-1 t-etiqueta text-tinta-tenue">
+              {titulo} ({muebles.length})
+            </p>
+            <ul>
+              {muebles.map((m) => (
+                <li key={m.id}>
+                  <Fila
+                    activo={activo({ tipo: 'mueble', id: m.id })}
+                    onClick={() => alSeleccionar({ tipo: 'mueble', id: m.id })}
+                    titulo={m.nombre}
+                    detalle={detalleDeMueble(m)}
+                    tenue={estadoDelMueble(m) !== 'colocado'}
+                  />
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+
         {borrador.equipos.map((e) => (
           <li key={e.id}>
             <Fila
@@ -58,9 +83,11 @@ export function ListaObjetos({
               onClick={() => alSeleccionar({ tipo: 'equipo', id: e.id })}
               titulo={e.cantidad > 1 ? `${e.nombre} ×${e.cantidad}` : e.nombre}
               detalle={
-                e.posicion_confirmada
+                (e.posicion_confirmada
                   ? `${ETIQUETA_EXTREMO[e.extremo]} · X ${metros(e.x_m)} Y ${metros(e.y_m)}`
-                  : `${ETIQUETA_EXTREMO[e.extremo]} · posición estimada`
+                  : `${ETIQUETA_EXTREMO[e.extremo]} · posición estimada`) +
+                (e.rotacion_grados ? ` · ${e.rotacion_grados}°` : '') +
+                (e.es_nuevo ? ' · sin guardar' : '')
               }
               tenue={!e.posicion_confirmada}
             />
@@ -123,3 +150,29 @@ function Fila({
 }
 
 const metros = (n: number): string => n.toFixed(2).replace('.', ',');
+
+/** Los muebles partidos en dos: lo que falta por poner y lo que ya está. */
+function grupos(
+  mobiliario: MuebleBorrador[],
+): Array<{ titulo: string; muebles: MuebleBorrador[] }> {
+  const colocados = mobiliario.filter((m) => estadoDelMueble(m) === 'colocado');
+  const pendientes = mobiliario.filter((m) => estadoDelMueble(m) !== 'colocado');
+  return [
+    { titulo: 'Por colocar', muebles: pendientes },
+    { titulo: 'Colocados', muebles: colocados },
+  ].filter((g) => g.muebles.length > 0);
+}
+
+/** Qué le falta a este mueble, o dónde está. Y si todavía no está guardado. */
+function detalleDeMueble(m: MuebleBorrador): string {
+  const giro = m.rotacion_grados ? ` · ${m.rotacion_grados}°` : '';
+  const nuevo = m.es_nuevo ? ' · sin guardar' : '';
+  switch (estadoDelMueble(m)) {
+    case 'sin_medir':
+      return `Sin medir${giro}${nuevo}`;
+    case 'sin_colocar':
+      return `Sin colocar${giro}${nuevo}`;
+    default:
+      return `X ${metros(m.x_m ?? 0)} Y ${metros(m.y_m ?? 0)}${giro}${nuevo}`;
+  }
+}

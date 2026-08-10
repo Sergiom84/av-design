@@ -456,6 +456,35 @@ function revalidarLaFicha() {
   revalidatePath('/');
 }
 
+/**
+ * Declarar que el plano se prepara desde cero.
+ *
+ * No borra nada, y eso es exactamente lo que significa: la sala conserva sus
+ * medidas, sus equipos, sus tiradas y sus rosetas, y el técnico completará a
+ * mano lo que falte. Lo único que cambia es que la pestaña deja de preguntar.
+ *
+ * Es una acción propia y no un `inicio_diagrama` suelto en el patch porque la
+ * tarjeta de origen aparece antes de que haya borrador que guardar.
+ */
+export async function iniciarDiagramaDesdeCero(
+  salaId: string,
+  versionEsperada: number,
+): Promise<ResultadoGuardado> {
+  return guardarDiagramaSala({
+    sala_id: salaId,
+    versionEsperada,
+    sala: null,
+    equipos: [],
+    equipos_alta: [],
+    mobiliario_alta: [],
+    mobiliario_cambio: [],
+    mobiliario_baja: [],
+    tomas: [],
+    inicio_diagrama: { origen: 'desde_cero', plantilla_id: null },
+    sillas_modo: null,
+  });
+}
+
 // =====================================================================
 // Preparar la sala desde una plantilla
 //

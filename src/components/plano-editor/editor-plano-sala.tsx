@@ -7,6 +7,8 @@ import {
   acercar,
   afectaAlCalculo,
   avisosDelBorrador,
+  anadirEquipo,
+  anadirMuebles,
   aplicarIdsReales,
   borradorDesde,
   confirmarEstimadas,
@@ -28,12 +30,21 @@ import {
   type Seleccion,
   type Vista,
 } from '@/lib/plano-editor';
-import type { Conexion, EquipoEnSala, MuebleEnSala, Sala, TomaRed } from '@/lib/tipos';
+import type {
+  ArticuloElegible,
+  Conexion,
+  EquipoEnSala,
+  MuebleCatalogo,
+  MuebleEnSala,
+  Sala,
+  TomaRed,
+} from '@/lib/tipos';
 import { guardarDiagramaSala } from '@/app/acciones-diagrama';
 import { Aviso, Boton, Tarjeta } from '@/components/ui';
 import { BarraHerramientas, type Herramienta } from './barra-herramientas';
 import { ANCHO_BASE_PX, LienzoPlano, type PuntoMetros } from './lienzo-plano';
 import { ListaObjetos } from './lista-objetos';
+import { BibliotecaElementos } from './biblioteca';
 import { InspectorSala } from './inspector-sala';
 import { InspectorMesa } from './inspector-mesa';
 import { InspectorEquipo } from './inspector-equipo';
@@ -59,6 +70,8 @@ export function EditorPlanoSala({
   conexiones,
   tomas,
   muebles,
+  categoriasMobiliario,
+  plantillaBase,
   cerrado,
 }: {
   sala: Sala;
@@ -66,6 +79,9 @@ export function EditorPlanoSala({
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles: MuebleEnSala[];
+  categoriasMobiliario: string[];
+  /** Nombre de la plantilla de la que salió el plano, para el rótulo `Base:`. */
+  plantillaBase: string | null;
   cerrado: boolean;
 }) {
   const router = useRouter();
@@ -165,6 +181,43 @@ export function EditorPlanoSala({
   const soltar = useCallback(() => {
     arrastrando.current = false;
   }, []);
+
+  // ------------------------------------------------------------------ altas
+  //
+  // Añadir no escribe en la base: entra en el borrador con un id temporal, se
+  // selecciona para que se vea de qué se está hablando, y se guarda con el
+  // resto. Deshacer lo quita, que es lo que espera quien acaba de teclear
+  // «silla» y ve que no era esa.
+
+  const anadirMobiliario = useCallback(
+    (mueble: MuebleCatalogo, cantidad: number) => {
+      const ids = Array.from({ length: Math.max(1, cantidad) }, () =>
+        crypto.randomUUID(),
+      );
+      aplicar(anadirMuebles(borrador, mueble, ids));
+      setSeleccion({ tipo: 'mueble', id: ids[0] });
+    },
+    [aplicar, borrador],
+  );
+
+  const anadirEquipamiento = useCallback(
+    (articulo: ArticuloElegible) => {
+      const id = crypto.randomUUID();
+      aplicar(
+        anadirEquipo(borrador, {
+          id,
+          articulo_id: articulo.id,
+          nombre: articulo.etiqueta,
+          // Provisional y solo para dibujarlo mientras no está guardado: el
+          // extremo definitivo lo decide el servidor con la categoría del
+          // catálogo, que es lo que fija la holgura del cable.
+          extremo: 'pared',
+        }),
+      );
+      setSeleccion({ tipo: 'equipo', id });
+    },
+    [aplicar, borrador],
+  );
 
   // ---------------------------------------------------------------- teclado
 
@@ -353,6 +406,18 @@ export function EditorPlanoSala({
 
       {estado === 'error' && problema && <Aviso tono="alerta">{problema}</Aviso>}
 
+      {/* De dónde salió el plano. Compacto y sin acción: cambiarlo no puede
+          sustituir datos en silencio, así que no se ofrece un botón que lo
+          insinúe. */}
+      <p className="text-tinta-tenue">
+        Base:{' '}
+        {sala.diagrama_origen === 'plantilla'
+          ? `Plantilla${plantillaBase ? ` · ${plantillaBase}` : ''}`
+          : sala.diagrama_origen === 'desde_cero'
+            ? 'Desde cero'
+            : 'Sin registrar'}
+      </p>
+
       {sinMedidas ? (
         <Tarjeta titulo="Define la sala">
           <p className="mb-4 text-tinta-tenue">
@@ -444,6 +509,13 @@ export function EditorPlanoSala({
 
             {/* Escritorio: lista e inspector en columna. Móvil: panel inferior. */}
             <div className="hidden lg:flex lg:flex-col min-w-0 max-h-[calc(100vh-8rem)] overflow-y-auto">
+              {!soloLectura && (
+                <BibliotecaElementos
+                  categorias={categoriasMobiliario}
+                  alAnadirMuebles={anadirMobiliario}
+                  alAnadirEquipo={anadirEquipamiento}
+                />
+              )}
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccion}
@@ -455,6 +527,13 @@ export function EditorPlanoSala({
 
           <PanelMovil resumen={resumenSeleccion}>
             <div className="pt-2">
+              {!soloLectura && (
+                <BibliotecaElementos
+                  categorias={categoriasMobiliario}
+                  alAnadirMuebles={anadirMobiliario}
+                  alAnadirEquipo={anadirEquipamiento}
+                />
+              )}
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccion}

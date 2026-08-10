@@ -14,6 +14,7 @@ import {
   comoViewBox,
   confirmarEstimadas,
   construirPatch,
+  coordenadasFueraDeSala,
   dentroDeLaSala,
   desplazamientoDeTecla,
   desplazarEquipo,
@@ -31,6 +32,7 @@ import {
   vistaCompleta,
   zoomDe,
   type BorradorPlano,
+  type PatchEquipoPlano,
 } from './plano-editor';
 import type { EquipoEnSala, Sala, TomaRed } from './tipos';
 
@@ -341,6 +343,7 @@ describe('las rosetas', () => {
     const t = b.tomas.find((x) => x.id === '12')!;
     assert.equal(t.x_m, null);
     assert.equal(t.y_m, null, 'media roseta situada no se dibuja');
+    assert.equal(t.z_m, null, 'y la altura suelta se va con ella');
     assert.equal(t.codigo, '12', 'la roseta sigue existiendo');
   });
 });
@@ -499,6 +502,111 @@ describe('el inspector numérico', () => {
   it('se puede devolver un equipo a estimado a propósito', () => {
     const b = editarEquipo(base(), 'caja', { posicion_confirmada: false });
     assert.equal(b.equipos.find((e) => e.id === 'caja')!.posicion_confirmada, false);
+  });
+});
+
+describe('los límites que comprueba el servidor', () => {
+  // Las medidas reales de Batería 006. El editor recorta antes de llegar
+  // aquí; esto es lo que ve una petición que no pasó por el editor.
+  const MEDIDAS = { largo_m: 4.7, ancho_m: 2.5, alto_m: 2.7 };
+
+  const salaDelPatch = () => ({
+    largo_m: 4.7,
+    ancho_m: 2.5,
+    alto_m: 2.7,
+    aforo: 8,
+    mesa_largo_m: 2.4,
+    mesa_ancho_m: 1.21,
+    mesa_alto_cm: 73,
+    mesa_x_m: null as number | null,
+    mesa_y_m: null as number | null,
+    mesa_rotacion_grados: 0,
+  });
+
+  const equipo = (
+    x_m: number,
+    y_m: number,
+    z_m = 0,
+    posicion_confirmada = true,
+  ): PatchEquipoPlano => ({ id: 'e1', x_m, y_m, z_m, posicion_confirmada });
+
+  const soloEquipos = (...equipos: PatchEquipoPlano[]) => ({
+    sala: null,
+    equipos,
+    tomas: [],
+  });
+
+  it('el borde exacto entra: la pantalla va pegada a la pared', () => {
+    assert.deepEqual(coordenadasFueraDeSala(soloEquipos(equipo(0, 0, 0)), MEDIDAS), []);
+    assert.deepEqual(coordenadasFueraDeSala(soloEquipos(equipo(4.7, 2.5, 2.7)), MEDIDAS), []);
+  });
+
+  it('un centímetro fuera se rechaza en cualquiera de los tres ejes', () => {
+    const fuera: Array<[number, number, number]> = [
+      [4.71, 1, 1],
+      [-0.01, 1, 1],
+      [1, 2.51, 1],
+      [1, -0.01, 1],
+      [1, 1, 2.71],
+      [1, 1, -0.01],
+    ];
+    for (const [x, y, z] of fuera) {
+      assert.equal(
+        coordenadasFueraDeSala(soloEquipos(equipo(x, y, z)), MEDIDAS).length,
+        1,
+        `${x}, ${y}, ${z} debería quedar fuera`,
+      );
+    }
+  });
+
+  it('un equipo sin confirmar no se juzga: su posición la deduce el croquis', () => {
+    assert.deepEqual(
+      coordenadasFueraDeSala(soloEquipos(equipo(99, 99, 99, false)), MEDIDAS),
+      [],
+    );
+  });
+
+  it('una sala sin medir no admite colocación confirmada', () => {
+    const sinMedir = { largo_m: 0, ancho_m: 0, alto_m: 0 };
+    assert.equal(coordenadasFueraDeSala(soloEquipos(equipo(0, 0, 0)), sinMedir).length, 1);
+  });
+
+  it('se valida contra las medidas del propio patch, no contra las viejas', () => {
+    // Medir la sala y colocar el equipo en el mismo guardado es el caso
+    // normal: validar contra las medidas anteriores lo rechazaría.
+    const patch = {
+      sala: { ...salaDelPatch(), largo_m: 8, ancho_m: 5, alto_m: 3 },
+      equipos: [equipo(7.5, 4.5, 2.9)],
+      tomas: [],
+    };
+    assert.deepEqual(coordenadasFueraDeSala(patch, { largo_m: 8, ancho_m: 5, alto_m: 3 }), []);
+    assert.equal(coordenadasFueraDeSala(patch, MEDIDAS).length, 1, 'con las viejas caería');
+  });
+
+  it('una roseta sin situar es válida; media roseta situada no', () => {
+    const toma = (x: number | null, y: number | null, z: number | null) => ({
+      sala: null,
+      equipos: [],
+      tomas: [{ id: 't1', x_m: x, y_m: y, z_m: z }],
+    });
+    assert.deepEqual(coordenadasFueraDeSala(toma(null, null, null), MEDIDAS), []);
+    assert.equal(coordenadasFueraDeSala(toma(1, null, null), MEDIDAS).length, 1);
+    assert.equal(coordenadasFueraDeSala(toma(1, 1, null), MEDIDAS).length, 1);
+    assert.deepEqual(coordenadasFueraDeSala(toma(4.7, 2.5, 2.7), MEDIDAS), []);
+    assert.equal(coordenadasFueraDeSala(toma(4.71, 1, 1), MEDIDAS).length, 1);
+  });
+
+  it('el centro de la mesa es un par y cae dentro de la sala', () => {
+    const conMesa = (mesa_x_m: number | null, mesa_y_m: number | null) => ({
+      sala: { ...salaDelPatch(), mesa_x_m, mesa_y_m },
+      equipos: [],
+      tomas: [],
+    });
+    assert.deepEqual(coordenadasFueraDeSala(conMesa(null, null), MEDIDAS), [], 'centrada');
+    assert.deepEqual(coordenadasFueraDeSala(conMesa(2.35, 1.25), MEDIDAS), []);
+    assert.equal(coordenadasFueraDeSala(conMesa(2.35, null), MEDIDAS).length, 1);
+    assert.equal(coordenadasFueraDeSala(conMesa(null, 1.25), MEDIDAS).length, 1);
+    assert.equal(coordenadasFueraDeSala(conMesa(4.71, 1.25), MEDIDAS).length, 1);
   });
 });
 

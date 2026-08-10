@@ -398,6 +398,127 @@ try {
       'rollback: la versión no sube',
     );
   }
+  // --------------------------------------------------- 7 · límites de la sala
+  //
+  // Que el número sea finito no basta. El editor recorta contra la pared, pero
+  // eso es comodidad del editor: aquí se llama a la acción directamente, que
+  // es exactamente lo que hace una petición fabricada a mano.
+  {
+    const equipoId = await nuevoEquipo(salaLegadoId, 'TEST equipo limites');
+    const medir = {
+      largo_m: 6,
+      ancho_m: 4,
+      alto_m: 3,
+      aforo: 8,
+      mesa_largo_m: null,
+      mesa_ancho_m: null,
+      mesa_alto_cm: null,
+      mesa_x_m: null,
+      mesa_y_m: null,
+      mesa_rotacion_grados: 0,
+    };
+
+    // Se deja la sala en 6 × 4 × 3 para que los límites sean conocidos.
+    await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: medir,
+    });
+
+    const enElBorde = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      equipos: [{ id: equipoId, x_m: 6, y_m: 4, z_m: 3, posicion_confirmada: true }],
+    });
+    afirmar(enElBorde.ok, 'el borde exacto entra: la pantalla va pegada a la pared');
+    afirmar(Number((await equipoDe(equipoId)).x_m) === 6, 'y se escribe tal cual');
+
+    for (const [etiqueta, punto] of [
+      ['x', { x_m: 6.01, y_m: 2, z_m: 1 }],
+      ['x negativa', { x_m: -0.01, y_m: 2, z_m: 1 }],
+      ['y', { x_m: 3, y_m: 4.01, z_m: 1 }],
+      ['z', { x_m: 3, y_m: 2, z_m: 3.01 }],
+    ] as const) {
+      const version = await versionDe(salaLegadoId);
+      const r = await invocar({
+        ...patchBase(salaLegadoId, version),
+        equipos: [{ id: equipoId, ...punto, posicion_confirmada: true }],
+      });
+      afirmar(
+        !r.ok && r.motivo === 'fuera',
+        `un centímetro fuera en ${etiqueta} se rechaza, no se recorta`,
+      );
+      afirmar(
+        Number((await equipoDe(equipoId)).x_m) === 6,
+        `${etiqueta}: y el equipo se queda donde estaba`,
+      );
+      afirmar((await versionDe(salaLegadoId)) === version, `${etiqueta}: la versión no sube`);
+    }
+
+    // Medir la sala y colocar el equipo en el mismo guardado es el caso
+    // normal: se valida contra las medidas del patch, no contra las de antes.
+    const conMedidasNuevas = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: { ...medir, largo_m: 9, ancho_m: 6 },
+      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true }],
+    });
+    afirmar(
+      conMedidasNuevas.ok,
+      'una coordenada que solo cabe en las medidas NUEVAS del patch entra',
+    );
+    afirmar(Number((await equipoDe(equipoId)).x_m) === 8.5, 'y se escribe');
+
+    // Y encoger la sala dejando el equipo fuera se rechaza en el mismo patch.
+    const encogiendo = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: { ...medir, largo_m: 4, ancho_m: 3 },
+      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true }],
+    });
+    afirmar(
+      !encogiendo.ok && encogiendo.motivo === 'fuera',
+      'encoger la sala dejando el equipo fuera se rechaza',
+    );
+
+    // Una roseta a medias no sitúa nada.
+    const tomaId = await nuevaToma(salaLegadoId, 'TEST-limites');
+    const aMedias = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      tomas: [{ id: tomaId, x_m: 1, y_m: null, z_m: null }],
+    });
+    afirmar(!aMedias.ok && aMedias.motivo === 'fuera', 'media roseta situada se rechaza');
+
+    const sinSituar = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      tomas: [{ id: tomaId, x_m: null, y_m: null, z_m: null }],
+    });
+    afirmar(sinSituar.ok, 'una roseta sin situar sigue siendo válida');
+
+    // El centro de la mesa también cae dentro.
+    const mesaFuera = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: { ...medir, largo_m: 9, ancho_m: 6, mesa_x_m: 12, mesa_y_m: 3 },
+    });
+    afirmar(!mesaFuera.ok && mesaFuera.motivo === 'fuera', 'la mesa fuera de la sala se rechaza');
+
+    // Sala sin medir: no hay dónde colocar nada.
+    const sinMedir = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: { ...medir, largo_m: 0, ancho_m: 0, alto_m: 0 },
+      equipos: [{ id: equipoId, x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: true }],
+    });
+    afirmar(
+      !sinMedir.ok && sinMedir.motivo === 'fuera',
+      'una sala sin medir no admite colocación confirmada',
+    );
+
+    // Control positivo: sin confirmar, la coordenada es un resto y no se juzga.
+    const sinConfirmar = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      equipos: [{ id: equipoId, x_m: 99, y_m: 99, z_m: 99, posicion_confirmada: false }],
+    });
+    afirmar(
+      sinConfirmar.ok,
+      'un equipo sin confirmar no se juzga: su posición la deduce el croquis',
+    );
+  }
 } finally {
   await limpiar();
   await sql.end();

@@ -110,8 +110,10 @@ export function borradorDesde(
     mesa_largo_m: sala.mesa_largo_m,
     mesa_ancho_m: sala.mesa_ancho_m,
     mesa_alto_cm: sala.mesa_alto_cm,
-    mesa_x_m: sala.mesa_x_m,
-    mesa_y_m: sala.mesa_y_m,
+    // El centro de la mesa es un par: media coordenada guardada en la base no
+    // sitúa nada y el servidor la rechaza, así que se lee como «centrada».
+    mesa_x_m: sala.mesa_x_m != null && sala.mesa_y_m != null ? sala.mesa_x_m : null,
+    mesa_y_m: sala.mesa_x_m != null && sala.mesa_y_m != null ? sala.mesa_y_m : null,
     mesa_rotacion_grados: normalizarGrados(sala.mesa_rotacion_grados),
     equipos: equipos.map((e) => ({
       id: e.id,
@@ -124,15 +126,20 @@ export function borradorDesde(
       posicion_confirmada: e.posicion_confirmada,
       toma_red_id: e.toma_red_id ?? null,
     })),
-    tomas: tomas.map((t) => ({
-      id: t.id,
-      codigo: t.codigo,
-      ubicacion: t.ubicacion,
-      x_m: t.x_m,
-      y_m: t.y_m,
-      z_m: t.z_m,
-      notas: t.notas,
-    })),
+    tomas: tomas.map((t) => {
+      // Situada o no situada, sin estados intermedios: una x sin y no dibuja
+      // ninguna roseta y no puede guardarse.
+      const situada = t.x_m != null && t.y_m != null;
+      return {
+        id: t.id,
+        codigo: t.codigo,
+        ubicacion: t.ubicacion,
+        x_m: situada ? t.x_m : null,
+        y_m: situada ? t.y_m : null,
+        z_m: situada ? (t.z_m ?? 0) : null,
+        notas: t.notas,
+      };
+    }),
   };
 }
 
@@ -461,9 +468,13 @@ export function editarToma(
     const combinado = { ...t, ...cambios };
     // Una roseta puede volver a quedarse sin situar: borrar la casilla la
     // saca del plano sin borrar la roseta, que sigue existiendo en la sala.
+    // Se van las tres coordenadas juntas: una z suelta sin x ni y no es una
+    // altura medida, es el resto de una posición borrada, y el servidor
+    // rechaza las coordenadas a medias.
     if (combinado.x_m == null || combinado.y_m == null) {
-      return { ...combinado, x_m: null, y_m: null };
+      return { ...combinado, x_m: null, y_m: null, z_m: null };
     }
+    combinado.z_m = combinado.z_m ?? 0;
     const dentro = limitarALaSala(
       { x_m: combinado.x_m, y_m: combinado.y_m, z_m: combinado.z_m ?? 0 },
       borrador,
@@ -696,6 +707,108 @@ export function construirPatch(
     equipos,
     tomas,
   };
+}
+
+// ---------------------------------------------------------------------
+// La validación de límites, que también corre en el servidor
+//
+// El cliente recorta con `limitarALaSala()`: eso es comodidad, no una
+// guarda. Una petición hecha a mano no pasa por el editor, y hasta aquí el
+// servidor solo comprobaba que los números fueran finitos, así que un equipo
+// a 400 m de la pared entraba en la base y salía en el cálculo de cable.
+//
+// Está en lógica pura y no en la acción por lo mismo que el cálculo: los
+// límites exactos y el centímetro de fuera se prueban sin base de datos, y
+// la acción se limita a leer las medidas efectivas y llamar aquí.
+// ---------------------------------------------------------------------
+
+/**
+ * Las medidas contra las que se valida.
+ *
+ * Son las EFECTIVAS: si el mismo patch ensancha la sala, las coordenadas se
+ * comprueban contra la sala nueva. Validar contra la vieja rechazaría el
+ * caso normal de medir la sala y colocar el equipo en el mismo guardado.
+ */
+export interface MedidasSala {
+  largo_m: number;
+  ancho_m: number;
+  alto_m: number;
+}
+
+/**
+ * Margen contra el ruido del coma flotante. Tiene que ser mucho menor que el
+ * centímetro: 5,20 exacto entra, 5,21 en una sala de 5,20 no.
+ */
+const EPSILON_M = 1e-6;
+
+const fueraDe = (valor: number, maximo: number): boolean =>
+  !Number.isFinite(valor) || valor < -EPSILON_M || valor > maximo + EPSILON_M;
+
+/** Una sala sin medir no admite ninguna colocación confirmada: no hay dónde. */
+const sinMedir = (m: MedidasSala): boolean => !(m.largo_m > 0) || !(m.ancho_m > 0);
+
+/**
+ * Qué coordenadas del patch no se pueden guardar. Lista vacía = todo entra.
+ *
+ * Devuelve motivos legibles y no un booleano porque el servidor los registra
+ * y porque una prueba que afirma «rechaza» sin saber por qué pasa igual
+ * cuando el rechazo llega por otro sitio.
+ */
+export function coordenadasFueraDeSala(
+  patch: Pick<PatchPlano, 'sala' | 'equipos' | 'tomas'>,
+  medidas: MedidasSala,
+): string[] {
+  const problemas: string[] = [];
+  const { largo_m, ancho_m, alto_m } = medidas;
+
+  for (const e of patch.equipos) {
+    // Un equipo sin confirmar no dice dónde está: el croquis lo deduce del
+    // extremo y sus coordenadas son un resto. Solo se exige el rectángulo a
+    // lo que alguien colocó, que es lo que de verdad alimenta los metros.
+    if (!e.posicion_confirmada) continue;
+    if (sinMedir(medidas)) {
+      problemas.push(`El equipo ${e.id} se coloca en una sala sin medir.`);
+      continue;
+    }
+    if (fueraDe(e.x_m, largo_m) || fueraDe(e.y_m, ancho_m) || fueraDe(e.z_m, alto_m)) {
+      problemas.push(`El equipo ${e.id} queda fuera de la sala.`);
+    }
+  }
+
+  for (const t of patch.tomas) {
+    const ausentes = [t.x_m, t.y_m, t.z_m].filter((v) => v == null).length;
+    if (ausentes === 3) continue; // Roseta dada de alta y sin situar: válido.
+    if (ausentes > 0) {
+      problemas.push(`La roseta ${t.id} tiene coordenadas a medias.`);
+      continue;
+    }
+    if (sinMedir(medidas)) {
+      problemas.push(`La roseta ${t.id} se sitúa en una sala sin medir.`);
+      continue;
+    }
+    if (
+      fueraDe(t.x_m as number, largo_m) ||
+      fueraDe(t.y_m as number, ancho_m) ||
+      fueraDe(t.z_m as number, alto_m)
+    ) {
+      problemas.push(`La roseta ${t.id} queda fuera de la sala.`);
+    }
+  }
+
+  if (patch.sala) {
+    const { mesa_x_m, mesa_y_m } = patch.sala;
+    if ((mesa_x_m == null) !== (mesa_y_m == null)) {
+      problemas.push('El centro de la mesa tiene una coordenada y no la otra.');
+    } else if (mesa_x_m != null && mesa_y_m != null) {
+      if (sinMedir(medidas)) {
+        problemas.push('La mesa se sitúa en una sala sin medir.');
+      } else if (fueraDe(mesa_x_m, largo_m) || fueraDe(mesa_y_m, ancho_m)) {
+        problemas.push('El centro de la mesa queda fuera de la sala.');
+      }
+    }
+  }
+
+  return problemas;
 }
 
 /** ¿Hay algo que guardar? Es lo que enciende el botón y la advertencia al salir. */

@@ -223,7 +223,10 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 |---|---|
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Compilación de producción (también valida tipos) |
-
+| `npm test` | Pruebas de la lógica pura: cable, tabla de cables, croquis, plano, almacén, compras y carga |
+| `npm run test:diagrama` | Guardas del guardado del plano contra Postgres real |
+| `npm run test:plantillas` | Ida y vuelta sala ↔ plantilla contra Postgres real |
+| `npm run test:guardas-sala` | Guardas de «proyecto cerrado» contra Postgres real |
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |

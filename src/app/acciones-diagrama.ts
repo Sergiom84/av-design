@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { sql } from '@/lib/db';
 import { esUuid } from '@/lib/uuid';
 import { normalizarGrados } from '@/lib/croquis';
-import type { PatchPlano } from '@/lib/plano-editor';
+import { coordenadasFueraDeSala, type PatchPlano } from '@/lib/plano-editor';
 
 /**
  * El guardado del plano: una acción, una transacción, todo o nada.
@@ -25,6 +25,12 @@ import type { PatchPlano } from '@/lib/plano-editor';
  *   guardó desde otra pestaña y esto sobrescribiría su trabajo en silencio.
  * - Cada equipo y cada roseta del patch tienen que ser de esta sala. Un id de
  *   otra sala, inventado o repetido tumba el guardado entero.
+ * - Las coordenadas caen dentro de la sala. Que el número sea finito no basta:
+ *   el editor recorta contra la pared, pero el recorte del editor es comodidad
+ *   y no una guarda, y una petición hecha a mano no pasa por el editor. Se
+ *   valida contra las medidas EFECTIVAS —las del propio patch si las cambia—
+ *   y se RECHAZA, no se recorta en silencio: recortar guardaría una posición
+ *   que nadie decidió y la daría por medida en el cálculo de cable.
  */
 
 const numeroPlano = z.number().finite().min(-1000).max(1000);
@@ -72,7 +78,7 @@ export type ResultadoGuardado =
   | { ok: true; version: number }
   | {
       ok: false;
-      motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno';
+      motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno' | 'fuera';
       detalle: string;
     };
 
@@ -82,6 +88,7 @@ const MENSAJE: Record<Exclude<ResultadoGuardado & { ok: false }, never>['motivo'
   cerrado: 'La obra está cerrada: el plano no se toca sin reabrirla.',
   conflicto: 'La sala cambió en otra pestaña.',
   ajeno: 'El plano trae algún elemento que no es de esta sala.',
+  fuera: 'Hay elementos colocados fuera de la sala.',
 };
 
 const fallo = (motivo: Exclude<ResultadoGuardado & { ok: false }, never>['motivo']): ResultadoGuardado => ({
@@ -110,8 +117,17 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
     // se ponen en fila y el segundo lee la versión que dejó el primero, así
     // que el conflicto se detecta en vez de colarse entre la lectura y el
     // `update`.
-    const [sala] = await tx<Array<{ id: string; diagrama_version: number; localizacion_id: string | null }>>`
-      select id, diagrama_version, localizacion_id
+    const [sala] = await tx<
+      Array<{
+        id: string;
+        diagrama_version: number;
+        localizacion_id: string | null;
+        largo_m: string | null;
+        ancho_m: string | null;
+        alto_m: string | null;
+      }>
+    >`
+      select id, diagrama_version, localizacion_id, largo_m, ancho_m, alto_m
       from salas where id = ${p.sala_id}
       for update`;
     if (!sala) return fallo('no_existe');
@@ -127,6 +143,18 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
     if (cierre?.cerrado) return fallo('cerrado');
 
     if (Number(sala.diagrama_version) !== p.versionEsperada) return fallo('conflicto');
+
+    // Las medidas efectivas: las del patch si las cambia, y si no las que hay
+    // en la fila bloqueada. Validar contra las viejas rechazaría el caso
+    // normal —medir la sala y colocar el equipo en el mismo guardado— y
+    // validar contra las nuevas cuando el patch no las trae dejaría entrar
+    // cualquier coordenada mandando `sala: null`.
+    const medidas = {
+      largo_m: p.sala ? p.sala.largo_m : Number(sala.largo_m ?? 0),
+      ancho_m: p.sala ? p.sala.ancho_m : Number(sala.ancho_m ?? 0),
+      alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
+    };
+    if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
 
     // Pertenencia: se cuenta contra la base, no contra lo que dice el patch.
     if (p.equipos.length > 0) {

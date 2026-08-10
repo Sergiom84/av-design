@@ -548,6 +548,14 @@ export interface Proyeccion {
   y: (m: number) => number;
   /** Una longitud en metros pasada a píxeles, sin desplazar. */
   d: (m: number) => number;
+  /**
+   * La vuelta: de píxeles del dibujo a metros de la sala. Vive aquí y no en el
+   * editor a propósito, para que no acaben conviviendo dos fórmulas de
+   * proyección que se puedan separar. El editor arrastra en píxeles y guarda
+   * metros; sin la inversa tendría que reimplementar la escala.
+   */
+  aMetrosX: (px: number) => number;
+  aMetrosY: (px: number) => number;
 }
 
 export function proyectar(
@@ -569,6 +577,8 @@ export function proyectar(
     // píxel entero y restarlo desplazaría el dibujo medio píxel hacia fuera.
     y: (m) => redondear(margen_px + (ancho - m) * escala),
     d: (m) => redondear(m * escala),
+    aMetrosX: (px) => (px - margen_px) / escala,
+    aMetrosY: (px) => ancho - (px - margen_px) / escala,
   };
 }
 

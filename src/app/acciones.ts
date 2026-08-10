@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
+import { extremoPorCategoria } from '@/lib/tipos';
 
 const numero = (v: FormDataEntryValue | null): number | null => {
   if (v == null || String(v).trim() === '') return null;
@@ -34,28 +35,6 @@ export async function guardarMedidasPlantilla(datos: FormData) {
 }
 
 // --------------------------------------------------------------------- salas
-/** Traduce la categoría del inventario al tipo de extremo, para la holgura. */
-function extremoPorCategoria(categoria: string): string {
-  const c = categoria.toUpperCase();
-  if (c.includes('PANTALLA') || c.includes('MONITOR') || c.includes('VIDEOWALL'))
-    return 'pantalla';
-  if (c.includes('PROYECTOR')) return 'proyector';
-  if (c.includes('CAJA CONEXIONES')) return 'caja_conexiones';
-  if (c.includes('ALTAVOZ') || c.includes('CAMARA') || c.includes('CÁMARA'))
-    return 'techo';
-  if (c.includes('PANEL') || c.includes('MICROFONO') || c.includes('MICRÓFONO'))
-    return 'mesa';
-  if (
-    c.includes('MATRIZ') ||
-    c.includes('AMPLIFICADOR') ||
-    c.includes('PROCESADOR') ||
-    c.includes('SWITCH') ||
-    c.includes('CONTROLADORA') ||
-    c.includes('DSP')
-  )
-    return 'rack';
-  return 'pared';
-}
 
 /**
  * Da de alta la sala, con plantilla o sin ella, y tantas copias como se pidan.
@@ -153,9 +132,10 @@ export async function crearSala(datos: FormData) {
             y_m: string | null;
             z_m: string | null;
             posicion_confirmada: boolean | null;
+            rotacion_grados: string | null;
           }>
         >`select id, articulo_id, categoria, cantidad, modelo_texto,
-                 extremo, x_m, y_m, z_m, posicion_confirmada
+                 extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados
           from plantilla_articulos
           where plantilla_id = ${plantillaId} and not opcional`
       : [];
@@ -205,14 +185,42 @@ export async function crearSala(datos: FormData) {
           (Number(l.x_m ?? 0) !== 0 || Number(l.y_m ?? 0) !== 0 || Number(l.z_m ?? 0) !== 0);
 
         const [equipo] = await tx<Array<{ id: string }>>`
-          insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m, posicion_confirmada)
+          insert into sala_equipos
+            (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m,
+             posicion_confirmada, rotacion_grados, origen_plantilla_linea_id)
           values (${sala.id}, ${l.articulo_id}, ${l.modelo_texto ?? l.categoria},
                   ${Math.max(1, Math.round(Number(l.cantidad) || 1))},
                   ${l.extremo ?? extremoPorCategoria(l.categoria)}::extremo_cable,
                   ${Number(l.x_m ?? 0)}, ${Number(l.y_m ?? 0)}, ${Number(l.z_m ?? 0)},
-                  ${colocada})
+                  ${colocada}, ${Number(l.rotacion_grados ?? 0)}, ${l.id})
           returning id`;
         equipoDeLinea.set(l.id, equipo.id);
+      }
+
+      // El mobiliario de la plantilla viaja con el equipamiento: la sala nace
+      // con sus sillas y sus mesas puestas donde la tipología dice, no vacía.
+      if (plantillaId) {
+        await tx`
+          insert into sala_mobiliario
+            (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, alto_m,
+             x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden,
+             origen_plantilla_mobiliario_id)
+          select ${sala.id}, pm.mobiliario_id, pm.nombre, pm.forma,
+                 pm.largo_m, pm.ancho_m, pm.alto_m,
+                 pm.x_m, pm.y_m, pm.z_m, pm.rotacion_grados,
+                 coalesce(pm.posicion_confirmada, pm.x_m is not null and pm.y_m is not null),
+                 pm.orden, pm.id
+          from plantilla_mobiliario pm
+          where pm.plantilla_id = ${plantillaId}`;
+
+        // Nacer de una plantilla ya contesta a «de dónde sale el plano»: la
+        // pestaña Diagrama abre el editor en vez de volver a preguntarlo.
+        await tx`
+          update salas set
+            diagrama_iniciado_en  = now(),
+            diagrama_origen       = 'plantilla',
+            diagrama_plantilla_id = ${plantillaId}
+          where id = ${sala.id}`;
       }
 
       // Una tirada cuyo equipo no se ha heredado —porque la línea estaba
@@ -322,9 +330,11 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
         y_m: string;
         z_m: string;
         posicion_confirmada: boolean;
+        rotacion_grados: string | null;
       }>
     >`select e.id, e.articulo_id, e.nombre, e.cantidad, a.categoria,
-             e.extremo, e.x_m, e.y_m, e.z_m, e.posicion_confirmada
+             e.extremo, e.x_m, e.y_m, e.z_m, e.posicion_confirmada,
+             e.rotacion_grados
       from sala_equipos e
       left join articulos a on a.id = e.articulo_id
       where e.sala_id = ${salaId}
@@ -341,17 +351,35 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
       const [linea] = await tx<Array<{ id: string }>>`
         insert into plantilla_articulos
           (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
-           extremo, x_m, y_m, z_m, posicion_confirmada)
+           extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados)
         values (${id}, ${e.articulo_id}, ${e.categoria ?? 'SIN CATEGORIA'},
                 ${e.nombre}, ${Math.max(1, Math.round(Number(e.cantidad) || 1))}, false,
                 ${e.extremo}::extremo_cable,
                 ${e.posicion_confirmada ? Number(e.x_m) : null},
                 ${e.posicion_confirmada ? Number(e.y_m) : null},
                 ${e.posicion_confirmada ? Number(e.z_m) : null},
-                ${e.posicion_confirmada})
+                ${e.posicion_confirmada},
+                ${Number(e.rotacion_grados ?? 0)})
         returning id`;
       lineaDeEquipo.set(String(e.id), linea.id);
     }
+
+    // El mobiliario de la sala pasa a ser el mobiliario tipo. Se conserva la
+    // ausencia de posición en los dos sentidos del viaje: un mueble sin
+    // colocar da una línea sin colocar, y no un (0,0) en la esquina.
+    await tx`
+      insert into plantilla_mobiliario
+        (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m, alto_m,
+         x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+      select ${id}, sm.mobiliario_id, sm.nombre, sm.forma,
+             sm.largo_m, sm.ancho_m, sm.alto_m,
+             case when sm.posicion_confirmada then sm.x_m end,
+             case when sm.posicion_confirmada then sm.y_m end,
+             case when sm.posicion_confirmada then sm.z_m end,
+             sm.rotacion_grados, sm.posicion_confirmada, sm.orden
+      from sala_mobiliario sm
+      where sm.sala_id = ${salaId}
+      order by sm.orden, sm.creado_en`;
 
     // Las tiradas de la sala pasan a ser las tiradas tipo de la plantilla.
     const conexiones = await tx<

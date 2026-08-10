@@ -45,6 +45,13 @@ const moduloInterno = Module as unknown as ModuloConLoad;
 const cargarOriginal = moduloInterno._load;
 moduloInterno._load = (request, ...resto) => {
   if (request === 'server-only') return {};
+  // `revalidatePath()` lanza fuera de una petición real. Se sustituye por un
+  // no-op para poder leer lo que DEVUELVE la acción —el mapa de ids, entre
+  // otras cosas— en vez de solo el estado que deja en la base. Lo que se
+  // afirma sigue siendo el contenido de las tablas.
+  if (request === 'next/cache') {
+    return { revalidatePath: () => {}, revalidateTag: () => {}, unstable_cache: (f: unknown) => f };
+  }
   return cargarOriginal.call(Module, request, ...resto);
 };
 
@@ -70,9 +77,24 @@ const localizacionId = randomUUID();
 const salaCerradaId = randomUUID();
 const salaLegadoId = randomUUID();
 const salaVecinaId = randomUUID();
+const salaVaciaId = randomUUID();
+
+// Catálogo de prueba. Se crea y se borra aquí: el catálogo real cambia y una
+// prueba que dependa de que exista tal referencia falla el día que se corrige.
+const articuloEquipoId = randomUUID();
+const articuloCableId = randomUUID();
+const articuloInactivoId = randomUUID();
+const nombreArticuloEquipo = 'TESTMARCA TEST-PANTALLA';
+const sillaCatalogoId = randomUUID();
+const sillaInactivaId = randomUUID();
+const plantillaAId = randomUUID();
+const plantillaBId = randomUUID();
 
 async function limpiar() {
-  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId})`;
+  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId}, ${salaVaciaId})`;
+  await sql`delete from plantillas_sala where id in (${plantillaAId}, ${plantillaBId})`;
+  await sql`delete from articulos where id in (${articuloEquipoId}, ${articuloCableId}, ${articuloInactivoId})`;
+  await sql`delete from catalogo_mobiliario where id in (${sillaCatalogoId}, ${sillaInactivaId})`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
   await sql`delete from localizaciones where id = ${localizacionId}`;
   await sql`delete from proyectos where id = ${proyectoId}`;
@@ -95,6 +117,56 @@ async function preparar() {
             values (${salaLegadoId}, 'TEST diagrama legado', 6, 4, 3, 8)`;
   await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
             values (${salaVecinaId}, 'TEST diagrama vecina', 6, 4, 3)`;
+  // Sin medidas, sin equipos y sin tiradas: la sala que puede recibir una
+  // plantilla entera.
+  await sql`insert into salas (id, nombre) values (${salaVaciaId}, 'TEST diagrama vacia')`;
+
+  await sql`
+    insert into articulos (id, tipo, categoria, marca, modelo, activo) values
+      (${articuloEquipoId},   'equipo', 'PANTALLA', 'TESTMARCA', 'TEST-PANTALLA', true),
+      (${articuloCableId},    'cable',  'CABLE',    'TESTMARCA', 'TEST-CABLE',    true),
+      (${articuloInactivoId}, 'equipo', 'PANTALLA', 'TESTMARCA', 'TEST-BAJA',     false)`;
+
+  await sql`
+    insert into catalogo_mobiliario (id, clave, nombre, categoria, forma, activo, fuente) values
+      (${sillaCatalogoId}, 'test-silla',   'Silla', 'Asientos', 'circulo', true,  'app'),
+      (${sillaInactivaId}, 'test-silla-x', 'Silla', 'Asientos', 'circulo', false, 'app')`;
+
+  // Dos plantillas: la que se aplica y la que se intenta aplicar encima.
+  for (const [id, nombre] of [
+    [plantillaAId, 'TEST plantilla A'],
+    [plantillaBId, 'TEST plantilla B'],
+  ] as const) {
+    await sql`
+      insert into plantillas_sala
+        (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m,
+         mesa_largo_m, mesa_ancho_m, mesa_rotacion_grados)
+      values (${id}, ${nombre}, 'TEST', 8, 6, 4, 3, 2.4, 1.2, 90)`;
+  }
+
+  const [l1] = await sql<Array<{ id: string }>>`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados)
+    values (${plantillaAId}, ${articuloEquipoId}, 'PANTALLA', ${nombreArticuloEquipo}, 1, false,
+            'pantalla', 0, 2, 1.4, true, 270)
+    returning id`;
+  const [l2] = await sql<Array<{ id: string }>>`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, posicion_confirmada)
+    values (${plantillaAId}, ${articuloEquipoId}, 'CAJA CONEXIONES', 'TEST CAJA', 1, false,
+            'caja_conexiones', null)
+    returning id`;
+  await sql`
+    insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal)
+    values (${plantillaAId}, ${l2.id}, ${l1.id}, 'hdmi')`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaAId}, ${sillaCatalogoId}, 'Silla', 'circulo', 0.5, 0.5,
+            1, 1, 0, 45, true, 0)`;
 }
 
 async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
@@ -146,7 +218,7 @@ try {
       if (!(mensaje.startsWith(PREFIJO_SEÑAL_REVALIDATE) && codigo === CODIGO_SEÑAL_REVALIDATE)) {
         throw e;
       }
-      return { ok: true, version: await versionDe(patch.sala_id) };
+      return { ok: true, version: await versionDe(patch.sala_id), ids: {} };
     }
   };
 
@@ -524,6 +596,306 @@ try {
       sinConfirmar.ok,
       'un equipo sin confirmar no se juzga: su posición la deduce el croquis',
     );
+  }
+  // ------------------------------------------------- 8 · altas y catálogos
+  //
+  // De un alta solo se cree el identificador. Todo lo demás —nombre,
+  // categoría, extremo— se relee del catálogo, y se exige artículo activo y
+  // de tipo equipo: un cable en el plano falsearía la tabla de cables.
+  {
+    const version = await versionDe(salaLegadoId);
+    const tmp = randomUUID();
+
+    const alta = (id: string, articulo_id: string) => ({
+      id,
+      articulo_id,
+      // Lo que mande el navegador en `extremo` da igual: el servidor lo
+      // deduce de la categoría del artículo que relee.
+      extremo: 'pared' as const,
+      x_m: 1,
+      y_m: 1,
+      z_m: 0,
+      posicion_confirmada: true,
+      rotacion_grados: 90,
+    });
+
+    const r = await invocar({
+      ...patchBase(salaLegadoId, version),
+      equipos_alta: [alta(tmp, articuloEquipoId)],
+    });
+    afirmar(r.ok, 'un equipo del catálogo se da de alta desde el plano');
+    afirmar(
+      r.ok && typeof r.ids[tmp] === 'string' && r.ids[tmp] !== tmp,
+      'y vuelve con el uuid real, no con el id temporal del navegador',
+    );
+
+    const [nuevo] = await sql<Array<{ nombre: string; extremo: string; rotacion_grados: string }>>`
+      select nombre, extremo, rotacion_grados from sala_equipos
+      where id = ${r.ok ? r.ids[tmp] : ''}`;
+    afirmar(nuevo?.nombre === nombreArticuloEquipo, 'el nombre lo pone el catálogo');
+    afirmar(Number(nuevo?.rotacion_grados) === 90, 'y el giro se guarda');
+
+    // Un nombre manipulado no llega a la base: no hay campo por donde entre.
+    const version2 = await versionDe(salaLegadoId);
+    const conCable = await invocar({
+      ...patchBase(salaLegadoId, version2),
+      equipos_alta: [alta(randomUUID(), articuloCableId)],
+    });
+    afirmar(
+      !conCable.ok && conCable.motivo === 'catalogo',
+      'un cable no se puede añadir como equipo del plano',
+    );
+
+    const inactivo = await invocar({
+      ...patchBase(salaLegadoId, version2),
+      equipos_alta: [alta(randomUUID(), articuloInactivoId)],
+    });
+    afirmar(
+      !inactivo.ok && inactivo.motivo === 'catalogo',
+      'un artículo dado de baja tampoco',
+    );
+
+    const inventado = await invocar({
+      ...patchBase(salaLegadoId, version2),
+      equipos_alta: [alta(randomUUID(), randomUUID())],
+    });
+    afirmar(!inventado.ok && inventado.motivo === 'catalogo', 'ni uno que no existe');
+
+    afirmar(
+      (await versionDe(salaLegadoId)) === version2,
+      'ningún rechazo de catálogo ha subido la versión',
+    );
+  }
+
+  // ---------------------------------------------- 9 · mobiliario
+  {
+    const version = await versionDe(salaLegadoId);
+    const tmpA = randomUUID();
+    const tmpB = randomUUID();
+
+    const silla = (id: string, x: number) => ({
+      id,
+      mobiliario_id: sillaCatalogoId,
+      nombre: 'Lo que diga el navegador',
+      forma: 'circulo' as const,
+      largo_m: 0.5,
+      ancho_m: 0.5,
+      alto_m: null,
+      x_m: x,
+      y_m: 2,
+      z_m: 0,
+      rotacion_grados: 45,
+      posicion_confirmada: true,
+      orden: 0,
+    });
+
+    const r = await invocar({
+      ...patchBase(salaLegadoId, version),
+      mobiliario_alta: [silla(tmpA, 1), silla(tmpB, 2)],
+      sillas_modo: 'manuales',
+    });
+    afirmar(r.ok, 'dos sillas se dan de alta a la vez');
+
+    const filas = await sql<Array<{ id: string; nombre: string; x_m: string; rotacion_grados: string }>>`
+      select id, nombre, x_m, rotacion_grados from sala_mobiliario
+      where sala_id = ${salaLegadoId} order by x_m`;
+    afirmar(filas.length === 2, 'y son dos filas distintas, no una con cantidad 2');
+    afirmar(filas[0].nombre === 'Silla', 'el nombre lo pone el catálogo, no el navegador');
+    afirmar(Number(filas[0].rotacion_grados) === 45, 'el giro del mueble se guarda');
+
+    const [s] = await sql<Array<{ sillas_modo: string }>>`
+      select sillas_modo from salas where id = ${salaLegadoId}`;
+    afirmar(s.sillas_modo === 'manuales', 'y las sillas pasan a ser manuales');
+
+    // Cambio y baja de filas reales.
+    const version2 = await versionDe(salaLegadoId);
+    const cambio = await invocar({
+      ...patchBase(salaLegadoId, version2),
+      mobiliario_cambio: [
+        {
+          id: filas[0].id,
+          nombre: 'Silla',
+          largo_m: 0.5,
+          ancho_m: 0.5,
+          alto_m: null,
+          x_m: 3,
+          y_m: 3,
+          z_m: 0,
+          rotacion_grados: 180,
+          posicion_confirmada: true,
+          orden: 5,
+        },
+      ],
+      mobiliario_baja: [filas[1].id],
+    });
+    afirmar(cambio.ok, 'se puede mover una silla y quitar otra en el mismo guardado');
+    const quedan = await sql<Array<{ id: string; x_m: string }>>`
+      select id, x_m from sala_mobiliario where sala_id = ${salaLegadoId}`;
+    afirmar(quedan.length === 1 && Number(quedan[0].x_m) === 3, 'queda una y en su sitio');
+
+    // Un mueble de otra sala no se toca.
+    const version3 = await versionDe(salaLegadoId);
+    const [ajena] = await sql<Array<{ id: string }>>`
+      insert into sala_mobiliario (sala_id, mobiliario_id, nombre, forma)
+      values (${salaVecinaId}, ${sillaCatalogoId}, 'Silla', 'circulo') returning id`;
+    const conAjeno = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_baja: [ajena.id],
+    });
+    afirmar(!conAjeno.ok && conAjeno.motivo === 'ajeno', 'una baja de otra sala se rechaza');
+    const [sigue] = await sql<Array<{ id: string }>>`
+      select id from sala_mobiliario where id = ${ajena.id}`;
+    afirmar(!!sigue, 'y el mueble de la otra sala sigue ahí');
+
+    // Un mueble del catálogo inactivo no entra.
+    const inactivo = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_alta: [{ ...silla(randomUUID(), 1), mobiliario_id: sillaInactivaId }],
+    });
+    afirmar(
+      !inactivo.ok && inactivo.motivo === 'catalogo',
+      'un mueble dado de baja del catálogo no se puede añadir',
+    );
+
+    // El mismo id en un alta y en un cambio es un borrador roto.
+    const repetido = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_cambio: [
+        {
+          id: quedan[0].id,
+          nombre: 'Silla',
+          largo_m: 0.5,
+          ancho_m: 0.5,
+          alto_m: null,
+          x_m: 1,
+          y_m: 1,
+          z_m: 0,
+          rotacion_grados: 0,
+          posicion_confirmada: true,
+          orden: 0,
+        },
+      ],
+      mobiliario_baja: [quedan[0].id],
+    });
+    afirmar(!repetido.ok && repetido.motivo === 'ajeno', 'cambiar y borrar lo mismo se rechaza');
+
+    // Coordenadas fuera, también en mobiliario.
+    const fuera = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_alta: [silla(randomUUID(), 99)],
+    });
+    afirmar(!fuera.ok && fuera.motivo === 'fuera', 'una silla fuera de la sala se rechaza');
+
+    afirmar(
+      (await versionDe(salaLegadoId)) === version3,
+      'ningún rechazo de mobiliario ha subido la versión',
+    );
+  }
+
+  // ------------------------------------- 10 · inicio del diagrama
+  {
+    const version = await versionDe(salaLegadoId);
+    const r = await invocar({
+      ...patchBase(salaLegadoId, version),
+      inicio_diagrama: { origen: 'desde_cero', plantilla_id: null },
+    });
+    afirmar(r.ok, 'se puede declarar que el plano se hace desde cero');
+
+    const [s1] = await sql<Array<{ diagrama_origen: string; diagrama_iniciado_en: Date }>>`
+      select diagrama_origen, diagrama_iniciado_en from salas where id = ${salaLegadoId}`;
+    afirmar(s1.diagrama_origen === 'desde_cero', 'y queda registrado');
+    afirmar(!!s1.diagrama_iniciado_en, 'con su marca de tiempo');
+
+    // Volver a mandarlo no reescribe la procedencia de una sala ya preparada.
+    const antes = s1.diagrama_iniciado_en;
+    await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      inicio_diagrama: { origen: 'plantilla', plantilla_id: plantillaAId },
+    });
+    const [s2] = await sql<Array<{ diagrama_origen: string; diagrama_iniciado_en: Date }>>`
+      select diagrama_origen, diagrama_iniciado_en from salas where id = ${salaLegadoId}`;
+    afirmar(
+      s2.diagrama_origen === 'desde_cero' && +s2.diagrama_iniciado_en === +antes,
+      'el inicio se escribe una sola vez: repetirlo no cambia la procedencia',
+    );
+  }
+
+  // ------------------------------- 11 · aplicar una plantilla al diagrama
+  {
+    const { aplicarPlantillaAlDiagrama } = await import('../src/app/acciones-diagrama');
+    type ResPlantilla = Awaited<ReturnType<typeof aplicarPlantillaAlDiagrama>>;
+
+    const aplicar = async (
+      salaId: string,
+      plantillaId: string,
+      version: number,
+    ): Promise<ResPlantilla> => {
+      try {
+        return await aplicarPlantillaAlDiagrama(salaId, plantillaId, version);
+      } catch (e) {
+        const mensaje = e instanceof Error ? e.message : String(e);
+        const codigo = (e as { ['__NEXT_ERROR_CODE']?: string })?.['__NEXT_ERROR_CODE'];
+        if (!(mensaje.startsWith(PREFIJO_SEÑAL_REVALIDATE) && codigo === CODIGO_SEÑAL_REVALIDATE)) {
+          throw e;
+        }
+        const [f] = await sql<Array<{ diagrama_version: number }>>`
+          select diagrama_version from salas where id = ${salaId}`;
+        return { ok: true, version: Number(f.diagrama_version), copiado: true };
+      }
+    };
+
+    // Sala vacía: se copia todo.
+    const r = await aplicar(salaVaciaId, plantillaAId, await versionDe(salaVaciaId));
+    afirmar(r.ok, 'una sala vacía acepta la plantilla');
+
+    const contar = async (salaId: string) => {
+      const [f] = await sql<Array<{ equipos: string; muebles: string; conexiones: string }>>`
+        select
+          (select count(*) from sala_equipos    where sala_id = ${salaId})::text as equipos,
+          (select count(*) from sala_mobiliario where sala_id = ${salaId})::text as muebles,
+          (select count(*) from conexiones      where sala_id = ${salaId})::text as conexiones`;
+      return f;
+    };
+
+    const c1 = await contar(salaVaciaId);
+    afirmar(Number(c1.equipos) === 2, 'copia los dos equipos de la plantilla');
+    afirmar(Number(c1.muebles) === 1, 'y su mobiliario');
+    afirmar(Number(c1.conexiones) === 1, 'y su tirada');
+
+    const [medida] = await sql<Array<{ largo_m: string; mesa_rotacion_grados: string }>>`
+      select largo_m, mesa_rotacion_grados from salas where id = ${salaVaciaId}`;
+    afirmar(Number(medida.largo_m) === 6, 'y las medidas de la tipología');
+    afirmar(Number(medida.mesa_rotacion_grados) === 90, 'y el giro de la mesa');
+
+    const [eqGirado] = await sql<Array<{ rotacion_grados: string }>>`
+      select rotacion_grados from sala_equipos
+      where sala_id = ${salaVaciaId} and rotacion_grados <> 0`;
+    afirmar(Number(eqGirado?.rotacion_grados) === 270, 'el giro del equipo viaja plantilla → sala');
+
+    // Repetir la misma plantilla NO duplica.
+    const r2 = await aplicar(salaVaciaId, plantillaAId, await versionDe(salaVaciaId));
+    afirmar(r2.ok && r2.copiado === false, 'la plantilla ya heredada se reconoce y no se copia');
+    const c2 = await contar(salaVaciaId);
+    afirmar(
+      c2.equipos === c1.equipos && c2.muebles === c1.muebles && c2.conexiones === c1.conexiones,
+      'y no aparece nada por duplicado',
+    );
+
+    // Otra plantilla sobre una sala ocupada se bloquea y no muta nada.
+    const otra = await aplicar(salaVaciaId, plantillaBId, await versionDe(salaVaciaId));
+    afirmar(
+      !otra.ok && otra.motivo === 'ocupada',
+      'otra plantilla sobre una sala con equipos se rechaza',
+    );
+    const c3 = await contar(salaVaciaId);
+    afirmar(c3.equipos === c1.equipos && c3.conexiones === c1.conexiones, 'y no borra nada');
+
+    // Obra cerrada y versión obsoleta.
+    const cerrada = await aplicar(salaCerradaId, plantillaAId, await versionDe(salaCerradaId));
+    afirmar(!cerrada.ok && cerrada.motivo === 'cerrado', 'la obra cerrada rechaza la plantilla');
+
+    const conflicto = await aplicar(salaVaciaId, plantillaAId, 0);
+    afirmar(!conflicto.ok && conflicto.motivo === 'conflicto', 'una versión obsoleta se rechaza');
   }
 } finally {
   await limpiar();

@@ -900,6 +900,32 @@ export function materializarSillas(
   };
 }
 
+/**
+ * Cambia los ids temporales por los que puso Postgres.
+ *
+ * Se aplica al volver de un guardado correcto. Sin esto, seguir arrastrando
+ * la silla recién creada mandaría otra vez su id temporal y el servidor la
+ * daría de alta por segunda vez: dos sillas donde el técnico ve una.
+ */
+export function aplicarIdsReales(
+  borrador: BorradorPlano,
+  ids: Record<string, string>,
+): BorradorPlano {
+  if (Object.keys(ids).length === 0) return borrador;
+  return {
+    ...borrador,
+    equipos: borrador.equipos.map((e) =>
+      ids[e.id] ? { ...e, id: ids[e.id], es_nuevo: false } : e,
+    ),
+    mobiliario: borrador.mobiliario.map((m) =>
+      ids[m.id] ? { ...m, id: ids[m.id], es_nuevo: false } : m,
+    ),
+    // El inicio ya está escrito: mandarlo otra vez no lo cambiaría, pero
+    // dejaría el botón de guardar encendido para siempre.
+    inicio: null,
+  };
+}
+
 /** Deja constancia de cómo se preparó el plano. Se decide una sola vez. */
 export function iniciarDiagrama(
   borrador: BorradorPlano,
@@ -1272,6 +1298,34 @@ export interface MedidasSala {
  */
 const EPSILON_M = 1e-6;
 
+/**
+ * Lo mínimo que hace falta para juzgar una posición. Se escribe así y no como
+ * `Pick<PatchPlano, ...>` para que la acción pueda pasar lo que le devuelve
+ * zod sin adaptarlo: la validación de límites solo mira geometría.
+ */
+interface ColocableFijo {
+  id: string;
+  x_m: number;
+  y_m: number;
+  z_m: number;
+  posicion_confirmada: boolean;
+}
+
+interface Colocable {
+  id: string;
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+  posicion_confirmada: boolean;
+}
+
+interface Situable {
+  id: string;
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+}
+
 const fueraDe = (valor: number, maximo: number): boolean =>
   !Number.isFinite(valor) || valor < -EPSILON_M || valor > maximo + EPSILON_M;
 
@@ -1286,8 +1340,14 @@ const sinMedir = (m: MedidasSala): boolean => !(m.largo_m > 0) || !(m.ancho_m > 
  * cuando el rechazo llega por otro sitio.
  */
 export function coordenadasFueraDeSala(
-  patch: Pick<PatchPlano, 'sala' | 'equipos' | 'tomas'> &
-    Partial<Pick<PatchPlano, 'equipos_alta' | 'mobiliario_alta' | 'mobiliario_cambio'>>,
+  patch: {
+    sala: { mesa_x_m: number | null; mesa_y_m: number | null } | null;
+    equipos: readonly ColocableFijo[];
+    equipos_alta?: readonly ColocableFijo[];
+    tomas: readonly Situable[];
+    mobiliario_alta?: readonly Colocable[];
+    mobiliario_cambio?: readonly Colocable[];
+  },
   medidas: MedidasSala,
 ): string[] {
   const problemas: string[] = [];

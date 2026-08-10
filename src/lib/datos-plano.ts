@@ -1,7 +1,7 @@
 import 'server-only';
 import { sql } from './db';
 import { esUuid } from './uuid';
-import type { Conexion, EquipoEnSala, Sala, TomaRed } from './tipos';
+import type { Conexion, EquipoEnSala, MuebleEnSala, Sala, TomaRed } from './tipos';
 
 /**
  * Lo que necesita el editor del plano y nada más.
@@ -19,6 +19,7 @@ export interface DatosPlanoSala {
   equipos: EquipoEnSala[];
   conexiones: Conexion[];
   tomas: TomaRed[];
+  muebles: MuebleEnSala[];
   /** La obra cerrada es de solo lectura, y eso se decide en el servidor. */
   cerrado: boolean;
 }
@@ -46,7 +47,7 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasTomas] = await Promise.all([
+  const [filasEquipos, filasConexiones, filasTomas, filasMuebles] = await Promise.all([
     sql<Fila[]>`select id, sala_id, articulo_id, nombre, cantidad, extremo,
                        x_m, y_m, z_m, posicion_confirmada, rotacion_grados,
                        origen_plantilla_linea_id, toma_red_id
@@ -56,6 +57,11 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
                 from conexiones where sala_id = ${id} order by creado_en, id`,
     sql<Fila[]>`select id, sala_id, codigo, ubicacion, x_m, y_m, z_m, notas
                 from tomas_red where sala_id = ${id} order by codigo`,
+    sql<Fila[]>`select id, sala_id, mobiliario_id, nombre, forma,
+                       largo_m, ancho_m, alto_m, x_m, y_m, z_m,
+                       rotacion_grados, posicion_confirmada,
+                       origen_plantilla_mobiliario_id, orden
+                from sala_mobiliario where sala_id = ${id} order by orden, creado_en`,
   ]);
 
   const sala: Sala = {
@@ -124,6 +130,23 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
       notas: s(f.notas),
+    })),
+    muebles: filasMuebles.map((f) => ({
+      id: String(f.id),
+      sala_id: String(f.sala_id),
+      mobiliario_id: s(f.mobiliario_id),
+      nombre: String(f.nombre),
+      forma: f.forma === 'circulo' ? 'circulo' : 'rectangulo',
+      largo_m: n(f.largo_m),
+      ancho_m: n(f.ancho_m),
+      alto_m: n(f.alto_m),
+      x_m: n(f.x_m),
+      y_m: n(f.y_m),
+      z_m: n(f.z_m),
+      rotacion_grados: Number(f.rotacion_grados ?? 0),
+      posicion_confirmada: f.posicion_confirmada === true,
+      origen_plantilla_mobiliario_id: s(f.origen_plantilla_mobiliario_id),
+      orden: Number(f.orden ?? 100),
     })),
     tomas: filasTomas.map((f) => ({
       id: String(f.id),

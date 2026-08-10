@@ -7,6 +7,7 @@ import {
   acercar,
   afectaAlCalculo,
   avisosDelBorrador,
+  aplicarIdsReales,
   borradorDesde,
   confirmarEstimadas,
   construirPatch,
@@ -27,7 +28,7 @@ import {
   type Seleccion,
   type Vista,
 } from '@/lib/plano-editor';
-import type { Conexion, EquipoEnSala, Sala, TomaRed } from '@/lib/tipos';
+import type { Conexion, EquipoEnSala, MuebleEnSala, Sala, TomaRed } from '@/lib/tipos';
 import { guardarDiagramaSala } from '@/app/acciones-diagrama';
 import { Aviso, Boton, Tarjeta } from '@/components/ui';
 import { BarraHerramientas, type Herramienta } from './barra-herramientas';
@@ -57,20 +58,22 @@ export function EditorPlanoSala({
   equipos,
   conexiones,
   tomas,
+  muebles,
   cerrado,
 }: {
   sala: Sala;
   equipos: EquipoEnSala[];
   conexiones: Conexion[];
   tomas: TomaRed[];
+  muebles: MuebleEnSala[];
   cerrado: boolean;
 }) {
   const router = useRouter();
   const [guardando, empezarGuardado] = useTransition();
 
   const desdeServidor = useMemo(
-    () => borradorDesde(sala, equipos, tomas),
-    [sala, equipos, tomas],
+    () => borradorDesde(sala, equipos, tomas, muebles),
+    [sala, equipos, tomas, muebles],
   );
 
   const [original, setOriginal] = useState(desdeServidor);
@@ -205,7 +208,11 @@ export function EditorPlanoSala({
     empezarGuardado(async () => {
       const r = await guardarDiagramaSala(patch);
       if (r.ok) {
-        setOriginal(borrador);
+        // El id temporal de un alta ya no vale: se cambia por el que puso
+        // Postgres, o el siguiente guardado la daría de alta otra vez.
+        const guardado = aplicarIdsReales(borrador, r.ids);
+        setBorradorBruto(guardado);
+        setOriginal(guardado);
         setVersion(r.version);
         setPasado([]);
         setFuturo([]);

@@ -68,8 +68,15 @@ async function escenaDe(salaId: string) {
     from salas where id = ${salaId}`;
 
   const equipos = await sql<Array<Record<string, unknown>>>`
-    select nombre, cantidad, extremo, x_m, y_m, z_m, posicion_confirmada
+    select nombre, cantidad, extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados
     from sala_equipos where sala_id = ${salaId} order by nombre`;
+
+  // El mobiliario entra en la comparación por lo mismo que los equipos: si el
+  // viaje pierde una silla o su giro, la sala recreada no es la misma sala.
+  const muebles = await sql<Array<Record<string, unknown>>>`
+    select nombre, forma, largo_m, ancho_m, alto_m, x_m, y_m, z_m,
+           rotacion_grados, posicion_confirmada
+    from sala_mobiliario where sala_id = ${salaId} order by orden, nombre`;
 
   const tiradas = await sql<Array<Record<string, unknown>>>`
     select o.nombre as origen, d.nombre as destino, c.senal, c.ruta, c.notas
@@ -79,7 +86,7 @@ async function escenaDe(salaId: string) {
     where c.sala_id = ${salaId}
     order by o.nombre, d.nombre, c.senal`;
 
-  return JSON.parse(JSON.stringify({ sala, equipos, tiradas }));
+  return JSON.parse(JSON.stringify({ sala, equipos, muebles, tiradas }));
 }
 
 try {
@@ -114,17 +121,24 @@ try {
   const [articulo] = await sql<Array<{ id: string }>>`
     select id from articulos where activo order by modelo limit 1`;
 
-  const equipo = async (nombre: string, extremo: string, pos: [number, number, number] | null) => {
+  const equipo = async (
+    nombre: string,
+    extremo: string,
+    pos: [number, number, number] | null,
+    giro = 0,
+  ) => {
     const id = randomUUID();
     await sql`
       insert into sala_equipos (id, sala_id, articulo_id, nombre, cantidad, extremo,
-                                x_m, y_m, z_m, posicion_confirmada)
+                                x_m, y_m, z_m, posicion_confirmada, rotacion_grados)
       values (${id}, ${salaId}, ${articulo.id}, ${nombre}, 1, ${extremo}::extremo_cable,
-              ${pos?.[0] ?? 0}, ${pos?.[1] ?? 0}, ${pos?.[2] ?? 0}, ${pos != null})`;
+              ${pos?.[0] ?? 0}, ${pos?.[1] ?? 0}, ${pos?.[2] ?? 0}, ${pos != null}, ${giro})`;
     return id;
   };
 
-  const pantalla = await equipo('TEST pantalla', 'pantalla', [0, 2, 1.4]);
+  // Girada 45 grados: una pantalla en esquina. Si el viaje pierde el giro, el
+  // plano de obra manda taladrar en otro sitio.
+  const pantalla = await equipo('TEST pantalla', 'pantalla', [0, 2, 1.4], 45);
   const caja = await equipo('TEST caja', 'caja_conexiones', [3, 2, 0.73]);
   // Deliberadamente sin colocar: la ausencia tiene que sobrevivir al viaje.
   await equipo('TEST panel sin colocar', 'mesa', null);
@@ -132,6 +146,21 @@ try {
   await sql`
     insert into conexiones (sala_id, origen_id, destino_id, senal, ruta, notas)
     values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada')`;
+
+  // Dos sillas: una colocada y girada, otra sin colocar. Las dos tienen que
+  // volver, y la segunda tiene que volver SIN colocar.
+  const [sillaCat] = await sql<Array<{ id: string }>>`
+    select id from catalogo_mobiliario where clave = 'silla'`;
+  await sql`
+    insert into sala_mobiliario
+      (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${salaId}, ${sillaCat.id}, 'Silla', 'circulo', 0.5, 0.5,
+            2.1, 0.8, 0, 135, true, 0)`;
+  await sql`
+    insert into sala_mobiliario
+      (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, orden)
+    values (${salaId}, ${sillaCat.id}, 'Silla', 'circulo', 0.5, 0.5, 1)`;
 
   const antes = await escenaDe(salaId);
 
@@ -204,6 +233,10 @@ try {
   afirmar(
     JSON.stringify(antes.tiradas) === JSON.stringify(despues.tiradas),
     'las tiradas vuelven entre los mismos equipos, con su señal y su ruta',
+  );
+  afirmar(
+    JSON.stringify(antes.muebles) === JSON.stringify(despues.muebles),
+    'el mobiliario vuelve con sus medidas, su sitio y su giro, y lo no colocado sigue sin colocar',
   );
 
   if (JSON.stringify(antes) !== JSON.stringify(despues)) {

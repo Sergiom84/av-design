@@ -28,6 +28,7 @@ export default async function DiagramaSala({ params }: PageProps<'/salas/[id]/di
       equipos={datos.equipos}
       conexiones={datos.conexiones}
       tomas={datos.tomas}
+      muebles={datos.muebles}
       cerrado={datos.cerrado}
     />
   );

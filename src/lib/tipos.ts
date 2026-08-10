@@ -689,3 +689,33 @@ export interface PuntoRevision {
   notas: string | null;
   orden: number;
 }
+
+/**
+ * Traduce la categoría del inventario al tipo de extremo, para la holgura.
+ *
+ * Vive aquí y no en las acciones porque lo usan dos: crear una sala desde
+ * plantilla y añadir un equipo desde el editor del plano. El extremo lo
+ * decide el servidor a partir de la categoría del catálogo, nunca el
+ * navegador: es lo que fija la holgura de cada punta del cable.
+ */
+export function extremoPorCategoria(categoria: string): Extremo {
+  const c = categoria.toUpperCase();
+  if (c.includes('PANTALLA') || c.includes('MONITOR') || c.includes('VIDEOWALL'))
+    return 'pantalla';
+  if (c.includes('PROYECTOR')) return 'proyector';
+  if (c.includes('CAJA CONEXIONES')) return 'caja_conexiones';
+  if (c.includes('ALTAVOZ') || c.includes('CAMARA') || c.includes('CÁMARA'))
+    return 'techo';
+  if (c.includes('PANEL') || c.includes('MICROFONO') || c.includes('MICRÓFONO'))
+    return 'mesa';
+  if (
+    c.includes('MATRIZ') ||
+    c.includes('AMPLIFICADOR') ||
+    c.includes('PROCESADOR') ||
+    c.includes('SWITCH') ||
+    c.includes('CONTROLADORA') ||
+    c.includes('DSP')
+  )
+    return 'rack';
+  return 'pared';
+}

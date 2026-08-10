@@ -2,8 +2,16 @@
 
 import { Aviso, Boton, Campo, Estado } from '@/components/ui';
 import { ETIQUETA_EXTREMO, type Extremo } from '@/lib/tipos';
-import { editarEquipo, type BorradorPlano, type EquipoBorrador } from '@/lib/plano-editor';
+import {
+  colocarEnElCentro,
+  editarEquipo,
+  girar,
+  quitarAlta,
+  type BorradorPlano,
+  type EquipoBorrador,
+} from '@/lib/plano-editor';
 import { CampoMetros } from './campos-plano';
+import { ControlRotacion } from './control-rotacion';
 
 const EXTREMOS = Object.keys(ETIQUETA_EXTREMO) as Extremo[];
 
@@ -20,6 +28,7 @@ export function InspectorEquipo({
   borrador,
   posicionDibujada,
   alCambiar,
+  alQuitar,
   soloLectura,
 }: {
   equipo: EquipoBorrador;
@@ -27,6 +36,8 @@ export function InspectorEquipo({
   /** Dónde lo pinta el croquis mientras está estimado. */
   posicionDibujada: { x_m: number; y_m: number; z_m: number } | null;
   alCambiar: (b: BorradorPlano) => void;
+  /** Quitar cambia la selección, y eso lo decide el editor. */
+  alQuitar: () => void;
   soloLectura: boolean;
 }) {
   const editar = (cambios: Parameters<typeof editarEquipo>[2]) =>
@@ -37,7 +48,15 @@ export function InspectorEquipo({
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium [overflow-wrap:anywhere]">{equipo.nombre}</span>
         {equipo.cantidad > 1 && <Estado tono="informacion">×{equipo.cantidad}</Estado>}
+        {equipo.es_nuevo && <Estado tono="aviso">Sin guardar</Estado>}
       </div>
+
+      {equipo.es_nuevo && (
+        <Aviso tono="neutro">
+          Todavía no está en la base. Su sección y su extremo definitivos los pone el
+          catálogo al guardar.
+        </Aviso>
+      )}
 
       {equipo.cantidad > 1 && (
         <Aviso tono="neutro">
@@ -108,6 +127,13 @@ export function InspectorEquipo({
         </select>
       </Campo>
 
+      <ControlRotacion
+        grados={equipo.rotacion_grados}
+        deshabilitado={soloLectura}
+        alGirar={(g) => alCambiar(girar(borrador, { tipo: 'equipo', id: equipo.id }, g))}
+        ayuda="Gira sobre su punto. No cambia X, Y ni Z ni los metros de cable."
+      />
+
       <Campo etiqueta="Toma de red" ayuda="En qué roseta de la sala pincha este equipo.">
         <select
           value={equipo.toma_red_id ?? ''}
@@ -122,6 +148,33 @@ export function InspectorEquipo({
           ))}
         </select>
       </Campo>
+
+      {!soloLectura && (
+        <div className="flex flex-wrap gap-2">
+          <Boton
+            tipo="button"
+            onClick={() =>
+              alCambiar(colocarEnElCentro(borrador, { tipo: 'equipo', id: equipo.id }))
+            }
+          >
+            Colocar en el centro
+          </Boton>
+          {/* Solo lo que aún no está guardado. Un equipo persistido puede
+              tener tiradas colgando, y sus bajas viven en Equipamiento con
+              sus avisos. */}
+          {equipo.es_nuevo && (
+            <Boton
+              tipo="button"
+              onClick={() => {
+                alCambiar(quitarAlta(borrador, { tipo: 'equipo', id: equipo.id }));
+                alQuitar();
+              }}
+            >
+              Quitar del plano
+            </Boton>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   desplazamientoDeTecla,
   desplazarEquipo,
   desplazarMesa,
+  desplazarMueble,
   desplazarToma,
   desplazarVista,
   PASO_REJILLA_M,
@@ -23,6 +24,7 @@ import {
   hayCambios as tieneCambios,
   moverEquipo,
   moverMesa,
+  moverMueble,
   moverToma,
   vistaCompleta,
   zoomDe,
@@ -48,6 +50,7 @@ import { BibliotecaElementos } from './biblioteca';
 import { InspectorSala } from './inspector-sala';
 import { InspectorMesa } from './inspector-mesa';
 import { InspectorEquipo } from './inspector-equipo';
+import { InspectorMueble } from './inspector-mueble';
 import { InspectorToma } from './inspector-toma';
 import { PanelMovil } from './panel-movil';
 import type { EstadoGuardado } from './estado-guardado';
@@ -108,6 +111,9 @@ export function EditorPlanoSala({
   // Un arrastre son decenas de movimientos: entran como un solo paso en el
   // historial, no como cuarenta. Se apila el borrador de antes de agarrar.
   const arrastrando = useRef(false);
+
+  /** El SVG del lienzo, para convertir el puntero a metros al soltar. */
+  const lienzo = useRef<SVGSVGElement | null>(null);
 
   const soloLectura = cerrado;
 
@@ -171,6 +177,8 @@ export function EditorPlanoSala({
         aplicar(moverEquipo(borrador, objetivo.id, punto, opciones), { agrupar });
       } else if (objetivo.tipo === 'toma') {
         aplicar(moverToma(borrador, objetivo.id, punto, opciones), { agrupar });
+      } else if (objetivo.tipo === 'mueble') {
+        aplicar(moverMueble(borrador, objetivo.id, punto, opciones), { agrupar });
       } else if (objetivo.tipo === 'mesa') {
         aplicar(moverMesa(borrador, punto, opciones), { agrupar });
       }
@@ -181,6 +189,90 @@ export function EditorPlanoSala({
   const soltar = useCallback(() => {
     arrastrando.current = false;
   }, []);
+
+  // ------------------------------------------------ arrastre desde la bandeja
+  //
+  // Pointer Events y no HTML5 Drag and Drop: el arrastre nativo no funciona
+  // con el dedo, no deja pintar la previsualización dentro del SVG y arrastra
+  // una imagen fantasma que el navegador decide por su cuenta.
+  //
+  // El puntero se captura en el tirador de la fila, así que los eventos
+  // siguen llegando ahí aunque el dedo esté encima del lienzo. La conversión
+  // a metros la hace el editor, que tiene el SVG y la proyección.
+
+  // Qué se está arrastrando va en una referencia y no en estado: entre el
+  // `pointerdown` y el `pointerup` puede no haber ningún render, y un estado
+  // leído del cierre anterior valdría `null` justo al soltar. Lo que sí es
+  // estado es la previsualización, porque hay que repintarla.
+  const bandeja = useRef<Exclude<Seleccion, null> | null>(null);
+  const [previsto, setPrevisto] = useState<PuntoMetros | null>(null);
+
+  const cancelarBandeja = useCallback(() => {
+    bandeja.current = null;
+    setPrevisto(null);
+  }, []);
+
+  const enMetrosDesdePantalla = useCallback(
+    (ev: { clientX: number; clientY: number }): PuntoMetros | null => {
+      const svg = lienzo.current;
+      if (!svg) return null;
+      const caja = svg.getBoundingClientRect();
+      // Fuera del lienzo no hay sitio donde colocar: soltar ahí cancela.
+      if (
+        ev.clientX < caja.left ||
+        ev.clientX > caja.right ||
+        ev.clientY < caja.top ||
+        ev.clientY > caja.bottom
+      ) {
+        return null;
+      }
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return null;
+      const punto = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(ctm.inverse());
+      return { x_m: proyeccion.aMetrosX(punto.x), y_m: proyeccion.aMetrosY(punto.y) };
+    },
+    [proyeccion],
+  );
+
+  const colocar = useCallback(
+    (objetivo: Exclude<Seleccion, null>, punto: PuntoMetros) => {
+      const opciones = { ajustar: ajuste };
+      if (objetivo.tipo === 'mueble') {
+        aplicar(moverMueble(borrador, objetivo.id, punto, opciones));
+      } else if (objetivo.tipo === 'equipo') {
+        aplicar(moverEquipo(borrador, objetivo.id, punto, opciones));
+      } else if (objetivo.tipo === 'toma') {
+        aplicar(moverToma(borrador, objetivo.id, punto, opciones));
+      }
+    },
+    [ajuste, aplicar, borrador],
+  );
+
+  const arrastreDeBandeja = useCallback(
+    (objetivo: Exclude<Seleccion, null>) => ({
+      onPointerDown: (ev: React.PointerEvent) => {
+        if (soloLectura) return;
+        ev.preventDefault();
+        setSeleccion(objetivo);
+        bandeja.current = objetivo;
+        (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+      },
+      onPointerMove: (ev: React.PointerEvent) => {
+        if (!bandeja.current) return;
+        setPrevisto(enMetrosDesdePantalla(ev));
+      },
+      onPointerUp: (ev: React.PointerEvent) => {
+        const objetivoActual = bandeja.current;
+        const punto = enMetrosDesdePantalla(ev);
+        // Soltar fuera del lienzo cancela: no hay sitio donde colocarlo, y
+        // colocarlo «donde se pueda» sería inventarse una medida.
+        if (objetivoActual && punto) colocar(objetivoActual, punto);
+        cancelarBandeja();
+      },
+      onPointerCancel: cancelarBandeja,
+    }),
+    [cancelarBandeja, colocar, enMetrosDesdePantalla, soloLectura],
+  );
 
   // ------------------------------------------------------------------ altas
   //
@@ -226,6 +318,12 @@ export function EditorPlanoSala({
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(destino.tagName)) return;
 
     if (ev.key === 'Escape') {
+      // Primero cancela el arrastre en curso; solo si no hay ninguno, quita
+      // la selección. Escape hace una cosa cada vez.
+      if (bandeja.current) {
+        cancelarBandeja();
+        return;
+      }
       setSeleccion(null);
       return;
     }
@@ -241,6 +339,8 @@ export function EditorPlanoSala({
       aplicar(desplazarEquipo(borrador, seleccion.id, paso, opciones));
     } else if (seleccion.tipo === 'toma') {
       aplicar(desplazarToma(borrador, seleccion.id, paso, opciones));
+    } else if (seleccion.tipo === 'mueble') {
+      aplicar(desplazarMueble(borrador, seleccion.id, paso, opciones));
     } else if (seleccion.tipo === 'mesa') {
       aplicar(desplazarMesa(borrador, paso, opciones));
     }
@@ -334,10 +434,19 @@ export function EditorPlanoSala({
               borrador={borrador}
               posicionDibujada={posicionesDibujadas.get(e.id) ?? null}
               alCambiar={aplicar}
+              alQuitar={() => setSeleccion(null)}
               soloLectura={soloLectura}
             />
           ) : null;
         })()
+      ) : seleccion.tipo === 'mueble' ? (
+        <InspectorMueble
+          borrador={borrador}
+          id={seleccion.id}
+          alCambiar={aplicar}
+          alQuitar={() => setSeleccion(null)}
+          soloLectura={soloLectura}
+        />
       ) : (
         (() => {
           const t = borrador.tomas.find((x) => x.id === seleccion.id);
@@ -477,6 +586,15 @@ export function EditorPlanoSala({
                 alArrastrar={arrastrar}
                 alSoltar={soltar}
                 alDesplazarVista={(dx, dy) => setVista(desplazarVista(vistaEfectiva, dx, dy))}
+                svgRef={lienzo}
+                previsualizacion={previsto}
+                alSoltarDesdeBandeja={(punto) => {
+                  const objetivo = bandeja.current;
+                  if (!objetivo) return false;
+                  colocar(objetivo, punto);
+                  cancelarBandeja();
+                  return true;
+                }}
               />
 
               {avisos.length > 0 && (
@@ -520,6 +638,7 @@ export function EditorPlanoSala({
                 borrador={borrador}
                 seleccion={seleccion}
                 alSeleccionar={setSeleccion}
+                arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
               />
               <div className="p-4 border-t border-linea">{inspector}</div>
             </div>
@@ -538,6 +657,7 @@ export function EditorPlanoSala({
                 borrador={borrador}
                 seleccion={seleccion}
                 alSeleccionar={setSeleccion}
+                arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
               />
               <div className="pt-4">{inspector}</div>
             </div>

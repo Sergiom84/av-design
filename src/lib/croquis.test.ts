@@ -9,7 +9,7 @@ import {
   sillasAlrededor,
   type MesaCroquis,
 } from './croquis';
-import type { Conexion, EquipoEnSala, Sala } from './tipos';
+import type { Conexion, EquipoEnSala, MuebleEnSala, Sala } from './tipos';
 
 /**
  * La sala de referencia es la Sala de Batería 006, medida a mano por el
@@ -509,5 +509,62 @@ describe('la proyección a píxeles', () => {
     const p = proyectar(vacia);
     assert.ok(Number.isFinite(p.escala));
     assert.ok(p.alto_px > 0);
+  });
+});
+
+describe('el mobiliario del croquis', () => {
+  const mueble = (
+    id: string,
+    campos: Partial<MuebleEnSala> = {},
+  ): MuebleEnSala => ({
+    id,
+    sala_id: 'sala-1',
+    mobiliario_id: 'cat-silla',
+    nombre: 'Silla',
+    forma: 'circulo',
+    largo_m: 0.5,
+    ancho_m: 0.5,
+    alto_m: null,
+    x_m: 1,
+    y_m: 1,
+    z_m: 0,
+    rotacion_grados: 0,
+    posicion_confirmada: true,
+    orden: 0,
+    ...campos,
+  });
+
+  const escenaCon = (muebles: MuebleEnSala[], sala = SALA_BATERIA) =>
+    construirEscena({ sala, equipos: [], conexiones: [], tomas: [], muebles });
+
+  it('dibuja el mueble medido y colocado, con su giro normalizado', () => {
+    const e = escenaCon([mueble('m1', { rotacion_grados: -15 })]);
+    assert.equal(e.muebles.length, 1);
+    assert.equal(e.muebles[0].rotacion_grados, 345);
+    assert.deepEqual([e.muebles[0].x_m, e.muebles[0].y_m], [1, 1]);
+  });
+
+  it('no dibuja lo que no está medido ni lo que no está colocado, y lo dice', () => {
+    const e = escenaCon([
+      mueble('sinMedir', { largo_m: null }),
+      mueble('sinColocar', { x_m: null, y_m: null, posicion_confirmada: false }),
+      // Con coordenadas pero sin confirmar: son el resto de un sitio que
+      // nadie decidió, no una medida. Un mueble no se deduce como un equipo.
+      mueble('sinConfirmar', { posicion_confirmada: false }),
+    ]);
+    assert.equal(e.muebles.length, 0, 'un rectángulo de tamaño inventado es peor que nada');
+    assert.ok(e.avisos.some((a) => a.includes('no están medidos o colocados')));
+  });
+
+  it('con sillas explícitas deja de derivarlas del aforo', () => {
+    const derivadas = escenaCon([]);
+    assert.ok(derivadas.sillas.length > 0, 'sin muebles, el croquis las reparte');
+
+    const explicitas = escenaCon([mueble('m1'), mueble('m2', { x_m: 2 })], {
+      ...SALA_BATERIA,
+      sillas_modo: 'manuales',
+    });
+    assert.equal(explicitas.sillas.length, 0, 'nunca las dos fuentes a la vez');
+    assert.equal(explicitas.muebles.length, 2);
   });
 });

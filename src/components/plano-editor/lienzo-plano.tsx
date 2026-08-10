@@ -3,7 +3,12 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { proyectar, type EscenaCroquis } from '@/lib/croquis';
 import { comoViewBox, type Seleccion, type Vista } from '@/lib/plano-editor';
-import { GeometriaPlano, cajaDelEquipo } from '@/components/croquis/plano-sala';
+import {
+  GeometriaPlano,
+  cajaDelEquipo,
+  cajaDelMueble,
+  giroEnPantalla,
+} from '@/components/croquis/plano-sala';
 import type { Herramienta } from './barra-herramientas';
 
 /**
@@ -42,6 +47,9 @@ export function LienzoPlano({
   alArrastrar,
   alSoltar,
   alDesplazarVista,
+  alSoltarDesdeBandeja,
+  previsualizacion,
+  svgRef,
 }: {
   escena: EscenaCroquis;
   vista: Vista;
@@ -53,8 +61,19 @@ export function LienzoPlano({
   alArrastrar: (s: Exclude<Seleccion, null>, punto: PuntoMetros) => void;
   alSoltar: () => void;
   alDesplazarVista: (dx: number, dy: number) => void;
+  /**
+   * Dónde se ha soltado algo que venía de la bandeja lateral. Devuelve `true`
+   * si lo ha recogido, para que el lienzo no lo confunda con un clic al aire y
+   * quite la selección.
+   */
+  alSoltarDesdeBandeja?: (punto: PuntoMetros) => boolean;
+  /** Dónde caería lo que se está arrastrando desde la bandeja lateral. */
+  previsualizacion?: PuntoMetros | null;
+  /** El editor necesita el SVG para convertir el puntero a metros. */
+  svgRef?: React.RefObject<SVGSVGElement | null>;
 }) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const propio = useRef<SVGSVGElement>(null);
+  const svg = svgRef ?? propio;
   const arrastre = useRef<
     | { tipo: 'objeto'; objetivo: Exclude<Seleccion, null>; dx_m: number; dy_m: number }
     | { tipo: 'vista'; x: number; y: number }
@@ -65,9 +84,9 @@ export function LienzoPlano({
 
   /** Del puntero a coordenadas del `viewBox`. */
   const enLienzo = (ev: { clientX: number; clientY: number }) => {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const ctm = svg.getScreenCTM();
+    const elemento = svg.current;
+    if (!elemento) return { x: 0, y: 0 };
+    const ctm = elemento.getScreenCTM();
     if (!ctm) return { x: 0, y: 0 };
     const punto = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(ctm.inverse());
     return { x: punto.x, y: punto.y };
@@ -100,6 +119,9 @@ export function LienzoPlano({
 
   const empezarVista = (ev: ReactPointerEvent) => {
     if (herramienta !== 'mover') {
+      // Un puntero que viene de la bandeja no está haciendo clic al aire:
+      // está soltando algo. Se coloca ahí y no se pierde la selección.
+      if (alSoltarDesdeBandeja?.(enMetros(ev))) return;
       alSeleccionar(null);
       return;
     }
@@ -134,7 +156,7 @@ export function LienzoPlano({
 
   return (
     <svg
-      ref={svgRef}
+      ref={svg}
       viewBox={comoViewBox(vista)}
       // `touch-none` es lo que hace que el arrastre táctil funcione: sin él el
       // navegador se queda el gesto para hacer scroll de la página.
@@ -151,6 +173,39 @@ export function LienzoPlano({
       {rejilla && <Rejilla p={p} escena={escena} />}
 
       <GeometriaPlano p={p} escena={escena} />
+
+      {/* Previsualización de colocación: dónde caería lo que viene de la
+          bandeja. Discontinua y sin relleno, para que no se confunda con algo
+          que ya está puesto. */}
+      {previsualizacion && (
+        <g pointerEvents="none" aria-hidden="true">
+          <circle
+            cx={p.x(previsualizacion.x_m)}
+            cy={p.y(previsualizacion.y_m)}
+            r={14}
+            fill="none"
+            stroke="var(--acento)"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+          />
+          <line
+            x1={p.x(previsualizacion.x_m) - 20}
+            y1={p.y(previsualizacion.y_m)}
+            x2={p.x(previsualizacion.x_m) + 20}
+            y2={p.y(previsualizacion.y_m)}
+            stroke="var(--acento)"
+            strokeWidth={1}
+          />
+          <line
+            x1={p.x(previsualizacion.x_m)}
+            y1={p.y(previsualizacion.y_m) - 20}
+            x2={p.x(previsualizacion.x_m)}
+            y2={p.y(previsualizacion.y_m) + 20}
+            stroke="var(--acento)"
+            strokeWidth={1}
+          />
+        </g>
+      )}
 
       {/* Zonas de agarre. Transparentes y encima del dibujo: lo que se ve lo
           pinta la geometría compartida; esto solo recoge el puntero. */}
@@ -176,6 +231,24 @@ export function LienzoPlano({
           />
         )}
 
+        {escena.muebles.map((m) => {
+          const caja = cajaDelMueble(p, m);
+          return (
+            <Agarre
+              key={m.id}
+              activo={seleccionado({ tipo: 'mueble', id: m.id })}
+              x={caja.x}
+              y={caja.y}
+              ancho={caja.ancho}
+              alto={caja.alto}
+              giro={giroEnPantalla(p, m.rotacion_grados, m.x_m, m.y_m)}
+              onPointerDown={(ev) =>
+                empezarObjeto(ev, { tipo: 'mueble', id: m.id }, { x_m: m.x_m, y_m: m.y_m })
+              }
+            />
+          );
+        })}
+
         {escena.equipos.map((e) => {
           const caja = cajaDelEquipo(p, escena, e);
           return (
@@ -186,6 +259,7 @@ export function LienzoPlano({
               y={caja.y}
               ancho={caja.ancho}
               alto={caja.alto}
+              giro={giroEnPantalla(p, e.rotacion_grados, e.x_m, e.y_m)}
               onPointerDown={(ev) =>
                 empezarObjeto(ev, { tipo: 'equipo', id: e.id }, { x_m: e.x_m, y_m: e.y_m })
               }

@@ -18,10 +18,26 @@ export function ListaObjetos({
   borrador,
   seleccion,
   alSeleccionar,
+  arrastreDeBandeja,
 }: {
   borrador: BorradorPlano;
   seleccion: Seleccion;
   alSeleccionar: (s: Seleccion) => void;
+  /**
+   * Los manejadores de puntero para arrastrar una fila hasta el lienzo. Los
+   * pone el editor, que es quien sabe convertir la pantalla a metros.
+   *
+   * Van en un tirador aparte y no en la fila entera: la fila es un botón de
+   * selección y tiene que seguir siéndolo con teclado y con lector de
+   * pantalla. Arrastrar es un extra del ratón y del dedo, nunca el único
+   * camino.
+   */
+  arrastreDeBandeja?: (objetivo: Exclude<Seleccion, null>) => {
+    onPointerDown: (ev: React.PointerEvent) => void;
+    onPointerMove: (ev: React.PointerEvent) => void;
+    onPointerUp: (ev: React.PointerEvent) => void;
+    onPointerCancel: (ev: React.PointerEvent) => void;
+  };
 }) {
   const activo = (s: Exclude<Seleccion, null>) =>
     seleccion?.tipo === s.tipo && ('id' in s ? 'id' in seleccion && seleccion.id === s.id : true);
@@ -69,6 +85,11 @@ export function ListaObjetos({
                     titulo={m.nombre}
                     detalle={detalleDeMueble(m)}
                     tenue={estadoDelMueble(m) !== 'colocado'}
+                    arrastre={
+                      estadoDelMueble(m) === 'sin_medir'
+                        ? undefined
+                        : arrastreDeBandeja?.({ tipo: 'mueble', id: m.id })
+                    }
                   />
                 </li>
               ))}
@@ -90,6 +111,7 @@ export function ListaObjetos({
                 (e.es_nuevo ? ' · sin guardar' : '')
               }
               tenue={!e.posicion_confirmada}
+              arrastre={arrastreDeBandeja?.({ tipo: 'equipo', id: e.id })}
             />
           </li>
         ))}
@@ -120,32 +142,57 @@ function Fila({
   titulo,
   detalle,
   tenue = false,
+  arrastre,
 }: {
   activo: boolean;
   onClick: () => void;
   titulo: string;
   detalle: string;
   tenue?: boolean;
+  arrastre?: {
+    onPointerDown: (ev: React.PointerEvent) => void;
+    onPointerMove: (ev: React.PointerEvent) => void;
+    onPointerUp: (ev: React.PointerEvent) => void;
+    onPointerCancel: (ev: React.PointerEvent) => void;
+  };
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={activo ? 'true' : undefined}
-      // 44 px de alto mínimo: es un objetivo táctil, no una fila de tabla.
-      className={`w-full text-left px-3 py-2 min-h-[44px] border-l-2 ${
+    <div
+      className={`flex items-stretch border-l-2 ${
         activo
           ? 'border-acento bg-acento-suave'
           : 'border-transparent hover:bg-superficie-hundida'
       }`}
     >
-      <span className="block font-medium [overflow-wrap:anywhere]">{titulo}</span>
-      <span
-        className={`block text-[0.75rem] tabular-nums ${tenue ? 'text-aviso-fuerte' : 'text-tinta-tenue'}`}
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={activo ? 'true' : undefined}
+        // 44 px de alto mínimo: es un objetivo táctil, no una fila de tabla.
+        className="flex-1 min-w-0 text-left px-3 py-2 min-h-[44px]"
       >
-        {detalle}
-      </span>
-    </button>
+        <span className="block font-medium [overflow-wrap:anywhere]">{titulo}</span>
+        <span
+          className={`block text-[0.75rem] tabular-nums ${tenue ? 'text-aviso-fuerte' : 'text-tinta-tenue'}`}
+        >
+          {detalle}
+        </span>
+      </button>
+
+      {arrastre && (
+        // `touch-none` para que el navegador no se quede el gesto y lo
+        // convierta en scroll de la página, igual que en el lienzo.
+        <span
+          role="presentation"
+          aria-hidden="true"
+          {...arrastre}
+          className="shrink-0 w-11 min-h-[44px] flex items-center justify-center touch-none cursor-grab text-tinta-tenue select-none"
+          title="Arrastrar al plano"
+        >
+          ⠿
+        </span>
+      )}
+    </div>
   );
 }
 

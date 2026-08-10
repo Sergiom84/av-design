@@ -1,6 +1,6 @@
 'use client';
 
-import { Campo, Vacio } from '@/components/ui';
+import { Vacio } from '@/components/ui';
 import {
   cambiarMesa,
   girarMesa,
@@ -8,6 +8,7 @@ import {
   type BorradorPlano,
 } from '@/lib/plano-editor';
 import { CampoMetros } from './campos-plano';
+import { ControlRotacion } from './control-rotacion';
 
 /**
  * La mesa: medidas, altura, centro y giro.
@@ -93,23 +94,12 @@ export function InspectorMesa({
         alCambiar={(n) => alCambiar(moverMesa(borrador, { x_m: centroX, y_m: n ?? 0 }, { ajustar: false }))}
         deshabilitado={soloLectura}
       />
-      <Campo
-        etiqueta="Giro (grados)"
+      <ControlRotacion
+        grados={borrador.mesa_rotacion_grados}
+        deshabilitado={soloLectura}
+        alGirar={(g) => alCambiar(girarMesa(borrador, g))}
         ayuda="0 = alineada con las paredes. Con la mesa girada, sus cotas no se dibujan: medirían la proyección."
-      >
-        <input
-          type="number"
-          step={5}
-          className="tabular-nums"
-          disabled={soloLectura}
-          value={borrador.mesa_rotacion_grados}
-          onChange={(ev) => {
-            const n = Number(ev.target.value);
-            if (!Number.isFinite(n)) return;
-            alCambiar(girarMesa(borrador, n));
-          }}
-        />
-      </Campo>
+      />
     </div>
   );
 }

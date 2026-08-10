@@ -64,6 +64,7 @@ export function GeometriaPlano({ p, escena }: { p: Proyeccion; escena: EscenaCro
       <Paredes p={p} escena={escena} />
       <Mesa p={p} escena={escena} />
       <Sillas p={p} escena={escena} />
+      <Muebles p={p} escena={escena} />
       <Tiradas p={p} escena={escena} />
       <Equipos p={p} escena={escena} />
       <Rosetas p={p} escena={escena} />
@@ -95,6 +96,56 @@ export function cajaDelEquipo(
     ancho,
     alto,
   };
+}
+
+/**
+ * Dónde acaba dibujado un mueble. Mismo criterio que el equipo: centrado en su
+ * ancla, para que la zona de agarre del editor caiga sobre lo que se ve.
+ *
+ * No se recorta contra la pared. Un mueble arrimado tiene que verse arrimado,
+ * y a diferencia del símbolo de una pantalla —que es convencional— aquí el
+ * rectángulo son sus medidas reales.
+ */
+export function cajaDelMueble(
+  p: Proyeccion,
+  m: EscenaCroquis['muebles'][number],
+): { x: number; y: number; ancho: number; alto: number } {
+  const ancho = p.d(m.largo_m);
+  const alto = p.d(m.ancho_m);
+  return { x: p.x(m.x_m) - ancho / 2, y: p.y(m.y_m) - alto / 2, ancho, alto };
+}
+
+/** El giro en pantalla de un objeto que gira sobre su ancla. */
+export function giroEnPantalla(
+  p: Proyeccion,
+  grados: number,
+  x_m: number,
+  y_m: number,
+): string | undefined {
+  // Antihorario en la sala; el eje y del SVG va al revés, así que en pantalla
+  // se pinta con el signo cambiado.
+  return grados ? `rotate(${-grados} ${p.x(x_m)} ${p.y(y_m)})` : undefined;
+}
+
+function Muebles({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
+  return (
+    <g fill="none" stroke="var(--linea-fuerte)" strokeWidth={1.25}>
+      {escena.muebles.map((m) => {
+        const { x, y, ancho, alto } = cajaDelMueble(p, m);
+        const giro = giroEnPantalla(p, m.rotacion_grados, m.x_m, m.y_m);
+        return m.forma === 'circulo' ? (
+          // Una silla girada se ve igual: se dibuja el círculo y una marca de
+          // respaldo, que es lo único que tiene orientación.
+          <g key={m.id} transform={giro}>
+            <circle cx={p.x(m.x_m)} cy={p.y(m.y_m)} r={Math.min(ancho, alto) / 2} />
+            <line x1={x} y1={y} x2={x + ancho} y2={y} />
+          </g>
+        ) : (
+          <rect key={m.id} x={x} y={y} width={ancho} height={alto} transform={giro} />
+        );
+      })}
+    </g>
+  );
 }
 
 function Paredes({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
@@ -199,6 +250,9 @@ function Equipos({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
               y={y}
               width={ancho}
               height={alto}
+              // Gira sobre su ancla, no sobre el centro del símbolo: el ancla
+              // es lo que se guarda y lo que alimenta el cálculo de cable.
+              transform={giroEnPantalla(p, e.rotacion_grados, e.x_m, e.y_m)}
               fill="var(--tinta)"
               stroke="var(--tinta)"
               strokeWidth={1}

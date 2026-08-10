@@ -17,6 +17,8 @@ import {
   dentroDeLaSala,
   desplazamientoDeTecla,
   desplazarEquipo,
+  desplazarMesa,
+  desplazarToma,
   editarEquipo,
   editarToma,
   girarMesa,
@@ -257,9 +259,42 @@ describe('el teclado', () => {
 
   it('el paso fino no se pierde contra la rejilla', () => {
     const b = desplazarEquipo(base(), 'caja', { dx_m: PASO_FINO_M, dy_m: 0 }, {
-      paso: PASO_FINO_M,
+      ajustar: false,
     });
     assert.equal(b.equipos.find((e) => e.id === 'caja')!.x_m, 2.36);
+  });
+
+  it('la flecha horizontal no toca la y, aunque esté fuera de rejilla', () => {
+    // La caja está en (2,35 · 1,25). Ajustar los dos ejes le corría 5 cm la y
+    // en cada pulsación horizontal: un movimiento que nadie pidió sobre un
+    // dato que alguien midió.
+    const b = desplazarEquipo(base(), 'caja', { dx_m: PASO_REJILLA_M, dy_m: 0 });
+    const caja = b.equipos.find((e) => e.id === 'caja')!;
+    assert.equal(caja.y_m, 1.25, 'la y se queda exactamente donde estaba');
+    // 2,35 + 0,10 = 2,45, que ajusta a 2,50: la rejilla se aplica al destino.
+    assert.equal(caja.x_m, 2.5, 'la x sí se ajusta a la rejilla');
+  });
+
+  it('la flecha vertical, al revés', () => {
+    const caja = desplazarEquipo(base(), 'caja', { dx_m: 0, dy_m: PASO_REJILLA_M })
+      .equipos.find((e) => e.id === 'caja')!;
+    assert.equal(caja.x_m, 2.35);
+    assert.equal(caja.y_m, 1.4);
+  });
+
+  it('la mesa y las rosetas se desplazan con la misma regla', () => {
+    const b = desplazarMesa(base(), { dx_m: PASO_REJILLA_M, dy_m: 0 });
+    assert.equal(b.mesa_x_m, 2.5);
+    assert.equal(b.mesa_y_m, 1.25, 'el centro de la mesa conserva su y');
+
+    const t = desplazarToma(base(), '12', { dx_m: 0, dy_m: PASO_REJILLA_M })
+      .tomas.find((x) => x.id === '12')!;
+    assert.deepEqual([t.x_m, t.y_m], [3, 2.1]);
+  });
+
+  it('una roseta sin situar no se mueve: no está en ningún sitio', () => {
+    const antes = base();
+    assert.equal(desplazarToma(antes, '13', { dx_m: PASO_REJILLA_M, dy_m: 0 }), antes);
   });
 
   it('contra la pared el equipo se para, no se sale', () => {

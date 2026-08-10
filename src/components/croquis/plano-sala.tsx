@@ -44,7 +44,23 @@ export function PlanoSala({
       xmlns="http://www.w3.org/2000/svg"
     >
       <rect width="100%" height="100%" fill="var(--fondo)" />
+      <GeometriaPlano p={p} escena={escena} />
+    </svg>
+  );
+}
 
+/**
+ * El dibujo, sin el `<svg>` que lo envuelve.
+ *
+ * Existe para que el editor del plano (`src/components/plano-editor/`) pinte
+ * exactamente esta geometría en vez de una parecida: el editor solo añade
+ * rejilla debajo y tiradores encima. Dos implementaciones del mismo dibujo
+ * acabarían divergiendo, y el criterio es que una misma posición confirmada
+ * produzca el mismo plano en el editor, en Resumen y tras recargar.
+ */
+export function GeometriaPlano({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
+  return (
+    <>
       <Paredes p={p} escena={escena} />
       <Mesa p={p} escena={escena} />
       <Sillas p={p} escena={escena} />
@@ -52,8 +68,33 @@ export function PlanoSala({
       <Equipos p={p} escena={escena} />
       <Rosetas p={p} escena={escena} />
       <Cotas p={p} escena={escena} />
-    </svg>
+    </>
   );
+}
+
+/**
+ * Dónde acaba dibujado el símbolo de un equipo, en píxeles.
+ *
+ * El editor necesita el mismo recorte contra la pared que usa el dibujo para
+ * poner encima su zona de agarre: si el rectángulo transparente no cae sobre
+ * el símbolo, se arrastra un equipo que no está donde se ve.
+ */
+export function cajaDelEquipo(
+  p: Proyeccion,
+  escena: EscenaCroquis,
+  e: EscenaCroquis['equipos'][number],
+): { x: number; y: number; ancho: number; alto: number } {
+  const ancho = p.d(e.largo_m);
+  const alto = p.d(e.ancho_m);
+  return {
+    x: Math.min(Math.max(p.x(e.x_m) - ancho / 2, p.x(0)), p.x(escena.sala.largo_m) - ancho),
+    y: Math.min(
+      Math.max(p.y(e.y_m) - alto / 2, p.y(escena.sala.ancho_m)),
+      p.y(0) - alto,
+    ),
+    ancho,
+    alto,
+  };
 }
 
 function Paredes({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
@@ -147,18 +188,9 @@ function Equipos({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
   return (
     <g>
       {escena.equipos.map((e) => {
-        const ancho = p.d(e.largo_m);
-        const alto = p.d(e.ancho_m);
         // El equipo se dibuja centrado en su punto, y se recorta contra la
         // pared: una pantalla colocada en x = 0 se saldría media anchura.
-        const x = Math.min(
-          Math.max(p.x(e.x_m) - ancho / 2, p.x(0)),
-          p.x(escena.sala.largo_m) - ancho,
-        );
-        const y = Math.min(
-          Math.max(p.y(e.y_m) - alto / 2, p.y(escena.sala.ancho_m)),
-          p.y(0) - alto,
-        );
+        const { x, y, ancho, alto } = cajaDelEquipo(p, escena, e);
 
         return (
           <g key={e.id}>

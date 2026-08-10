@@ -1,5 +1,5 @@
 import { construirEscena, type EntradaCroquis } from '@/lib/croquis';
-import { Aviso, Tarjeta } from '@/components/ui';
+import { Aviso, Enlace, Tarjeta } from '@/components/ui';
 import { PlanoSala } from './plano-sala';
 
 /**
@@ -16,6 +16,11 @@ export function CroquisSala(entrada: EntradaCroquis) {
   return (
     <Tarjeta
       titulo="Croquis"
+      // El croquis se lee aquí y se edita en Diagrama. La tarjeta sigue
+      // llamándose Croquis porque es el nombre del entregable de obra.
+      acciones={
+        <Enlace href={`/salas/${entrada.sala.id}/diagrama`}>Editar diagrama</Enlace>
+      }
       pie={escena.anotaciones.length > 0 ? escena.anotaciones.join(' · ') : undefined}
     >
       {escena.avisos.length > 0 && (

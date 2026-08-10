@@ -43,6 +43,7 @@ function Flecha({ direccion }: { direccion: 'izquierda' | 'derecha' }) {
 }
 const PESTANAS = [
   { segmento: null, etiqueta: 'Resumen' },
+  { segmento: 'diagrama', etiqueta: 'Diagrama' },
   { segmento: 'equipamiento', etiqueta: 'Equipamiento' },
   { segmento: 'cableado', etiqueta: 'Cableado' },
   { segmento: 'logistica', etiqueta: 'Logística y ciclo de vida' },

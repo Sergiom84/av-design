@@ -16,8 +16,8 @@
  * planta. Todo lo que sale de aquí está en METROS.
  */
 
-import { normalizarGrados } from './croquis';
-import type { Extremo, Punto, Sala, EquipoEnSala, TomaRed } from './tipos';
+import { normalizarGrados, type EntradaCroquis } from './croquis';
+import type { Conexion, Extremo, Punto, Sala, EquipoEnSala, TomaRed } from './tipos';
 
 /**
  * El paso de la rejilla: 10 cm. Es la unidad con la que se mide una sala con
@@ -126,6 +126,58 @@ export function borradorDesde(
     })),
     tomas: tomas.map((t) => ({
       id: t.id,
+      codigo: t.codigo,
+      ubicacion: t.ubicacion,
+      x_m: t.x_m,
+      y_m: t.y_m,
+      z_m: t.z_m,
+      notas: t.notas,
+    })),
+  };
+}
+
+/**
+ * El borrador visto como escena de croquis.
+ *
+ * El editor no dibuja con sus propias reglas: pinta lo que pintaría el croquis
+ * de Resumen, con la misma `construirEscena()`. Así una posición confirmada da
+ * el mismo dibujo en el editor, en el resumen y después de recargar, que es el
+ * criterio de aceptación del que cuelga todo lo demás.
+ */
+export function entradaCroquisDe(
+  borrador: BorradorPlano,
+  sala: Sala,
+  conexiones: Conexion[],
+): EntradaCroquis {
+  return {
+    sala: {
+      ...sala,
+      largo_m: borrador.largo_m,
+      ancho_m: borrador.ancho_m,
+      alto_m: borrador.alto_m,
+      aforo: borrador.aforo,
+      mesa_largo_m: borrador.mesa_largo_m,
+      mesa_ancho_m: borrador.mesa_ancho_m,
+      mesa_alto_cm: borrador.mesa_alto_cm,
+      mesa_x_m: borrador.mesa_x_m,
+      mesa_y_m: borrador.mesa_y_m,
+      mesa_rotacion_grados: borrador.mesa_rotacion_grados,
+    },
+    equipos: borrador.equipos.map((e) => ({
+      id: e.id,
+      sala_id: sala.id,
+      articulo_id: '',
+      nombre: e.nombre,
+      cantidad: e.cantidad,
+      extremo: e.extremo,
+      posicion: { x_m: e.x_m, y_m: e.y_m, z_m: e.z_m },
+      posicion_confirmada: e.posicion_confirmada,
+      toma_red_id: e.toma_red_id,
+    })),
+    conexiones,
+    tomas: borrador.tomas.map((t) => ({
+      id: t.id,
+      sala_id: sala.id,
       codigo: t.codigo,
       ubicacion: t.ubicacion,
       x_m: t.x_m,
@@ -269,21 +321,67 @@ export function moverEquipo(
   return tocado ? { ...borrador, equipos } : borrador;
 }
 
+/**
+ * Dónde acaba un punto al desplazarlo, ajustando SOLO el eje que se mueve.
+ *
+ * La flecha derecha mueve en x y no puede tocar la y. Ajustar los dos ejes
+ * parecía lo natural, pero corría 5 cm la altura de una pantalla medida a
+ * 1,25 m cada vez que se pulsaba una flecha horizontal: un movimiento que
+ * nadie pidió sobre un dato que alguien midió.
+ */
+function desplazado(
+  desde: { x_m: number; y_m: number },
+  { dx_m, dy_m }: { dx_m: number; dy_m: number },
+  { ajustar = true, paso = PASO_REJILLA_M }: { ajustar?: boolean; paso?: number } = {},
+): { x_m: number; y_m: number } {
+  const eje = (valor: number, delta: number) =>
+    delta === 0 ? valor : ajustar ? ajustarARejilla(valor + delta, paso) : valor + delta;
+  return { x_m: eje(desde.x_m, dx_m), y_m: eje(desde.y_m, dy_m) };
+}
+
 /** Desplaza un equipo, que es lo que hacen las flechas del teclado. */
 export function desplazarEquipo(
   borrador: BorradorPlano,
   id: string,
-  { dx_m, dy_m }: { dx_m: number; dy_m: number },
+  paso: { dx_m: number; dy_m: number },
   opciones?: { ajustar?: boolean; paso?: number },
 ): BorradorPlano {
   const e = borrador.equipos.find((x) => x.id === id);
   if (!e) return borrador;
-  return moverEquipo(
+  return moverEquipo(borrador, id, { ...desplazado(e, paso, opciones), z_m: e.z_m }, {
+    ajustar: false,
+  });
+}
+
+/** Desplaza una roseta situada. Una sin situar no se mueve: no está en ningún sitio. */
+export function desplazarToma(
+  borrador: BorradorPlano,
+  id: string,
+  paso: { dx_m: number; dy_m: number },
+  opciones?: { ajustar?: boolean; paso?: number },
+): BorradorPlano {
+  const t = borrador.tomas.find((x) => x.id === id);
+  if (!t || t.x_m == null || t.y_m == null) return borrador;
+  return moverToma(
     borrador,
     id,
-    { x_m: e.x_m + dx_m, y_m: e.y_m + dy_m, z_m: e.z_m },
-    opciones,
+    { ...desplazado({ x_m: t.x_m, y_m: t.y_m }, paso, opciones), z_m: t.z_m ?? 0 },
+    { ajustar: false },
   );
+}
+
+/** Desplaza la mesa por su centro. */
+export function desplazarMesa(
+  borrador: BorradorPlano,
+  paso: { dx_m: number; dy_m: number },
+  opciones?: { ajustar?: boolean; paso?: number },
+): BorradorPlano {
+  if (!borrador.mesa_largo_m || !borrador.mesa_ancho_m) return borrador;
+  const centro = {
+    x_m: borrador.mesa_x_m ?? borrador.largo_m / 2,
+    y_m: borrador.mesa_y_m ?? borrador.ancho_m / 2,
+  };
+  return moverMesa(borrador, desplazado(centro, paso, opciones), { ajustar: false });
 }
 
 /** Edita los campos numéricos de un equipo desde el inspector. */

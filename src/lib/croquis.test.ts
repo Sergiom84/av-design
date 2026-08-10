@@ -43,6 +43,7 @@ const SALA_BATERIA: Sala = {
   mesa_y_m: null,
   mesa_rotacion_grados: 0,
   diagrama_version: 0,
+  sillas_modo: 'derivadas',
 };
 
 const equipo = (
@@ -55,6 +56,7 @@ const equipo = (
   id,
   sala_id: 'sala-1',
   articulo_id: `art-${id}`,
+  rotacion_grados: 0,
   nombre,
   cantidad: 1,
   extremo,

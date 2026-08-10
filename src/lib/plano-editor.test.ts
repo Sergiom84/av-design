@@ -13,8 +13,21 @@ import {
   cambiarMedidasSala,
   comoViewBox,
   confirmarEstimadas,
+  MAXIMO_ALTA_MOBILIARIO,
+  anadirEquipo,
+  anadirMuebles,
+  colocarEnElCentro,
   construirPatch,
   coordenadasFueraDeSala,
+  desplazarMueble,
+  editarMueble,
+  entradaCroquisDe,
+  estadoDelMueble,
+  girar,
+  iniciarDiagrama,
+  materializarSillas,
+  moverMueble,
+  quitarAlta,
   dentroDeLaSala,
   desplazamientoDeTecla,
   desplazarEquipo,
@@ -34,7 +47,36 @@ import {
   type BorradorPlano,
   type PatchEquipoPlano,
 } from './plano-editor';
-import type { EquipoEnSala, Sala, TomaRed } from './tipos';
+import { construirEscena, sillasAlrededor, mesaDeLaSala } from './croquis';
+import type { EquipoEnSala, MuebleCatalogo, Sala, TomaRed } from './tipos';
+
+/** La silla del catálogo: medio metro, que es el círculo que ya dibuja el croquis. */
+const SILLA: MuebleCatalogo = {
+  id: 'cat-silla',
+  clave: 'silla',
+  nombre: 'Silla',
+  categoria: 'Asientos',
+  palabras_clave: 'silla asiento butaca',
+  forma: 'circulo',
+  largo_m_defecto: 0.5,
+  ancho_m_defecto: 0.5,
+  alto_m_defecto: null,
+};
+
+/** Una mesa auxiliar sin medidas del departamento: nace «Sin medir». */
+const MESA_AUX: MuebleCatalogo = {
+  ...SILLA,
+  id: 'cat-mesa',
+  clave: 'mesa-rectangular',
+  nombre: 'Mesa rectangular',
+  categoria: 'Mesas',
+  forma: 'rectangulo',
+  largo_m_defecto: null,
+  ancho_m_defecto: null,
+};
+
+const ids = (n: number, prefijo = 'tmp') =>
+  Array.from({ length: n }, (_, i) => `${prefijo}-${i}`);
 
 /**
  * La misma Sala de Batería 006 del croquis: 4,70 × 2,50 × 2,70, mesa de
@@ -67,6 +109,7 @@ const SALA: Sala = {
   mesa_y_m: null,
   mesa_rotacion_grados: 0,
   diagrama_version: 3,
+  sillas_modo: 'derivadas',
 };
 
 const equipo = (
@@ -77,6 +120,7 @@ const equipo = (
   id,
   sala_id: 'sala-1',
   articulo_id: `art-${id}`,
+  rotacion_grados: 0,
   nombre: id,
   cantidad: 1,
   extremo: 'pared',
@@ -411,7 +455,7 @@ describe('los avisos', () => {
   });
 
   it('un equipo que quedó fuera se nombra', () => {
-    const b = { ...base(), equipos: base().equipos.map((e) => ({ ...e, x_m: 99, posicion_confirmada: true })) };
+    const b = { ...base(), equipos: base().equipos.map((e) => ({ ...e, x_m: 99, posicion_confirmada: true, rotacion_grados: 0 })) };
     assert.ok(avisosDelBorrador(b).some((a) => a.includes('fuera de la sala')));
   });
 });
@@ -528,7 +572,7 @@ describe('los límites que comprueba el servidor', () => {
     y_m: number,
     z_m = 0,
     posicion_confirmada = true,
-  ): PatchEquipoPlano => ({ id: 'e1', x_m, y_m, z_m, posicion_confirmada });
+  ): PatchEquipoPlano => ({ id: 'e1', x_m, y_m, z_m, posicion_confirmada, rotacion_grados: 0 });
 
   const soloEquipos = (...equipos: PatchEquipoPlano[]) => ({
     sala: null,
@@ -607,6 +651,251 @@ describe('los límites que comprueba el servidor', () => {
     assert.equal(coordenadasFueraDeSala(conMesa(2.35, null), MEDIDAS).length, 1);
     assert.equal(coordenadasFueraDeSala(conMesa(null, 1.25), MEDIDAS).length, 1);
     assert.equal(coordenadasFueraDeSala(conMesa(4.71, 1.25), MEDIDAS).length, 1);
+  });
+});
+
+describe('el alta de mobiliario', () => {
+  it('ocho sillas son ocho instancias, no una línea con cantidad 8', () => {
+    const b = anadirMuebles(base(), SILLA, ids(8));
+    assert.equal(b.mobiliario.length, 8);
+    assert.equal(new Set(b.mobiliario.map((m) => m.id)).size, 8, 'cada una con su id');
+    assert.ok(
+      b.mobiliario.every((m) => m.es_nuevo && m.x_m === null && m.posicion_confirmada === false),
+      'nacen sin colocar: la ausencia no se convierte en (0,0,0)',
+    );
+  });
+
+  it('copia las medidas del catálogo como snapshot', () => {
+    const m = anadirMuebles(base(), SILLA, ids(1)).mobiliario[0];
+    assert.deepEqual([m.largo_m, m.ancho_m], [0.5, 0.5]);
+    assert.equal(estadoDelMueble(m), 'sin_colocar');
+  });
+
+  it('un mueble sin medidas por defecto nace Sin medir', () => {
+    const m = anadirMuebles(base(), MESA_AUX, ids(1)).mobiliario[0];
+    assert.equal(estadoDelMueble(m), 'sin_medir');
+    // Y ni siquiera colocarlo lo da por puesto: primero se mide.
+    const b = moverMueble(anadirMuebles(base(), MESA_AUX, ids(1)), 'tmp-0', { x_m: 2, y_m: 1 });
+    assert.equal(estadoDelMueble(b.mobiliario[0]), 'sin_medir');
+  });
+
+  it('el alta tiene tope: un 500 de más no son 500 filas', () => {
+    const b = anadirMuebles(base(), SILLA, ids(500));
+    assert.equal(b.mobiliario.length, MAXIMO_ALTA_MOBILIARIO);
+  });
+
+  it('quitar un alta la saca del borrador; deshacer es volver al anterior', () => {
+    const antes = base();
+    const conSilla = anadirMuebles(antes, SILLA, ids(1));
+    assert.equal(quitarAlta(conSilla, { tipo: 'mueble', id: 'tmp-0' }).mobiliario.length, 0);
+    assert.equal(antes.mobiliario.length, 0, 'el borrador de partida no se muta');
+  });
+
+  it('un equipo persistido no se borra desde el plano: puede tener tiradas', () => {
+    const b = base();
+    assert.equal(quitarAlta(b, { tipo: 'equipo', id: 'tv' }), b, 'mismo borrador, sin copia');
+  });
+
+  it('un equipo recién añadido sí se puede quitar', () => {
+    const b = anadirEquipo(base(), {
+      id: 'tmp-eq',
+      articulo_id: 'art-9',
+      nombre: 'SAMSUNG QB65R',
+      extremo: 'pantalla',
+    });
+    assert.equal(b.equipos.at(-1)!.es_nuevo, true);
+    assert.equal(b.equipos.at(-1)!.cantidad, 1);
+    assert.equal(b.equipos.at(-1)!.posicion_confirmada, false, 'sin colocar: se deduce');
+    assert.equal(quitarAlta(b, { tipo: 'equipo', id: 'tmp-eq' }).equipos.length, 2);
+  });
+});
+
+describe('la rotación', () => {
+  const conSilla = () => anadirMuebles(base(), SILLA, ids(1));
+
+  it('se normaliza a [0, 360)', () => {
+    const g = (grados: number) =>
+      girar(conSilla(), { tipo: 'mueble', id: 'tmp-0' }, grados).mobiliario[0].rotacion_grados;
+    assert.equal(g(-15), 345);
+    assert.equal(g(360), 0);
+    assert.equal(g(725), 5);
+  });
+
+  it('girar no mueve el ancla', () => {
+    const colocada = moverMueble(conSilla(), 'tmp-0', { x_m: 1.2, y_m: 0.8 });
+    const girada = girar(colocada, { tipo: 'mueble', id: 'tmp-0' }, 90);
+    assert.deepEqual(
+      [girada.mobiliario[0].x_m, girada.mobiliario[0].y_m, girada.mobiliario[0].z_m],
+      [1.2, 0.8, 0],
+    );
+  });
+
+  it('cada elemento gira por su cuenta', () => {
+    let b = anadirMuebles(base(), SILLA, ids(2));
+    b = girar(b, { tipo: 'mueble', id: 'tmp-0' }, 90);
+    b = girar(b, { tipo: 'equipo', id: 'tv' }, 180);
+    assert.equal(b.mobiliario[0].rotacion_grados, 90);
+    assert.equal(b.mobiliario[1].rotacion_grados, 0);
+    assert.equal(b.equipos.find((e) => e.id === 'tv')!.rotacion_grados, 180);
+    assert.equal(b.mesa_rotacion_grados, 0, 'la mesa no se entera');
+  });
+
+  it('lo que no tiene orientación visible no gira: nada de controles falsos', () => {
+    const b = base();
+    assert.equal(girar(b, { tipo: 'sala' }, 90), b);
+    assert.equal(girar(b, { tipo: 'toma', id: '12' }, 90), b);
+    assert.equal(girar(b, null, 90), b);
+  });
+});
+
+describe('colocar sin ratón', () => {
+  it('coloca en el centro de la sala lo seleccionado', () => {
+    const b = colocarEnElCentro(anadirMuebles(base(), SILLA, ids(1)), {
+      tipo: 'mueble',
+      id: 'tmp-0',
+    });
+    assert.deepEqual([b.mobiliario[0].x_m, b.mobiliario[0].y_m], [2.4, 1.3]);
+    assert.equal(b.mobiliario[0].posicion_confirmada, true);
+  });
+
+  it('desde ahí las flechas lo ajustan al decímetro', () => {
+    let b = colocarEnElCentro(anadirMuebles(base(), SILLA, ids(1)), {
+      tipo: 'mueble',
+      id: 'tmp-0',
+    });
+    b = desplazarMueble(b, 'tmp-0', { dx_m: PASO_REJILLA_M, dy_m: 0 });
+    assert.equal(b.mobiliario[0].x_m, 2.5);
+  });
+
+  it('borrar la coordenada lo devuelve a Por colocar', () => {
+    let b = colocarEnElCentro(anadirMuebles(base(), SILLA, ids(1)), {
+      tipo: 'mueble',
+      id: 'tmp-0',
+    });
+    b = editarMueble(b, 'tmp-0', { x_m: null });
+    assert.equal(estadoDelMueble(b.mobiliario[0]), 'sin_colocar');
+    assert.equal(b.mobiliario[0].y_m, null, 'y no se queda media colocada');
+  });
+});
+
+describe('las sillas derivadas se materializan sin moverse', () => {
+  it('salen exactamente donde las dibujaba el croquis', () => {
+    const mesa = mesaDeLaSala(SALA)!;
+    const sillas = sillasAlrededor(mesa, SALA.aforo!);
+    const b = materializarSillas(base(), sillas, SILLA, ids(sillas.length));
+
+    assert.equal(b.sillas_modo, 'manuales');
+    assert.equal(b.mobiliario.length, sillas.length, 'una fila por silla, ni una más');
+    assert.deepEqual(
+      b.mobiliario.map((m) => [m.x_m, m.y_m]),
+      sillas.map((s) => [s.x_m, s.y_m]),
+      'el croquis de antes y el de después son el mismo dibujo',
+    );
+    assert.ok(b.mobiliario.every((m) => m.posicion_confirmada && m.largo_m === 0.5));
+  });
+
+  it('no se materializa dos veces', () => {
+    const mesa = mesaDeLaSala(SALA)!;
+    const sillas = sillasAlrededor(mesa, SALA.aforo!);
+    const una = materializarSillas(base(), sillas, SILLA, ids(sillas.length));
+    assert.equal(materializarSillas(una, sillas, SILLA, ids(sillas.length, 'otra')), una);
+  });
+
+  it('con sillas explícitas el croquis deja de derivarlas', () => {
+    const mesa = mesaDeLaSala(SALA)!;
+    const sillas = sillasAlrededor(mesa, SALA.aforo!);
+    const b = materializarSillas(base(), sillas, SILLA, ids(sillas.length));
+    const escena = construirEscena(entradaCroquisDe(b, SALA, []));
+    assert.equal(escena.sillas.length, 0, 'ninguna derivada');
+    assert.equal(escena.muebles.length, sillas.length, 'y todas explícitas');
+    assert.deepEqual(
+      escena.muebles.map((m) => [m.x_m, m.y_m]).sort(),
+      sillas.map((s) => [s.x_m, s.y_m]).sort(),
+    );
+  });
+});
+
+describe('el patch discriminado', () => {
+  const patchDe = (b: BorradorPlano, original = base()) =>
+    construirPatch('sala-1', 3, original, b);
+
+  it('separa alta, cambio y baja en vez de mirarle el prefijo al id', () => {
+    const original = borradorDesde(
+      SALA,
+      [equipo('tv'), equipo('caja', { x_m: 2.35, y_m: 1.25, z_m: 0.73 }, true)],
+      [toma('12', 3, 2), toma('13')],
+      [
+        {
+          id: 'm-viejo',
+          sala_id: 'sala-1',
+          mobiliario_id: 'cat-silla',
+          nombre: 'Silla',
+          forma: 'circulo',
+          largo_m: 0.5,
+          ancho_m: 0.5,
+          alto_m: null,
+          x_m: 1,
+          y_m: 1,
+          z_m: 0,
+          rotacion_grados: 0,
+          posicion_confirmada: true,
+          orden: 0,
+        },
+      ],
+    );
+
+    let b = anadirMuebles(original, SILLA, ids(1));
+    b = girar(b, { tipo: 'mueble', id: 'm-viejo' }, 90);
+    const patch = patchDe(b, original);
+
+    assert.equal(patch.mobiliario_alta.length, 1);
+    assert.equal(patch.mobiliario_alta[0].id, 'tmp-0');
+    assert.equal(patch.mobiliario_cambio.length, 1);
+    assert.equal(patch.mobiliario_cambio[0].rotacion_grados, 90);
+    assert.deepEqual(patch.mobiliario_baja, []);
+
+    const conBaja = patchDe(quitarAlta(b, { tipo: 'mueble', id: 'm-viejo' }), original);
+    assert.deepEqual(conBaja.mobiliario_baja, ['m-viejo']);
+  });
+
+  it('un equipo nuevo va a equipos_alta con su articulo_id, no a equipos', () => {
+    const b = anadirEquipo(base(), {
+      id: 'tmp-eq',
+      articulo_id: 'art-9',
+      nombre: 'SAMSUNG QB65R',
+      extremo: 'pantalla',
+    });
+    const patch = patchDe(b);
+    assert.equal(patch.equipos.length, 0);
+    assert.equal(patch.equipos_alta.length, 1);
+    assert.equal(patch.equipos_alta[0].articulo_id, 'art-9');
+  });
+
+  it('el giro de un equipo ya guardado viaja como cambio', () => {
+    const patch = patchDe(girar(base(), { tipo: 'equipo', id: 'tv' }, 45));
+    assert.equal(patch.equipos.length, 1);
+    assert.equal(patch.equipos[0].rotacion_grados, 45);
+  });
+
+  it('sin cambios no hay nada que guardar, tampoco en mobiliario', () => {
+    assert.equal(hayCambios(patchDe(base())), false);
+    assert.equal(hayCambios(patchDe(anadirMuebles(base(), SILLA, ids(1)))), true);
+    assert.equal(hayCambios(patchDe(iniciarDiagrama(base(), 'desde_cero'))), true);
+  });
+
+  it('el inicio del diagrama viaja una sola vez y con su plantilla', () => {
+    const patch = patchDe(iniciarDiagrama(base(), 'plantilla', 'plantilla-7'));
+    assert.deepEqual(patch.inicio_diagrama, {
+      origen: 'plantilla',
+      plantilla_id: 'plantilla-7',
+    });
+  });
+
+  it('el modo de sillas solo viaja cuando cambia', () => {
+    assert.equal(patchDe(base()).sillas_modo, null);
+    const mesa = mesaDeLaSala(SALA)!;
+    const b = materializarSillas(base(), sillasAlrededor(mesa, 8), SILLA, ids(8));
+    assert.equal(patchDe(b).sillas_modo, 'manuales');
   });
 });
 

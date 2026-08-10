@@ -49,6 +49,7 @@ const SALA: Sala = {
   mesa_y_m: null,
   mesa_rotacion_grados: 0,
   diagrama_version: 0,
+  sillas_modo: 'derivadas',
 };
 
 const TOMA: TomaRed = {
@@ -71,6 +72,7 @@ const PANTALLA: EquipoEnSala = {
   extremo: 'pantalla',
   posicion: { x_m: 3, y_m: 0, z_m: 1.5 },
   posicion_confirmada: true,
+  rotacion_grados: 0,
   toma_red_id: null,
 };
 
@@ -83,6 +85,7 @@ const CAJA: EquipoEnSala = {
   extremo: 'caja_conexiones',
   posicion: { x_m: 3, y_m: 2, z_m: 0.75 },
   posicion_confirmada: true,
+  rotacion_grados: 0,
   toma_red_id: TOMA.id,
 };
 

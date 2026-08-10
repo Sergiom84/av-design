@@ -41,6 +41,7 @@ const esquemaEquipo = z.object({
   y_m: numeroPlano,
   z_m: numeroPlano,
   posicion_confirmada: z.boolean(),
+  rotacion_grados: z.number().finite(),
 });
 
 const esquemaToma = z.object({
@@ -72,6 +73,16 @@ const esquemaPatch = z.object({
   sala: esquemaSala.nullable(),
   equipos: z.array(esquemaEquipo).max(500),
   tomas: z.array(esquemaToma).max(500),
+  // Las altas y las bajas de mobiliario ya viajan en el patch, pero todavía
+  // no se aplican aquí. Se exigen vacías en vez de dejar que zod las quite en
+  // silencio: un guardado que dice `ok` habiendo tirado las cuatro sillas que
+  // el técnico acaba de añadir es peor que un guardado que falla.
+  equipos_alta: z.array(z.unknown()).max(0),
+  mobiliario_alta: z.array(z.unknown()).max(0),
+  mobiliario_cambio: z.array(z.unknown()).max(0),
+  mobiliario_baja: z.array(z.unknown()).max(0),
+  inicio_diagrama: z.null(),
+  sillas_modo: z.null(),
 });
 
 export type ResultadoGuardado =
@@ -154,7 +165,9 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       ancho_m: p.sala ? p.sala.ancho_m : Number(sala.ancho_m ?? 0),
       alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
     };
-    if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
+    if (coordenadasFueraDeSala({ sala: p.sala, equipos: p.equipos, tomas: p.tomas }, medidas).length > 0) {
+      return fallo('fuera');
+    }
 
     // Pertenencia: se cuenta contra la base, no contra lo que dice el patch.
     if (p.equipos.length > 0) {
@@ -197,7 +210,8 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       await tx`
         update sala_equipos set
           x_m = ${e.x_m}, y_m = ${e.y_m}, z_m = ${e.z_m},
-          posicion_confirmada = ${e.posicion_confirmada}
+          posicion_confirmada = ${e.posicion_confirmada},
+          rotacion_grados = ${normalizarGrados(e.rotacion_grados)}
         where id = ${e.id} and sala_id = ${p.sala_id}`;
     }
 

@@ -155,7 +155,13 @@ try {
     versionEsperada: version,
     sala: null,
     equipos: [],
+    equipos_alta: [],
+    mobiliario_alta: [],
+    mobiliario_cambio: [],
+    mobiliario_baja: [],
     tomas: [],
+    inicio_diagrama: null,
+    sillas_modo: null,
   });
 
   // --------------------------------------------------- 1 · guardado completo
@@ -178,7 +184,7 @@ try {
         mesa_y_m: 1.5,
         mesa_rotacion_grados: 450,
       },
-      equipos: [{ id: equipoId, x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
       tomas: [{ id: tomaId, x_m: 1.2, y_m: 0.4, z_m: 0 }],
     });
 
@@ -212,13 +218,13 @@ try {
 
     const primero = await invocar({
       ...patchBase(salaLegadoId, version),
-      equipos: [{ id: equipoId, x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(primero.ok, 'la primera pestaña guarda');
 
     const segundo = await invocar({
       ...patchBase(salaLegadoId, version),
-      equipos: [{ id: equipoId, x_m: 4, y_m: 4, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 4, y_m: 4, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(
       !segundo.ok && segundo.motivo === 'conflicto',
@@ -239,8 +245,8 @@ try {
     const conAjeno = await invocar({
       ...patchBase(salaLegadoId, version),
       equipos: [
-        { id: propio, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true },
-        { id: ajeno, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true },
+        { id: propio, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
+        { id: ajeno, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
       ],
     });
     afirmar(!conAjeno.ok && conAjeno.motivo === 'ajeno', 'un equipo de otra sala se rechaza');
@@ -264,15 +270,15 @@ try {
 
     const inventado = await invocar({
       ...patchBase(salaLegadoId, version),
-      equipos: [{ id: randomUUID(), x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: randomUUID(), x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(!inventado.ok && inventado.motivo === 'ajeno', 'un id inventado se rechaza');
 
     const repetido = await invocar({
       ...patchBase(salaLegadoId, version),
       equipos: [
-        { id: propio, x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true },
-        { id: propio, x_m: 3, y_m: 3, z_m: 0, posicion_confirmada: true },
+        { id: propio, x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
+        { id: propio, x_m: 3, y_m: 3, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
       ],
     });
     afirmar(!repetido.ok && repetido.motivo === 'ajeno', 'un id repetido se rechaza');
@@ -283,7 +289,7 @@ try {
     const noFinito = await invocar({
       ...patchBase(salaLegadoId, version),
       equipos: [
-        { id: propio, x_m: Number.NaN, y_m: 1, z_m: 0, posicion_confirmada: true },
+        { id: propio, x_m: Number.NaN, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
       ],
     });
     afirmar(!noFinito.ok && noFinito.motivo === 'invalido', 'una coordenada NaN se rechaza');
@@ -313,7 +319,7 @@ try {
         mesa_y_m: null,
         mesa_rotacion_grados: 0,
       },
-      equipos: [{ id: equipoId, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 2, y_m: 2, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(!r.ok && r.motivo === 'cerrado', 'la obra cerrada rechaza el guardado');
 
@@ -370,7 +376,7 @@ try {
           mesa_y_m: null,
           mesa_rotacion_grados: 0,
         },
-        equipos: [{ id: equipoId, x_m: 3, y_m: 3, z_m: 0, posicion_confirmada: true }],
+        equipos: [{ id: equipoId, x_m: 3, y_m: 3, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
         tomas: [{ id: tomaId, x_m: 1, y_m: 1, z_m: 0 }],
       });
     } catch (e) {
@@ -426,7 +432,7 @@ try {
 
     const enElBorde = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
-      equipos: [{ id: equipoId, x_m: 6, y_m: 4, z_m: 3, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 6, y_m: 4, z_m: 3, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(enElBorde.ok, 'el borde exacto entra: la pantalla va pegada a la pared');
     afirmar(Number((await equipoDe(equipoId)).x_m) === 6, 'y se escribe tal cual');
@@ -440,7 +446,7 @@ try {
       const version = await versionDe(salaLegadoId);
       const r = await invocar({
         ...patchBase(salaLegadoId, version),
-        equipos: [{ id: equipoId, ...punto, posicion_confirmada: true }],
+        equipos: [{ id: equipoId, ...punto, posicion_confirmada: true, rotacion_grados: 0 }],
       });
       afirmar(
         !r.ok && r.motivo === 'fuera',
@@ -458,7 +464,7 @@ try {
     const conMedidasNuevas = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
       sala: { ...medir, largo_m: 9, ancho_m: 6 },
-      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(
       conMedidasNuevas.ok,
@@ -470,7 +476,7 @@ try {
     const encogiendo = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
       sala: { ...medir, largo_m: 4, ancho_m: 3 },
-      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 8.5, y_m: 5.5, z_m: 1, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(
       !encogiendo.ok && encogiendo.motivo === 'fuera',
@@ -502,7 +508,7 @@ try {
     const sinMedir = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
       sala: { ...medir, largo_m: 0, ancho_m: 0, alto_m: 0 },
-      equipos: [{ id: equipoId, x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: true }],
+      equipos: [{ id: equipoId, x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 }],
     });
     afirmar(
       !sinMedir.ok && sinMedir.motivo === 'fuera',
@@ -512,7 +518,7 @@ try {
     // Control positivo: sin confirmar, la coordenada es un resto y no se juzga.
     const sinConfirmar = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
-      equipos: [{ id: equipoId, x_m: 99, y_m: 99, z_m: 99, posicion_confirmada: false }],
+      equipos: [{ id: equipoId, x_m: 99, y_m: 99, z_m: 99, posicion_confirmada: false, rotacion_grados: 0 }],
     });
     afirmar(
       sinConfirmar.ok,

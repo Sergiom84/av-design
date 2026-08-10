@@ -115,6 +115,16 @@ export interface Sala {
    * servidor rechaza la obsoleta: dos pestañas no se pisan en silencio.
    */
   diagrama_version: number;
+  /**
+   * Cuándo se decidió de dónde sale el plano. Nulo = la pestaña Diagrama
+   * todavía tiene que preguntar «desde cero o desde plantilla». Se pregunta
+   * una vez y no en cada visita.
+   */
+  diagrama_iniciado_en?: string | null;
+  diagrama_origen?: OrigenDiagrama | null;
+  diagrama_plantilla_id?: string | null;
+  /** Quién manda sobre las sillas. Nunca las dos fuentes a la vez. */
+  sillas_modo: SillasModo;
 }
 
 export interface PlantillaSala {
@@ -293,8 +303,91 @@ export interface EquipoEnSala {
    * ser teórica: se arrastra un equipo a la esquina y tiene que quedarse ahí.
    */
   posicion_confirmada: boolean;
+  /**
+   * Giro del símbolo sobre su ancla, en grados antihorarios y en [0, 360).
+   *
+   * Rotar no mueve el equipo: el ancla se queda donde está y solo cambia
+   * hacia dónde mira. Una pantalla en una esquina a 45°, un rack de costado
+   * o una barra de vídeo bajo la mesa necesitan orientación, y sin ella el
+   * plano de obra es aproximado justo donde se taladra.
+   */
+  rotacion_grados: number;
   /** En qué roseta de la sala pincha este equipo, si pincha en alguna. */
   toma_red_id?: string | null;
+  /**
+   * De qué línea de plantilla salió. Distingue lo heredado de lo añadido a
+   * mano y es lo que impide copiar dos veces la misma plantilla.
+   */
+  origen_plantilla_linea_id?: string | null;
+}
+
+/**
+ * Cómo se dibuja un mueble en planta. Una silla es el círculo de siempre;
+ * una mesa auxiliar, un rectángulo.
+ */
+export type FormaMueble = 'rectangulo' | 'circulo';
+
+/**
+ * De dónde salió el plano de la sala. Nulo con el diagrama ya iniciado = sala
+ * histórica cuya procedencia no puede demostrarse; no se inventa.
+ */
+export type OrigenDiagrama = 'desde_cero' | 'plantilla';
+
+/**
+ * Quién manda sobre las sillas. Nunca las dos fuentes a la vez: con
+ * `derivadas` el croquis las reparte desde el aforo y no hay filas; con
+ * `manuales` mandan las filas de `sala_mobiliario` y el aforo vuelve a ser
+ * solo la capacidad de la sala.
+ */
+export type SillasModo = 'derivadas' | 'manuales';
+
+/**
+ * Una referencia del catálogo de mobiliario.
+ *
+ * Deliberadamente fuera de `articulos`: una silla no se pide a un proveedor
+ * de audiovisuales, no tiene puertos y no entra en ninguna tirada. Meterla
+ * en el catálogo AV la haría aparecer entre los cables y los consumibles de
+ * cada obra.
+ */
+export interface MuebleCatalogo {
+  id: string;
+  clave: string;
+  nombre: string;
+  categoria: string;
+  palabras_clave: string | null;
+  forma: FormaMueble;
+  /** Nulas = sin medida por defecto. La instancia nace «Sin medir». */
+  largo_m_defecto: number | null;
+  ancho_m_defecto: number | null;
+  alto_m_defecto: number | null;
+}
+
+/**
+ * Un mueble físico de una sala. Ocho sillas son ocho de estos: cada una está
+ * en un sitio y mirando a un lado, así que no caben en una línea con
+ * `cantidad = 8`.
+ *
+ * Las medidas son un snapshot del catálogo tomado al crearlo: corregir mañana
+ * la silla del catálogo no puede deformar los planos ya dibujados.
+ */
+export interface MuebleEnSala {
+  id: string;
+  sala_id: string;
+  mobiliario_id: string | null;
+  nombre: string;
+  forma: FormaMueble;
+  /** Nulas mientras nadie lo mida. Sin medidas no se da por colocado. */
+  largo_m: number | null;
+  ancho_m: number | null;
+  alto_m: number | null;
+  /** Nulas mientras nadie lo coloque. La ausencia se propaga como ausencia. */
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+  rotacion_grados: number;
+  posicion_confirmada: boolean;
+  origen_plantilla_mobiliario_id?: string | null;
+  orden: number;
 }
 
 export interface Conexion {

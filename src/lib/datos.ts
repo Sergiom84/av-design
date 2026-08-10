@@ -86,6 +86,10 @@ function aSala(f: Fila): Sala {
     mesa_y_m: n(f.mesa_y_m),
     mesa_rotacion_grados: Number(f.mesa_rotacion_grados ?? 0),
     diagrama_version: Number(f.diagrama_version ?? 0),
+    diagrama_iniciado_en: f.diagrama_iniciado_en ? String(f.diagrama_iniciado_en) : null,
+    diagrama_origen: (f.diagrama_origen as Sala['diagrama_origen']) ?? null,
+    diagrama_plantilla_id: s(f.diagrama_plantilla_id),
+    sillas_modo: f.sillas_modo === 'manuales' ? 'manuales' : 'derivadas',
   };
 }
 
@@ -629,6 +633,8 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       z_m: Number(f.z_m ?? 0),
     },
     posicion_confirmada: f.posicion_confirmada === true,
+    rotacion_grados: Number(f.rotacion_grados ?? 0),
+    origen_plantilla_linea_id: s(f.origen_plantilla_linea_id),
     toma_red_id: s(f.toma_red_id),
   }));
 

@@ -16,8 +16,20 @@
  * planta. Todo lo que sale de aquí está en METROS.
  */
 
-import { normalizarGrados, type EntradaCroquis } from './croquis';
-import type { Conexion, Extremo, Punto, Sala, EquipoEnSala, TomaRed } from './tipos';
+import { normalizarGrados, type EntradaCroquis, type SillaCroquis } from './croquis';
+import type {
+  Conexion,
+  Extremo,
+  FormaMueble,
+  MuebleCatalogo,
+  MuebleEnSala,
+  OrigenDiagrama,
+  Punto,
+  Sala,
+  SillasModo,
+  EquipoEnSala,
+  TomaRed,
+} from './tipos';
 
 /**
  * El paso de la rejilla: 10 cm. Es la unidad con la que se mide una sala con
@@ -52,6 +64,8 @@ export const MARGEN_FUERA_M = 0;
 
 export interface EquipoBorrador {
   id: string;
+  /** Del catálogo AV. El servidor relee el artículo por aquí y no se fía del resto. */
+  articulo_id: string;
   nombre: string;
   extremo: Extremo;
   cantidad: number;
@@ -59,7 +73,52 @@ export interface EquipoBorrador {
   y_m: number;
   z_m: number;
   posicion_confirmada: boolean;
+  rotacion_grados: number;
   toma_red_id: string | null;
+  /**
+   * Alta que todavía no está en la base.
+   *
+   * Es un campo del dato y no un prefijo en el id a propósito: mirar el
+   * principio de una cadena que controla el navegador para decidir si algo se
+   * inserta o se actualiza es dejar que el navegador elija la sentencia SQL.
+   */
+  es_nuevo: boolean;
+}
+
+/**
+ * Un mueble del borrador.
+ *
+ * Todo lo que puede faltar es nulo y se queda nulo: un mueble sin medir no
+ * mide cero, y uno sin colocar no está en (0,0,0). Ese fue el error del
+ * triple cero de los equipos y no se repite aquí.
+ */
+export interface MuebleBorrador {
+  id: string;
+  mobiliario_id: string | null;
+  nombre: string;
+  forma: FormaMueble;
+  largo_m: number | null;
+  ancho_m: number | null;
+  alto_m: number | null;
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+  rotacion_grados: number;
+  posicion_confirmada: boolean;
+  origen_plantilla_mobiliario_id: string | null;
+  orden: number;
+  es_nuevo: boolean;
+}
+
+/** Qué falta para dar un mueble por colocado. Vacío = está puesto. */
+export function estadoDelMueble(
+  m: MuebleBorrador,
+): 'sin_medir' | 'sin_colocar' | 'colocado' {
+  if (m.largo_m == null || m.ancho_m == null || m.largo_m <= 0 || m.ancho_m <= 0) {
+    return 'sin_medir';
+  }
+  if (!m.posicion_confirmada || m.x_m == null || m.y_m == null) return 'sin_colocar';
+  return 'colocado';
 }
 
 export interface TomaBorrador {
@@ -86,13 +145,22 @@ export interface BorradorPlano {
   mesa_y_m: number | null;
   mesa_rotacion_grados: number;
   equipos: EquipoBorrador[];
+  mobiliario: MuebleBorrador[];
   tomas: TomaBorrador[];
+  /** Quién manda sobre las sillas. Nunca las dos fuentes a la vez. */
+  sillas_modo: SillasModo;
+  /**
+   * De dónde sale el plano, cuando se decide en esta sesión. Nulo = ya estaba
+   * decidido y no se vuelve a preguntar.
+   */
+  inicio: { origen: OrigenDiagrama; plantilla_id: string | null } | null;
 }
 
 export type Seleccion =
   | { tipo: 'sala' }
   | { tipo: 'mesa' }
   | { tipo: 'equipo'; id: string }
+  | { tipo: 'mueble'; id: string }
   | { tipo: 'toma'; id: string }
   | null;
 
@@ -101,6 +169,7 @@ export function borradorDesde(
   sala: Sala,
   equipos: EquipoEnSala[],
   tomas: TomaRed[],
+  muebles: MuebleEnSala[] = [],
 ): BorradorPlano {
   return {
     largo_m: sala.largo_m,
@@ -115,8 +184,11 @@ export function borradorDesde(
     mesa_x_m: sala.mesa_x_m != null && sala.mesa_y_m != null ? sala.mesa_x_m : null,
     mesa_y_m: sala.mesa_x_m != null && sala.mesa_y_m != null ? sala.mesa_y_m : null,
     mesa_rotacion_grados: normalizarGrados(sala.mesa_rotacion_grados),
+    sillas_modo: sala.sillas_modo,
+    inicio: null,
     equipos: equipos.map((e) => ({
       id: e.id,
+      articulo_id: e.articulo_id,
       nombre: e.nombre,
       extremo: e.extremo,
       cantidad: e.cantidad,
@@ -124,7 +196,26 @@ export function borradorDesde(
       y_m: e.posicion.y_m,
       z_m: e.posicion.z_m,
       posicion_confirmada: e.posicion_confirmada,
+      rotacion_grados: normalizarGrados(e.rotacion_grados),
       toma_red_id: e.toma_red_id ?? null,
+      es_nuevo: false,
+    })),
+    mobiliario: muebles.map((m) => ({
+      id: m.id,
+      mobiliario_id: m.mobiliario_id,
+      nombre: m.nombre,
+      forma: m.forma,
+      largo_m: m.largo_m,
+      ancho_m: m.ancho_m,
+      alto_m: m.alto_m,
+      x_m: m.x_m,
+      y_m: m.y_m,
+      z_m: m.z_m,
+      rotacion_grados: normalizarGrados(m.rotacion_grados),
+      posicion_confirmada: m.posicion_confirmada,
+      origen_plantilla_mobiliario_id: m.origen_plantilla_mobiliario_id ?? null,
+      orden: m.orden,
+      es_nuevo: false,
     })),
     tomas: tomas.map((t) => {
       // Situada o no situada, sin estados intermedios: una x sin y no dibuja
@@ -169,17 +260,35 @@ export function entradaCroquisDe(
       mesa_x_m: borrador.mesa_x_m,
       mesa_y_m: borrador.mesa_y_m,
       mesa_rotacion_grados: borrador.mesa_rotacion_grados,
+      sillas_modo: borrador.sillas_modo,
     },
     equipos: borrador.equipos.map((e) => ({
       id: e.id,
       sala_id: sala.id,
-      articulo_id: '',
+      articulo_id: e.articulo_id,
       nombre: e.nombre,
       cantidad: e.cantidad,
       extremo: e.extremo,
       posicion: { x_m: e.x_m, y_m: e.y_m, z_m: e.z_m },
       posicion_confirmada: e.posicion_confirmada,
+      rotacion_grados: e.rotacion_grados,
       toma_red_id: e.toma_red_id,
+    })),
+    muebles: borrador.mobiliario.map((m) => ({
+      id: m.id,
+      sala_id: sala.id,
+      mobiliario_id: m.mobiliario_id,
+      nombre: m.nombre,
+      forma: m.forma,
+      largo_m: m.largo_m,
+      ancho_m: m.ancho_m,
+      alto_m: m.alto_m,
+      x_m: m.x_m,
+      y_m: m.y_m,
+      z_m: m.z_m,
+      rotacion_grados: m.rotacion_grados,
+      posicion_confirmada: m.posicion_confirmada,
+      orden: m.orden,
     })),
     conexiones,
     tomas: borrador.tomas.map((t) => ({
@@ -505,6 +614,301 @@ export function girarMesa(borrador: BorradorPlano, grados: number): BorradorPlan
   return { ...borrador, mesa_rotacion_grados: normalizarGrados(grados) };
 }
 
+// ---------------------------------------------------------------------
+// Altas, bajas y giro
+//
+// Añadir no escribe en la base: entra en el borrador con un id temporal y
+// se guarda en la misma transacción que el resto. Hasta entonces se puede
+// deshacer, que es lo que espera quien acaba de teclear «silla» y ve que no
+// era esa.
+// ---------------------------------------------------------------------
+
+/**
+ * Máximo de muebles que se dan de alta de una vez.
+ *
+ * Es un tope de teclazo, no un límite del dominio: la sala más grande del
+ * inventario no llega a cincuenta sillas, y un 500 escrito de más en la
+ * casilla de cantidad no puede convertirse en 500 filas arrastrables.
+ */
+export const MAXIMO_ALTA_MOBILIARIO = 50;
+
+/**
+ * Da de alta uno o varios muebles.
+ *
+ * Cada unidad es una fila: ocho sillas son ocho instancias arrastrables y
+ * rotables, no una línea con `cantidad = 8`. Las medidas se copian del
+ * catálogo y se quedan como snapshot; el catálogo puede corregirse mañana sin
+ * deformar los planos ya dibujados.
+ *
+ * Los ids los pone quien llama (`crypto.randomUUID()` en el navegador): esta
+ * función es pura y no puede inventar identificadores.
+ */
+export function anadirMuebles(
+  borrador: BorradorPlano,
+  catalogo: MuebleCatalogo,
+  ids: string[],
+): BorradorPlano {
+  const nuevos = ids.slice(0, MAXIMO_ALTA_MOBILIARIO).map((id, i) => ({
+    id,
+    mobiliario_id: catalogo.id,
+    nombre: catalogo.nombre,
+    forma: catalogo.forma,
+    largo_m: catalogo.largo_m_defecto,
+    ancho_m: catalogo.ancho_m_defecto,
+    alto_m: catalogo.alto_m_defecto,
+    x_m: null,
+    y_m: null,
+    z_m: null,
+    rotacion_grados: 0,
+    posicion_confirmada: false,
+    origen_plantilla_mobiliario_id: null,
+    orden: borrador.mobiliario.length + i,
+    es_nuevo: true,
+  }));
+  if (nuevos.length === 0) return borrador;
+  return { ...borrador, mobiliario: [...borrador.mobiliario, ...nuevos] };
+}
+
+/**
+ * Da de alta un equipo del catálogo AV.
+ *
+ * Se guardan el `articulo_id` y lo que hace falta para pintarlo, pero el
+ * servidor no se fía de nada de esto: relee el artículo por su id y exige que
+ * esté activo y sea de tipo equipo. Lo de aquí es para que el técnico lo vea
+ * en el lateral antes de guardar.
+ */
+export function anadirEquipo(
+  borrador: BorradorPlano,
+  equipo: { id: string; articulo_id: string; nombre: string; extremo: Extremo },
+): BorradorPlano {
+  return {
+    ...borrador,
+    equipos: [
+      ...borrador.equipos,
+      {
+        ...equipo,
+        cantidad: 1,
+        x_m: 0,
+        y_m: 0,
+        z_m: 0,
+        // Sin confirmar: el croquis lo deduce del extremo y lo dibuja
+        // discontinuo hasta que alguien lo coloque.
+        posicion_confirmada: false,
+        rotacion_grados: 0,
+        toma_red_id: null,
+        es_nuevo: true,
+      },
+    ],
+  };
+}
+
+/**
+ * Quita un alta que todavía no está guardada.
+ *
+ * Solo alcanza a lo temporal. Un equipo persistido no se borra desde el plano:
+ * puede tener conexiones colgando, y sus bajas viven en la pestaña
+ * Equipamiento con sus avisos. Un mueble persistido sí se puede quitar, porque
+ * no es extremo de ninguna tirada.
+ */
+export function quitarAlta(borrador: BorradorPlano, seleccion: Seleccion): BorradorPlano {
+  if (seleccion?.tipo === 'equipo') {
+    const e = borrador.equipos.find((x) => x.id === seleccion.id);
+    if (!e?.es_nuevo) return borrador;
+    return { ...borrador, equipos: borrador.equipos.filter((x) => x.id !== seleccion.id) };
+  }
+  if (seleccion?.tipo === 'mueble') {
+    if (!borrador.mobiliario.some((x) => x.id === seleccion.id)) return borrador;
+    return {
+      ...borrador,
+      mobiliario: borrador.mobiliario.filter((x) => x.id !== seleccion.id),
+    };
+  }
+  return borrador;
+}
+
+/** Coloca un mueble. La primera colocación es la que lo confirma. */
+export function moverMueble(
+  borrador: BorradorPlano,
+  id: string,
+  punto: { x_m: number; y_m: number; z_m?: number },
+  { ajustar = true, paso = PASO_REJILLA_M }: { ajustar?: boolean; paso?: number } = {},
+): BorradorPlano {
+  let tocado = false;
+  const mobiliario = borrador.mobiliario.map((m) => {
+    if (m.id !== id) return m;
+    tocado = true;
+    const dentro = limitarALaSala(
+      {
+        x_m: ajustar ? ajustarARejilla(punto.x_m, paso) : punto.x_m,
+        y_m: ajustar ? ajustarARejilla(punto.y_m, paso) : punto.y_m,
+        z_m: punto.z_m ?? m.z_m ?? 0,
+      },
+      borrador,
+    );
+    return { ...m, ...dentro, posicion_confirmada: true };
+  });
+  return tocado ? { ...borrador, mobiliario } : borrador;
+}
+
+/** Desplaza un mueble ya colocado. Uno sin colocar no está en ningún sitio. */
+export function desplazarMueble(
+  borrador: BorradorPlano,
+  id: string,
+  paso: { dx_m: number; dy_m: number },
+  opciones?: { ajustar?: boolean; paso?: number },
+): BorradorPlano {
+  const m = borrador.mobiliario.find((x) => x.id === id);
+  if (!m || m.x_m == null || m.y_m == null) return borrador;
+  return moverMueble(
+    borrador,
+    id,
+    { ...desplazado({ x_m: m.x_m, y_m: m.y_m }, paso, opciones), z_m: m.z_m ?? 0 },
+    { ajustar: false },
+  );
+}
+
+/** Edita los campos de un mueble desde el inspector. */
+export function editarMueble(
+  borrador: BorradorPlano,
+  id: string,
+  cambios: Partial<
+    Pick<
+      MuebleBorrador,
+      'nombre' | 'largo_m' | 'ancho_m' | 'alto_m' | 'x_m' | 'y_m' | 'z_m' | 'posicion_confirmada'
+    >
+  >,
+): BorradorPlano {
+  const mobiliario = borrador.mobiliario.map((m) => {
+    if (m.id !== id) return m;
+    const combinado = { ...m, ...cambios };
+    // Igual que en las rosetas: quitar la coordenada lo devuelve a «sin
+    // colocar» en vez de dejarlo medio situado.
+    if (combinado.x_m == null || combinado.y_m == null) {
+      return { ...combinado, x_m: null, y_m: null, z_m: null, posicion_confirmada: false };
+    }
+    const dentro = limitarALaSala(
+      { x_m: combinado.x_m, y_m: combinado.y_m, z_m: combinado.z_m ?? 0 },
+      borrador,
+    );
+    return {
+      ...combinado,
+      ...dentro,
+      posicion_confirmada:
+        cambios.posicion_confirmada ??
+        (cambios.x_m != null || cambios.y_m != null ? true : combinado.posicion_confirmada),
+    };
+  });
+  return { ...borrador, mobiliario };
+}
+
+/**
+ * Gira un elemento sobre su ancla.
+ *
+ * Girar no mueve nada: x, y y z se quedan como estaban y solo cambia hacia
+ * dónde mira el símbolo. El ancla sigue dentro de la sala aunque el dibujo
+ * sobresalga, que es el mismo criterio que con la pantalla pegada a la pared.
+ */
+export function girar(
+  borrador: BorradorPlano,
+  seleccion: Seleccion,
+  grados: number,
+): BorradorPlano {
+  const g = normalizarGrados(grados);
+  if (seleccion?.tipo === 'mesa') return girarMesa(borrador, g);
+  if (seleccion?.tipo === 'equipo') {
+    return {
+      ...borrador,
+      equipos: borrador.equipos.map((e) =>
+        e.id === seleccion.id ? { ...e, rotacion_grados: g } : e,
+      ),
+    };
+  }
+  if (seleccion?.tipo === 'mueble') {
+    return {
+      ...borrador,
+      mobiliario: borrador.mobiliario.map((m) =>
+        m.id === seleccion.id ? { ...m, rotacion_grados: g } : m,
+      ),
+    };
+  }
+  // La sala no gira y una roseta sin símbolo orientado tampoco: un control
+  // que no produce ningún cambio visible es un control falso.
+  return borrador;
+}
+
+/**
+ * Coloca en el centro de la sala lo que esté seleccionado.
+ *
+ * Es la alternativa accesible al arrastre: con teclado o desde el móvil se
+ * selecciona en el lateral, se coloca en el centro y desde ahí se ajusta con
+ * las flechas o escribiendo la coordenada.
+ */
+export function colocarEnElCentro(
+  borrador: BorradorPlano,
+  seleccion: Seleccion,
+): BorradorPlano {
+  const centro = { x_m: borrador.largo_m / 2, y_m: borrador.ancho_m / 2 };
+  if (seleccion?.tipo === 'equipo') return moverEquipo(borrador, seleccion.id, centro);
+  if (seleccion?.tipo === 'mueble') return moverMueble(borrador, seleccion.id, centro);
+  if (seleccion?.tipo === 'toma') return moverToma(borrador, seleccion.id, centro);
+  if (seleccion?.tipo === 'mesa') return moverMesa(borrador, centro);
+  return borrador;
+}
+
+/**
+ * Convierte las sillas derivadas del aforo en muebles editables.
+ *
+ * Las posiciones NO se recalculan aquí: entran las que ya dibuja
+ * `sillasAlrededor()` en `croquis.ts`, que es la geometría con pruebas. Por
+ * eso la silla materializada cae exactamente donde estaba antes de tocarla:
+ * el croquis de antes y el de después son el mismo dibujo.
+ *
+ * Al terminar, el modo pasa a `manuales` y el aforo vuelve a ser solo la
+ * capacidad de la sala: cambiarlo ya no añade, borra ni recoloca sillas
+ * reales.
+ */
+export function materializarSillas(
+  borrador: BorradorPlano,
+  sillas: SillaCroquis[],
+  catalogo: MuebleCatalogo,
+  ids: string[],
+): BorradorPlano {
+  if (borrador.sillas_modo === 'manuales') return borrador;
+  const nuevas = sillas.slice(0, ids.length).map((s, i) => ({
+    id: ids[i],
+    mobiliario_id: catalogo.id,
+    nombre: catalogo.nombre,
+    forma: catalogo.forma,
+    // El diámetro del círculo que ya dibuja el croquis, no una medida
+    // inventada: es la misma silla, ahora editable.
+    largo_m: alCentimetro(s.radio_m * 2),
+    ancho_m: alCentimetro(s.radio_m * 2),
+    alto_m: catalogo.alto_m_defecto,
+    x_m: alCentimetro(s.x_m),
+    y_m: alCentimetro(s.y_m),
+    z_m: 0,
+    rotacion_grados: 0,
+    posicion_confirmada: true,
+    origen_plantilla_mobiliario_id: null,
+    orden: borrador.mobiliario.length + i,
+    es_nuevo: true,
+  }));
+  return {
+    ...borrador,
+    sillas_modo: 'manuales',
+    mobiliario: [...borrador.mobiliario, ...nuevas],
+  };
+}
+
+/** Deja constancia de cómo se preparó el plano. Se decide una sola vez. */
+export function iniciarDiagrama(
+  borrador: BorradorPlano,
+  origen: OrigenDiagrama,
+  plantilla_id: string | null = null,
+): BorradorPlano {
+  return { ...borrador, inicio: { origen, plantilla_id } };
+}
+
 /**
  * Cambia las medidas de la sala y arrastra lo que se quede fuera.
  *
@@ -527,6 +931,11 @@ export function cambiarMedidasSala(
   return {
     ...base,
     equipos: base.equipos.map((e) => ({ ...e, ...limitarALaSala(e, base) })),
+    mobiliario: base.mobiliario.map((m) =>
+      m.x_m == null || m.y_m == null
+        ? m
+        : { ...m, ...limitarALaSala({ x_m: m.x_m, y_m: m.y_m, z_m: m.z_m ?? 0 }, base) },
+    ),
     tomas: base.tomas.map((t) =>
       t.x_m == null || t.y_m == null
         ? t
@@ -582,6 +991,17 @@ export function avisosDelBorrador(borrador: BorradorPlano): string[] {
     );
   }
 
+  const sinMedirMuebles = borrador.mobiliario.filter(
+    (m) => estadoDelMueble(m) === 'sin_medir',
+  ).length;
+  if (sinMedirMuebles > 0) {
+    avisos.push(
+      sinMedirMuebles === 1
+        ? 'Un mueble no tiene largo y ancho: no se puede dar por colocado.'
+        : `${sinMedirMuebles} muebles no tienen largo y ancho: no se pueden dar por colocados.`,
+    );
+  }
+
   const estimados = borrador.equipos.filter((e) => !e.posicion_confirmada).length;
   if (estimados > 0) {
     avisos.push(
@@ -604,6 +1024,38 @@ export interface PatchEquipoPlano {
   y_m: number;
   z_m: number;
   posicion_confirmada: boolean;
+  rotacion_grados: number;
+}
+
+/**
+ * Un equipo que todavía no existe. Viaja el `articulo_id` y el id temporal, y
+ * nada más: el nombre, la categoría y el extremo los vuelve a sacar el
+ * servidor del catálogo. Un nombre que manda el navegador es un nombre que
+ * puede no corresponder con la referencia que se va a pedir.
+ */
+export interface PatchEquipoAlta extends PatchEquipoPlano {
+  articulo_id: string;
+  extremo: Extremo;
+}
+
+export interface PatchMueblePlano {
+  id: string;
+  nombre: string;
+  largo_m: number | null;
+  ancho_m: number | null;
+  alto_m: number | null;
+  x_m: number | null;
+  y_m: number | null;
+  z_m: number | null;
+  rotacion_grados: number;
+  posicion_confirmada: boolean;
+  orden: number;
+}
+
+/** Un mueble nuevo. `mobiliario_id` es lo único que el servidor relee. */
+export interface PatchMuebleAlta extends PatchMueblePlano {
+  mobiliario_id: string | null;
+  forma: FormaMueble;
 }
 
 export interface PatchTomaPlano {
@@ -628,8 +1080,24 @@ export interface PatchPlano {
     mesa_y_m: number | null;
     mesa_rotacion_grados: number;
   } | null;
+  /**
+   * Altas y cambios van en listas distintas y no se distinguen por un prefijo
+   * en el id. Mirar cómo empieza una cadena que controla el navegador para
+   * decidir si algo se inserta o se actualiza es dejar que el navegador elija
+   * la sentencia SQL: mandar `nuevo-<uuid de otra sala>` convertiría un
+   * `update` ajeno en un `insert` propio, o al revés.
+   */
   equipos: PatchEquipoPlano[];
+  equipos_alta: PatchEquipoAlta[];
+  mobiliario_cambio: PatchMueblePlano[];
+  mobiliario_alta: PatchMuebleAlta[];
+  /** Solo ids: para borrar no hace falta nada más, y así no se puede colar otra cosa. */
+  mobiliario_baja: string[];
   tomas: PatchTomaPlano[];
+  /** Se decide una vez. Nulo = el diagrama ya estaba iniciado. */
+  inicio_diagrama: { origen: OrigenDiagrama; plantilla_id: string | null } | null;
+  /** Nulo = las sillas siguen como estaban. Solo se manda al materializarlas. */
+  sillas_modo: SillasModo | null;
 }
 
 /**
@@ -659,25 +1127,82 @@ export function construirPatch(
     original.mesa_y_m !== borrador.mesa_y_m ||
     original.mesa_rotacion_grados !== borrador.mesa_rotacion_grados;
 
+  const geometriaEquipo = (e: EquipoBorrador): PatchEquipoPlano => ({
+    id: e.id,
+    x_m: e.x_m,
+    y_m: e.y_m,
+    z_m: e.z_m,
+    posicion_confirmada: e.posicion_confirmada,
+    rotacion_grados: e.rotacion_grados,
+  });
+
   const antes = new Map(original.equipos.map((e) => [e.id, e]));
+  const equipos_alta = borrador.equipos
+    .filter((e) => e.es_nuevo)
+    .map((e) => ({ ...geometriaEquipo(e), articulo_id: e.articulo_id, extremo: e.extremo }));
+
   const equipos = borrador.equipos
     .filter((e) => {
+      if (e.es_nuevo) return false;
       const a = antes.get(e.id);
       return (
         !a ||
         a.x_m !== e.x_m ||
         a.y_m !== e.y_m ||
         a.z_m !== e.z_m ||
-        a.posicion_confirmada !== e.posicion_confirmada
+        a.posicion_confirmada !== e.posicion_confirmada ||
+        a.rotacion_grados !== e.rotacion_grados
       );
     })
-    .map((e) => ({
-      id: e.id,
-      x_m: e.x_m,
-      y_m: e.y_m,
-      z_m: e.z_m,
-      posicion_confirmada: e.posicion_confirmada,
+    .map(geometriaEquipo);
+
+  const geometriaMueble = (m: MuebleBorrador): PatchMueblePlano => ({
+    id: m.id,
+    nombre: m.nombre,
+    largo_m: m.largo_m,
+    ancho_m: m.ancho_m,
+    alto_m: m.alto_m,
+    x_m: m.x_m,
+    y_m: m.y_m,
+    z_m: m.z_m,
+    rotacion_grados: m.rotacion_grados,
+    posicion_confirmada: m.posicion_confirmada,
+    orden: m.orden,
+  });
+
+  const mueblesAntes = new Map(original.mobiliario.map((m) => [m.id, m]));
+  const mobiliario_alta = borrador.mobiliario
+    .filter((m) => m.es_nuevo)
+    .map((m) => ({
+      ...geometriaMueble(m),
+      mobiliario_id: m.mobiliario_id,
+      forma: m.forma,
     }));
+
+  const mobiliario_cambio = borrador.mobiliario
+    .filter((m) => {
+      if (m.es_nuevo) return false;
+      const a = mueblesAntes.get(m.id);
+      if (!a) return true;
+      return (
+        a.nombre !== m.nombre ||
+        a.largo_m !== m.largo_m ||
+        a.ancho_m !== m.ancho_m ||
+        a.alto_m !== m.alto_m ||
+        a.x_m !== m.x_m ||
+        a.y_m !== m.y_m ||
+        a.z_m !== m.z_m ||
+        a.rotacion_grados !== m.rotacion_grados ||
+        a.posicion_confirmada !== m.posicion_confirmada ||
+        a.orden !== m.orden
+      );
+    })
+    .map(geometriaMueble);
+
+  const vivos = new Set(borrador.mobiliario.map((m) => m.id));
+  const mobiliario_baja = original.mobiliario
+    .filter((m) => !vivos.has(m.id))
+    .map((m) => m.id);
 
   const tomasAntes = new Map(original.tomas.map((t) => [t.id, t]));
   const tomas = borrador.tomas
@@ -705,7 +1230,13 @@ export function construirPatch(
         }
       : null,
     equipos,
+    equipos_alta,
+    mobiliario_alta,
+    mobiliario_cambio,
+    mobiliario_baja,
     tomas,
+    inicio_diagrama: borrador.inicio,
+    sillas_modo: original.sillas_modo !== borrador.sillas_modo ? borrador.sillas_modo : null,
   };
 }
 
@@ -755,13 +1286,14 @@ const sinMedir = (m: MedidasSala): boolean => !(m.largo_m > 0) || !(m.ancho_m > 
  * cuando el rechazo llega por otro sitio.
  */
 export function coordenadasFueraDeSala(
-  patch: Pick<PatchPlano, 'sala' | 'equipos' | 'tomas'>,
+  patch: Pick<PatchPlano, 'sala' | 'equipos' | 'tomas'> &
+    Partial<Pick<PatchPlano, 'equipos_alta' | 'mobiliario_alta' | 'mobiliario_cambio'>>,
   medidas: MedidasSala,
 ): string[] {
   const problemas: string[] = [];
   const { largo_m, ancho_m, alto_m } = medidas;
 
-  for (const e of patch.equipos) {
+  for (const e of [...patch.equipos, ...(patch.equipos_alta ?? [])]) {
     // Un equipo sin confirmar no dice dónde está: el croquis lo deduce del
     // extremo y sus coordenadas son un resto. Solo se exige el rectángulo a
     // lo que alguien colocó, que es lo que de verdad alimenta los metros.
@@ -795,6 +1327,29 @@ export function coordenadasFueraDeSala(
     }
   }
 
+  // El mueble se juzga por su ANCLA, igual que el equipo: el símbolo puede
+  // sobresalir —una mesa arrimada a la pared— pero el punto que lo sitúa no.
+  for (const m of [...(patch.mobiliario_alta ?? []), ...(patch.mobiliario_cambio ?? [])]) {
+    const sinSituar = m.x_m == null || m.y_m == null;
+    if (sinSituar) {
+      if (m.posicion_confirmada) {
+        problemas.push(`El mueble ${m.id} se da por colocado sin coordenadas.`);
+      }
+      continue;
+    }
+    if (sinMedir(medidas)) {
+      problemas.push(`El mueble ${m.id} se coloca en una sala sin medir.`);
+      continue;
+    }
+    if (
+      fueraDe(m.x_m as number, largo_m) ||
+      fueraDe(m.y_m as number, ancho_m) ||
+      fueraDe(m.z_m ?? 0, alto_m)
+    ) {
+      problemas.push(`El mueble ${m.id} queda fuera de la sala.`);
+    }
+  }
+
   if (patch.sala) {
     const { mesa_x_m, mesa_y_m } = patch.sala;
     if ((mesa_x_m == null) !== (mesa_y_m == null)) {
@@ -813,7 +1368,17 @@ export function coordenadasFueraDeSala(
 
 /** ¿Hay algo que guardar? Es lo que enciende el botón y la advertencia al salir. */
 export function hayCambios(patch: PatchPlano): boolean {
-  return patch.sala !== null || patch.equipos.length > 0 || patch.tomas.length > 0;
+  return (
+    patch.sala !== null ||
+    patch.equipos.length > 0 ||
+    patch.equipos_alta.length > 0 ||
+    patch.mobiliario_alta.length > 0 ||
+    patch.mobiliario_cambio.length > 0 ||
+    patch.mobiliario_baja.length > 0 ||
+    patch.tomas.length > 0 ||
+    patch.inicio_diagrama !== null ||
+    patch.sillas_modo !== null
+  );
 }
 
 /**

@@ -19,7 +19,16 @@
  *   El origen es la esquina inferior izquierda de la sala vista en planta.
  */
 
-import type { Conexion, EquipoEnSala, Extremo, Sala, Senal, TomaRed } from './tipos';
+import type {
+  Conexion,
+  EquipoEnSala,
+  Extremo,
+  FormaMueble,
+  MuebleEnSala,
+  Sala,
+  Senal,
+  TomaRed,
+} from './tipos';
 
 /** Un rectángulo en planta, en metros, por su esquina inferior izquierda. */
 export interface Rectangulo {
@@ -49,6 +58,23 @@ export interface SillaCroquis {
   radio_m: number;
 }
 
+/**
+ * Un mueble en planta: la silla, la mesa auxiliar, el atril.
+ *
+ * Va por su ancla y su giro, igual que los equipos. Un mueble sin medir o sin
+ * colocar no llega hasta aquí: el croquis dibuja lo que se sabe.
+ */
+export interface MuebleCroquis {
+  id: string;
+  nombre: string;
+  forma: FormaMueble;
+  x_m: number;
+  y_m: number;
+  largo_m: number;
+  ancho_m: number;
+  rotacion_grados: number;
+}
+
 export interface EquipoCroquis {
   id: string;
   nombre: string;
@@ -64,6 +90,8 @@ export interface EquipoCroquis {
    * marca distinto: sirve para orientarse, no para taladrar.
    */
   estimada: boolean;
+  /** Giro del símbolo sobre su ancla. 0 = alineado con las paredes. */
+  rotacion_grados: number;
 }
 
 export interface TiradaCroquis {
@@ -97,7 +125,12 @@ export interface EscenaCroquis {
   titulo: string;
   sala: Rectangulo;
   mesa: MesaCroquis | null;
+  /**
+   * Las sillas derivadas del aforo. Vacío cuando la sala tiene sillas
+   * explícitas: las dos fuentes a la vez dibujarían cada silla dos veces.
+   */
   sillas: SillaCroquis[];
+  muebles: MuebleCroquis[];
   equipos: EquipoCroquis[];
   tomas: TomaCroquis[];
   tiradas: TiradaCroquis[];
@@ -276,6 +309,7 @@ export interface EntradaCroquis {
   equipos: EquipoEnSala[];
   conexiones: Conexion[];
   tomas: TomaRed[];
+  muebles?: MuebleEnSala[];
   /** Metros por conexión, ya calculados. Lo que devuelve `calcularConexion()`. */
   metrosPorConexion?: Map<string, number>;
 }
@@ -290,6 +324,7 @@ export function construirEscena({
   equipos,
   conexiones,
   tomas,
+  muebles = [],
   metrosPorConexion,
 }: EntradaCroquis): EscenaCroquis {
   const avisos: string[] = [];
@@ -310,9 +345,46 @@ export function construirEscena({
     avisos.push('Sin las medidas de la mesa no se dibujan ni la mesa ni las sillas.');
   }
 
-  const sillas = mesa && sala.aforo ? sillasAlrededor(mesa, sala.aforo) : [];
-  if (mesa && !sala.aforo) {
+  // Una sola fuente de sillas. Con `manuales` mandan las filas de mobiliario
+  // y el aforo vuelve a ser solo la capacidad: dibujar las dos daría dos
+  // sillas por cada sitio.
+  const derivadas = sala.sillas_modo !== 'manuales';
+  const sillas = derivadas && mesa && sala.aforo ? sillasAlrededor(mesa, sala.aforo) : [];
+  if (derivadas && mesa && !sala.aforo) {
     avisos.push('Sin aforo no se colocan las sillas.');
+  }
+
+  // Un mueble sin medir o sin colocar no se dibuja: se enseña en el lateral
+  // del editor, que es donde se completa, y no se inventa un rectángulo.
+  const mueblesDibujados: MuebleCroquis[] = muebles
+    .filter(
+      (m) =>
+        m.posicion_confirmada &&
+        m.x_m != null &&
+        m.y_m != null &&
+        m.largo_m != null &&
+        m.ancho_m != null &&
+        m.largo_m > 0 &&
+        m.ancho_m > 0,
+    )
+    .map((m) => ({
+      id: m.id,
+      nombre: m.nombre,
+      forma: m.forma,
+      x_m: redondear(m.x_m as number),
+      y_m: redondear(m.y_m as number),
+      largo_m: m.largo_m as number,
+      ancho_m: m.ancho_m as number,
+      rotacion_grados: normalizarGrados(m.rotacion_grados),
+    }));
+
+  const sinDibujar = muebles.length - mueblesDibujados.length;
+  if (sinDibujar > 0) {
+    avisos.push(
+      sinDibujar === 1
+        ? 'Un mueble no está medido o colocado y no se dibuja.'
+        : `${sinDibujar} muebles no están medidos o colocados y no se dibujan.`,
+    );
   }
 
   const dibujados: EquipoCroquis[] = equipos.map((e) => {
@@ -331,6 +403,7 @@ export function construirEscena({
       largo_m: tamano.largo_m,
       ancho_m: tamano.ancho_m,
       estimada,
+      rotacion_grados: normalizarGrados(e.rotacion_grados),
     };
   });
 
@@ -372,6 +445,7 @@ export function construirEscena({
     sala: rectSala,
     mesa,
     sillas,
+    muebles: mueblesDibujados,
     equipos: dibujados,
     tomas: tomasDibujadas,
     tiradas,

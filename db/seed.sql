@@ -1981,6 +1981,42 @@ insert into tecnico_roles (tecnico_id, rol)
 select id, 'recepcion' from tecnicos where nombre = 'Marcos' and fuente = 'csv'
 on conflict do nothing;
 
+-- Mobiliario: 4 referencias (data/mobiliario.csv)
+-- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.
+update catalogo_mobiliario set activo = false where fuente = 'csv' and clave not in ('silla', 'mesa-principal', 'mesa-rectangular', 'mesa-redonda');
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('silla', 'Silla', 'Asientos', 'silla sillas asiento butaca puesto', 'circulo', 0.5, 0.5, null, 10, 'csv')
+on conflict (clave) do update set
+  nombre = excluded.nombre, categoria = excluded.categoria,
+  palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
+  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
+where catalogo_mobiliario.fuente = 'csv';
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-principal', 'Mesa principal', 'Mesas', 'mesa principal junta reunion central', 'rectangulo', null, null, null, 20, 'csv')
+on conflict (clave) do update set
+  nombre = excluded.nombre, categoria = excluded.categoria,
+  palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
+  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
+where catalogo_mobiliario.fuente = 'csv';
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-rectangular', 'Mesa rectangular', 'Mesas', 'mesa rectangular auxiliar apoyo', 'rectangulo', null, null, null, 30, 'csv')
+on conflict (clave) do update set
+  nombre = excluded.nombre, categoria = excluded.categoria,
+  palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
+  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
+where catalogo_mobiliario.fuente = 'csv';
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-redonda', 'Mesa redonda', 'Mesas', 'mesa redonda circular', 'circulo', null, null, null, 40, 'csv')
+on conflict (clave) do update set
+  nombre = excluded.nombre, categoria = excluded.categoria,
+  palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
+  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
+where catalogo_mobiliario.fuente = 'csv';
+
 -- Plantillas de sala: 16 deducidas del inventario
 insert into plantillas_sala (nombre, tipologia, aforo, n_salas_reales, notas) values ('SALA TP · aforo 8', 'SALA TP', 8, 144, 'Deducida del inventario 2026. Faltan las medidas: rellenar largo, ancho y alto.') on conflict (nombre) do update set n_salas_reales = excluded.n_salas_reales;
 insert into plantilla_articulos (plantilla_id, categoria, modelo_texto, cantidad, opcional)

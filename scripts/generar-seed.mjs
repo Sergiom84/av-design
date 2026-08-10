@@ -714,6 +714,64 @@ if (hayCsvTecnicos) {
   sql.push('');
 }
 
+// --------------------------------------------------------------------------
+// Catálogo de mobiliario. No es catálogo AV y por eso no vive en `articulos`:
+// una silla no se pide a un proveedor de audiovisuales, no tiene puertos y no
+// entra en ninguna tirada. Misma convención `fuente` que puertos y precios: el
+// CSV manda sobre lo suyo, lo dado de alta desde la aplicación no se toca.
+//
+// Nunca se borra una fila csv: `sala_mobiliario` la referencia y borrarla y
+// recrearla con otro uuid dejaría el mobiliario de las salas sin catálogo. La
+// que desaparece del CSV pasa a inactiva, que es lo que le pasó de verdad.
+// --------------------------------------------------------------------------
+const hayCsvMobiliario = existsSync(data('mobiliario.csv'));
+const FORMAS_MOBILIARIO = new Set(['rectangulo', 'circulo']);
+const mobiliario = hayCsvMobiliario
+  ? leerCsv(data('mobiliario.csv'))
+      .filter((r) => r.clave && r.nombre)
+      .map((r) => ({
+        clave: r.clave,
+        nombre: r.nombre,
+        categoria: r.categoria || 'Mobiliario',
+        palabras_clave: r.palabras_clave || null,
+        forma: FORMAS_MOBILIARIO.has((r.forma || '').toLowerCase())
+          ? r.forma.toLowerCase()
+          : 'rectangulo',
+        // Vacío = sin medida por defecto. No se inventan las medidas del
+        // mobiliario del departamento: la instancia nace «Sin medir».
+        largo_m: r.largo_m,
+        ancho_m: r.ancho_m,
+        alto_m: r.alto_m,
+        orden: r.orden,
+      }))
+  : [];
+
+if (hayCsvMobiliario) {
+  sql.push(`-- Mobiliario: ${mobiliario.length} referencias (data/mobiliario.csv)`);
+  sql.push('-- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.');
+  const clavesCsv = mobiliario.map((m) => txt(m.clave)).join(', ');
+  sql.push(
+    `update catalogo_mobiliario set activo = false ` +
+      `where fuente = 'csv' and clave not in (${clavesCsv});`,
+  );
+  for (const m of mobiliario) {
+    sql.push(
+      `insert into catalogo_mobiliario ` +
+        `(clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)\n` +
+        `values (${txt(m.clave)}, ${txt(m.nombre)}, ${txt(m.categoria)}, ${txt(m.palabras_clave)}, ` +
+        `${txt(m.forma)}, ${num(m.largo_m)}, ${num(m.ancho_m)}, ${num(m.alto_m)}, ` +
+        `${num(m.orden) === 'null' ? 100 : num(m.orden)}, 'csv')\n` +
+        `on conflict (clave) do update set\n` +
+        `  nombre = excluded.nombre, categoria = excluded.categoria,\n` +
+        `  palabras_clave = excluded.palabras_clave, forma = excluded.forma,\n` +
+        `  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,\n` +
+        `  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true\n` +
+        `where catalogo_mobiliario.fuente = 'csv';`,
+    );
+  }
+  sql.push('');
+}
+
 sql.push(`-- Plantillas de sala: ${plantillas.size} deducidas del inventario`);
 for (const p of plantillas.values()) {
   sql.push(
@@ -853,6 +911,10 @@ console.log(`  cable/consum ${cables.length}`);
 console.log(`  plantillas   ${plantillas.size}`);
 if (hayCsvPuertos) console.log(`  puertos      ${puertos.length}`);
 if (hayCsvTecnicos) console.log(`  tecnicos     ${tecnicos.length}`);
+if (hayCsvMobiliario) {
+  const sinMedir = mobiliario.filter((m) => !m.largo_m || !m.ancho_m).length;
+  console.log(`  mobiliario   ${mobiliario.length}  (${sinMedir} sin medidas por defecto)`);
+}
 
 if (precios.length) {
   const presupuestos = new Set(precios.map((p) => p.presupuesto));

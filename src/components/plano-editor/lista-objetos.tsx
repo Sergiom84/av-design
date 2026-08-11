@@ -1,7 +1,13 @@
 'use client';
 
 import { ETIQUETA_EXTREMO } from '@/lib/tipos';
-import { estadoDelMueble, type BorradorPlano, type MuebleBorrador, type Seleccion } from '@/lib/plano-editor';
+import {
+  agruparEquipos,
+  estadoDelMueble,
+  type BorradorPlano,
+  type MuebleBorrador,
+  type Seleccion,
+} from '@/lib/plano-editor';
 
 /**
  * Los objetos de la sala, en una lista de botones de verdad.
@@ -97,22 +103,33 @@ export function ListaObjetos({
           </li>
         ))}
 
-        {borrador.equipos.map((e) => (
-          <li key={e.id}>
-            <Fila
-              activo={activo({ tipo: 'equipo', id: e.id })}
-              onClick={() => alSeleccionar({ tipo: 'equipo', id: e.id })}
-              titulo={e.cantidad > 1 ? `${e.nombre} ×${e.cantidad}` : e.nombre}
-              detalle={
-                (e.posicion_confirmada
-                  ? `${ETIQUETA_EXTREMO[e.extremo]} · X ${metros(e.x_m)} Y ${metros(e.y_m)}`
-                  : `${ETIQUETA_EXTREMO[e.extremo]} · posición estimada`) +
-                (e.rotacion_grados ? ` · ${e.rotacion_grados}°` : '') +
-                (e.es_nuevo ? ' · sin guardar' : '')
-              }
-              tenue={!e.posicion_confirmada}
-              arrastre={arrastreDeBandeja?.({ tipo: 'equipo', id: e.id })}
-            />
+        {agruparEquipos(borrador.equipos).map(({ titulo, equipos }) => (
+          <li key={titulo}>
+            <p className="px-3 pt-3 pb-1 t-etiqueta text-tinta-tenue">
+              {titulo} ({equipos.length})
+            </p>
+            <ul>
+              {equipos.map((e) => (
+                <li key={e.id}>
+                  <Fila
+                    activo={activo({ tipo: 'equipo', id: e.id })}
+                    onClick={() => alSeleccionar({ tipo: 'equipo', id: e.id })}
+                    // La marca ×N se conserva: una línea de cantidad mayor que
+                    // uno sigue siendo un solo ancla, no N objetos.
+                    titulo={e.cantidad > 1 ? `${e.nombre} ×${e.cantidad}` : e.nombre}
+                    detalle={
+                      (e.posicion_confirmada
+                        ? `${ETIQUETA_EXTREMO[e.extremo]} · X ${metros(e.x_m)} Y ${metros(e.y_m)}`
+                        : `${ETIQUETA_EXTREMO[e.extremo]} · posición estimada`) +
+                      (e.rotacion_grados ? ` · ${e.rotacion_grados}°` : '') +
+                      (e.es_nuevo ? ' · sin guardar' : '')
+                    }
+                    tenue={!e.posicion_confirmada}
+                    arrastre={arrastreDeBandeja?.({ tipo: 'equipo', id: e.id })}
+                  />
+                </li>
+              ))}
+            </ul>
           </li>
         ))}
 

@@ -1,6 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  hayResultados,
+  mensajeDeBusqueda,
+  permiteReintentar,
+  type EstadoBusqueda,
+} from '@/lib/combobox';
 
 /** Lo que se espera desde la última tecla antes de preguntar al servidor. */
 const ESPERA_MS = 150;
@@ -76,6 +82,9 @@ export function ComboboxRemoto({
   const [texto, setTexto] = useState('');
   const [elegido, setElegido] = useState<OpcionCombobox | null>(null);
   const [resultados, setResultados] = useState<OpcionCombobox[]>([]);
+  const [estado, setEstado] = useState<EstadoBusqueda>({ fase: 'inactivo' });
+  /** Se incrementa al reintentar: es lo que vuelve a lanzar la búsqueda. */
+  const [intento, setIntento] = useState(0);
   const [abierto, setAbierto] = useState(false);
   const [activo, setActivo] = useState(-1);
   const [caja, setCaja] = useState<{ top: number; left: number; width: number } | null>(
@@ -120,14 +129,23 @@ export function ComboboxRemoto({
     if (!abierto) return;
     const control = new AbortController();
     const espera = setTimeout(() => {
+      setEstado({ fase: 'cargando' });
       buscar(texto, control.signal)
         .then((lista) => {
           if (control.signal.aborted) return;
           setResultados(lista);
+          setEstado({ fase: 'listo', resultados: lista.length });
           setActivo(lista.length > 0 ? 0 : -1);
         })
         .catch(() => {
-          if (!control.signal.aborted) setResultados([]);
+          // La cancelación no es un fallo: es la tecla siguiente. Solo se
+          // enseña error cuando de verdad no se pudo preguntar, porque decir
+          // «no hay coincidencias» cuando no se ha podido mirar hace que se
+          // deje de buscar una referencia que sí está.
+          if (control.signal.aborted) return;
+          setResultados([]);
+          setEstado({ fase: 'error' });
+          setActivo(-1);
         });
     }, ESPERA_MS);
 
@@ -135,7 +153,7 @@ export function ComboboxRemoto({
       clearTimeout(espera);
       control.abort();
     };
-  }, [texto, abierto, buscar]);
+  }, [texto, abierto, buscar, intento]);
 
   /**
    * Sin selección el campo es inválido aunque tenga texto: escribir "QB65R" no
@@ -170,11 +188,17 @@ export function ComboboxRemoto({
     campo.current?.focus();
   };
 
+  const reintentar = () => {
+    setEstado({ fase: 'cargando' });
+    setIntento((n) => n + 1);
+    campo.current?.focus();
+  };
+
   const teclado = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!abierto) return abrir();
-      if (resultados.length === 0) return;
+      if (!hayResultados(estado)) return;
       const paso = e.key === 'ArrowDown' ? 1 : -1;
       setActivo((i) => (i + paso + resultados.length) % resultados.length);
       return;
@@ -230,22 +254,19 @@ export function ComboboxRemoto({
             type="button"
             onClick={limpiar}
             aria-label={`Vaciar ${etiqueta.toLowerCase()}`}
-            className="border border-linea rounded-md px-2 py-1 text-tinta-tenue hover:text-acento hover:border-acento"
+            // 44 × 44: es un objetivo táctil, y con `px-2 py-1` medía 28.
+            className="shrink-0 min-h-11 min-w-11 border border-linea rounded-md text-tinta-tenue hover:text-acento hover:border-acento"
           >
             ×
           </button>
         )}
       </div>
 
-      {/* `aria-live`: quien navega con lector de pantalla se entera de cuántas hay. */}
+      {/* `aria-live`: quien navega con lector de pantalla se entera de lo
+          mismo que quien ve la lista, incluido el fallo. El mensaje sale de
+          `src/lib/combobox.ts`, que es donde se prueba. */}
       <span className="sr-only" aria-live="polite">
-        {abierto
-          ? resultados.length === 0
-            ? vacio
-            : `${resultados.length} ${
-                resultados.length === 1 ? nombreColeccion[0] : nombreColeccion[1]
-              }`
-          : ''}
+        {abierto ? mensajeDeBusqueda(estado, { vacio, nombreColeccion }) : ''}
       </span>
 
       <ul
@@ -263,8 +284,19 @@ export function ComboboxRemoto({
         }
         className="fixed z-50 max-h-64 overflow-y-auto border border-linea bg-superficie rounded-md shadow-lg"
       >
-        {resultados.length === 0 ? (
-          <li className="px-2 py-1.5 text-tinta-tenue">{vacio}</li>
+        {!hayResultados(estado) ? (
+          <li className="px-2 py-1.5 text-tinta-tenue">
+            {mensajeDeBusqueda(estado, { vacio, nombreColeccion })}
+            {permiteReintentar(estado) && (
+              <button
+                type="button"
+                onClick={reintentar}
+                className="ml-2 min-h-11 px-3 underline text-acento"
+              >
+                Reintentar
+              </button>
+            )}
+          </li>
         ) : (
           resultados.map((o, i) => (
             <li

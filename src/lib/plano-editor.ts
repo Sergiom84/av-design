@@ -169,6 +169,50 @@ export type Seleccion =
   | { tipo: 'toma'; id: string }
   | null;
 
+/**
+ * La selección, comprobada contra lo que hay en el borrador.
+ *
+ * Deshacer un alta, descartar o recargar hacen desaparecer la fila que estaba
+ * seleccionada. Si la selección sobrevive al objeto, el inspector se queda
+ * enseñando «Ese mueble ya no está en el plano»: un error donde debería haber
+ * vuelto la ficha de la sala. La sala y la mesa siempre existen.
+ */
+export function seleccionVigente(
+  seleccion: Seleccion,
+  borrador: Pick<BorradorPlano, 'equipos' | 'mobiliario' | 'tomas'>,
+): Seleccion {
+  if (seleccion === null) return null;
+  switch (seleccion.tipo) {
+    case 'mueble':
+      return borrador.mobiliario.some((m) => m.id === seleccion.id) ? seleccion : null;
+    case 'equipo':
+      return borrador.equipos.some((e) => e.id === seleccion.id) ? seleccion : null;
+    case 'toma':
+      return borrador.tomas.some((t) => t.id === seleccion.id) ? seleccion : null;
+    default:
+      return seleccion;
+  }
+}
+
+/**
+ * Los equipos partidos en lo que falta por situar y lo que ya está.
+ *
+ * Mismo criterio que el mobiliario, y por el mismo motivo: un equipo sin
+ * confirmar se dibuja donde suele ir, pero eso es una suposición y no una
+ * medida. Mezclados en una sola lista, los estimados se pierden entre los
+ * colocados y nadie sabe cuáles quedan.
+ *
+ * Los grupos vacíos no salen: un rótulo «Por colocar (0)» es ruido.
+ */
+export function agruparEquipos(
+  equipos: readonly EquipoBorrador[],
+): Array<{ titulo: string; equipos: EquipoBorrador[] }> {
+  return [
+    { titulo: 'Por colocar', equipos: equipos.filter((e) => !e.posicion_confirmada) },
+    { titulo: 'Colocados', equipos: equipos.filter((e) => e.posicion_confirmada) },
+  ].filter((g) => g.equipos.length > 0);
+}
+
 /** Lo que viene del servidor, convertido a borrador. */
 export function borradorDesde(
   sala: Sala,

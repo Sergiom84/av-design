@@ -114,7 +114,9 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
               // un typo en PESTANAS deja de compilar.
               href={segmento === null ? `/salas/${salaId}` : `/salas/${salaId}/${segmento}`}
               aria-current={activa ? 'page' : undefined}
-              className={`whitespace-nowrap px-3.5 py-2 -mb-0.5 border-b-2 font-medium ${
+              // 44 px de alto: con `py-2` se quedaban en 40 y son la
+              // navegación principal de la ficha en móvil.
+              className={`whitespace-nowrap inline-flex items-center min-h-11 px-3.5 py-2 -mb-0.5 border-b-2 font-medium ${
                 activa
                   ? 'border-acento text-acento'
                   : 'border-transparent text-tinta-tenue hover:text-tinta'

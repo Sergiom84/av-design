@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { ComboboxRemoto, type OpcionCombobox } from './combobox-remoto';
+import { leerRespuesta } from '@/lib/combobox';
 import type { ArticuloElegible, TipoArticulo } from '@/lib/tipos';
 
 /** La opción que se pinta, más el artículo entero para poder devolverlo. */
@@ -57,7 +58,9 @@ export function BuscadorArticulo({
       const parametros = new URLSearchParams({ q: consulta });
       if (tipo) parametros.set('tipo', tipo);
       const respuesta = await fetch(`/api/catalogo?${parametros}`, { signal });
-      const lista: ArticuloElegible[] = respuesta.ok ? await respuesta.json() : [];
+      // Un error del servidor sube y se enseña como error: devolver la
+      // lista vacía haría creer que la referencia no está en el catálogo.
+      const lista = await leerRespuesta<ArticuloElegible>(respuesta);
       return lista.map((a) => ({
         id: a.id,
         etiqueta: a.etiqueta,

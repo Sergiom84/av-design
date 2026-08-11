@@ -14,6 +14,8 @@ import {
   comoViewBox,
   confirmarEstimadas,
   MAXIMO_AFORO_MATERIALIZABLE,
+  agruparEquipos,
+  seleccionVigente,
   MAXIMO_ALTA_MOBILIARIO,
   MAXIMO_MOBILIARIO_POR_PATCH,
   anadirDelCatalogo,
@@ -1120,6 +1122,83 @@ describe('los límites de alta son uno solo, no tres', () => {
       sillasDerivadas: derivadasDe(sala),
     });
     assert.equal(r.borrador.mobiliario.length, 1, 'la mesa entra aunque el aforo sea enorme');
+  });
+});
+
+describe('la selección no sobrevive a lo que selecciona', () => {
+  const contador = () => {
+    let n = 0;
+    return () => `nuevo-${n++}`;
+  };
+
+  it('deshacer un alta deja la selección sin objeto: vuelve a la sala', () => {
+    const antes = base();
+    const r = anadirDelCatalogo(antes, MESA_AUX, 1, { nuevoId: contador() });
+    const seleccion = r.seleccion;
+
+    assert.deepEqual(seleccionVigente(seleccion, r.borrador), seleccion, 'mientras existe, vale');
+    assert.equal(
+      seleccionVigente(seleccion, antes),
+      null,
+      'al deshacer, el inspector no puede seguir apuntando al mueble que ya no está',
+    );
+  });
+
+  it('vale para equipos y para rosetas, no solo para muebles', () => {
+    const conEquipo = anadirEquipo(base(), {
+      id: 'eq-1',
+      articulo_id: 'art-1',
+      nombre: 'TEST',
+      extremo: 'pared',
+    });
+    assert.deepEqual(seleccionVigente({ tipo: 'equipo', id: 'eq-1' }, conEquipo), {
+      tipo: 'equipo',
+      id: 'eq-1',
+    });
+    assert.equal(seleccionVigente({ tipo: 'equipo', id: 'eq-1' }, base()), null);
+    assert.equal(seleccionVigente({ tipo: 'toma', id: 'no-existe' }, base()), null);
+  });
+
+  it('la sala y la mesa siempre están: no se pierden nunca', () => {
+    assert.deepEqual(seleccionVigente({ tipo: 'sala' }, base()), { tipo: 'sala' });
+    assert.deepEqual(seleccionVigente({ tipo: 'mesa' }, base()), { tipo: 'mesa' });
+    assert.equal(seleccionVigente(null, base()), null);
+  });
+});
+
+describe('el equipamiento se agrupa como el mobiliario', () => {
+  // El último de la lista es el que se acaba de añadir: el borrador de partida
+  // ya trae dos equipos y coger el primero devolvía otro.
+  const nuevo = (id: string) =>
+    anadirEquipo(base(), { id, articulo_id: 'a', nombre: id, extremo: 'pared' as const })
+      .equipos.at(-1)!;
+  const colocado = (id: string) => ({ ...nuevo(id), posicion_confirmada: true });
+  const estimado = (id: string) => nuevo(id);
+
+  it('separa por colocar y colocados, en ese orden', () => {
+    const grupos = agruparEquipos([colocado('a'), estimado('b'), colocado('c')]);
+    assert.deepEqual(
+      grupos.map((g) => [g.titulo, g.equipos.map((e) => e.nombre)]),
+      [
+        ['Por colocar', ['b']],
+        ['Colocados', ['a', 'c']],
+      ],
+    );
+  });
+
+  it('un grupo vacío no se enseña', () => {
+    assert.deepEqual(
+      agruparEquipos([colocado('a')]).map((g) => g.titulo),
+      ['Colocados'],
+    );
+    assert.deepEqual(agruparEquipos([]), []);
+  });
+
+  it('no pierde ni duplica ningún equipo', () => {
+    const equipos = [colocado('a'), estimado('b'), estimado('c')];
+    const repartidos = agruparEquipos(equipos).flatMap((g) => g.equipos);
+    assert.equal(repartidos.length, equipos.length);
+    assert.deepEqual(new Set(repartidos.map((e) => e.nombre)), new Set(['a', 'b', 'c']));
   });
 });
 

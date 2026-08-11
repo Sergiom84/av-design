@@ -53,7 +53,7 @@ function Secciones({ ruta, alNavegar }: { ruta: string; alNavegar?: () => void }
             href={href as never}
             onClick={alNavegar}
             aria-current={activa ? 'page' : undefined}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 font-medium ${
+            className={`flex items-center gap-3 min-h-11 rounded-md px-3 py-2 font-medium ${
               activa
                 ? 'bg-acento text-rail-texto-activo'
                 : 'text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo'
@@ -85,7 +85,7 @@ function BotonSalir() {
     <form action={salir} className="mt-auto px-3 pb-4">
       <button
         type="submit"
-        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
+        className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
       >
         <IconoSalir className="size-5 shrink-0" />
         Salir
@@ -138,7 +138,8 @@ export function Marco({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => setAbierto(false)}
                 aria-label="Cerrar menú"
-                className="rounded-md p-2 text-rail-texto hover:text-rail-texto-activo"
+                // 44 × 44: objetivo táctil, no un icono con padding.
+                className="grid place-items-center min-h-11 min-w-11 rounded-md text-rail-texto hover:text-rail-texto-activo"
               >
                 <IconoCerrar />
               </button>
@@ -160,7 +161,8 @@ export function Marco({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setAbierto(true)}
             aria-label="Abrir menú"
-            className="rounded-md p-2 text-tinta-tenue hover:text-tinta md:hidden"
+            // 44 × 44: con  sobre un icono de 20 se quedaba en 36.
+            className="grid place-items-center min-h-11 min-w-11 -ml-2 rounded-md text-tinta-tenue hover:text-tinta md:hidden"
           >
             <IconoMenu />
           </button>

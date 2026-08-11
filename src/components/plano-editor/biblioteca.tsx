@@ -25,34 +25,39 @@ export function BibliotecaElementos({
   categorias,
   alAnadirMuebles,
   alAnadirEquipo,
+  aviso,
 }: {
   /** Las secciones del catálogo de mobiliario, para el filtro. */
   categorias: string[];
   /**
-   * Devuelve qué pasó, que no siempre es «se añadió una fila»: elegir `Mesa
-   * principal` selecciona la mesa que la sala ya tiene, y añadir una silla
-   * convierte de paso las del aforo en filas editables. Lo decide el editor,
-   * que es quien tiene el borrador; aquí solo se enseña.
+   * Qué hacer al añadir. Lo decide el editor, que es quien tiene el borrador:
+   * elegir `Mesa principal` selecciona la mesa que la sala ya tiene, y añadir
+   * una silla convierte de paso las del aforo en filas editables.
    */
-  alAnadirMuebles: (mueble: MuebleCatalogo, cantidad: number) => string;
+  alAnadirMuebles: (mueble: MuebleCatalogo, cantidad: number) => void;
   alAnadirEquipo: (articulo: ArticuloElegible) => void;
+  /**
+   * Qué pasó con lo último que se añadió. Lo decide y lo guarda el editor:
+   * Descartar tiene que poder borrarlo, y esta caja no sabe nada del
+   * borrador.
+   */
+  aviso: string | null;
 }) {
   const [categoria, setCategoria] = useState('');
   const [cantidad, setCantidad] = useState(1);
   const [elegido, setElegido] = useState<MuebleCatalogo | null>(null);
-  const [anadido, setAnadido] = useState<string | null>(null);
   const base = useId();
 
   const anadirMuebles = () => {
     if (!elegido) return;
-    setAnadido(alAnadirMuebles(elegido, cantidad));
+    alAnadirMuebles(elegido, cantidad);
     setElegido(null);
     setCantidad(1);
   };
 
   return (
     <div className="p-4 border-b border-linea space-y-3">
-      <h3 className="t-subtitulo">Añadir elementos</h3>
+      <h2 className="t-subtitulo">Añadir elementos</h2>
 
       <details className="group">
         <summary className="cursor-pointer py-2 min-h-11 flex items-center">
@@ -137,7 +142,6 @@ export function BibliotecaElementos({
             alElegir={(a) => {
               if (!a) return;
               alAnadirEquipo(a);
-              setAnadido(`${a.etiqueta} en la lista. Sin guardar todavía.`);
             }}
           />
           <p className="mt-2 text-tinta-tenue text-[0.75rem]">
@@ -148,9 +152,9 @@ export function BibliotecaElementos({
 
       {/* Quien no ve la lista tiene que enterarse igual de que se añadió. */}
       <span className="sr-only" role="status" aria-live="polite">
-        {anadido ?? ''}
+        {aviso ?? ''}
       </span>
-      {anadido && <p className="text-tinta-tenue">{anadido}</p>}
+      {aviso && <p className="text-tinta-tenue">{aviso}</p>}
     </div>
   );
 }

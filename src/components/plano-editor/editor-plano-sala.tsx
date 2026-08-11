@@ -22,6 +22,7 @@ import {
   PASO_REJILLA_M,
   entradaCroquisDe,
   hayCambios as tieneCambios,
+  seleccionVigente,
   moverEquipo,
   moverMesa,
   moverMueble,
@@ -107,6 +108,23 @@ export function EditorPlanoSala({
   const [vista, setVista] = useState<Vista | null>(null);
   const [estado, setEstado] = useState<EstadoGuardado>('limpio');
   const [problema, setProblema] = useState<string | null>(null);
+  /**
+   * Qué pasó con lo último que se añadió. Vive aquí y no en la biblioteca
+   * porque `Descartar` tiene que poder borrarlo: un «Silla en la lista» debajo
+   * de una lista donde ya no hay ninguna silla es una mentira pequeña que
+   * cuesta un rato entender.
+   */
+  const [avisoAlta, setAvisoAlta] = useState<string | null>(null);
+  /**
+   * El conflicto no se apaga solo.
+   *
+   * Es distinto del estado de guardado: al elegir «conservar mi borrador» el
+   * editor vuelve a estar sucio —hay cambios sin guardar— pero el conflicto
+   * sigue ahí y el siguiente guardado volverá a fallar. Cuando esto se ataba
+   * a `estado === 'conflicto'`, conservar el borrador hacía desaparecer el
+   * aviso que explicaba justo eso.
+   */
+  const [conflicto, setConflicto] = useState(false);
 
   // Un arrastre son decenas de movimientos: entran como un solo paso en el
   // historial, no como cuarenta. Se apila el borrador de antes de agarrar.
@@ -132,6 +150,15 @@ export function EditorPlanoSala({
     setPasado([]);
     setFuturo([]);
   }
+
+  // La selección se deriva del borrador, no se guarda aparte.
+  //
+  // Deshacer un alta, descartar o recargar hacen desaparecer la fila que
+  // estaba seleccionada. Si la selección sobrevive al objeto, el inspector se
+  // queda enseñando «Ese mueble ya no está en el plano», que es un error donde
+  // debería haber vuelto la ficha de la sala. Se comprueba aquí, en el sitio
+  // donde se sabe lo que hay.
+  const seleccionValida = seleccionVigente(seleccion, borrador);
 
   const patch = useMemo(
     () => construirPatch(sala.id, version, original, borrador),
@@ -286,7 +313,7 @@ export function EditorPlanoSala({
   // silla convierte de paso las del aforo en filas editables. Decir «añadida»
   // en los dos casos sería mentir en uno.
   const anadirMobiliario = useCallback(
-    (mueble: MuebleCatalogo, cantidad: number): string => {
+    (mueble: MuebleCatalogo, cantidad: number): void => {
       const r = anadirDelCatalogo(borrador, mueble, cantidad, {
         nuevoId: () => crypto.randomUUID(),
         // Las sillas que el croquis está dibujando AHORA, con la geometría con
@@ -296,7 +323,7 @@ export function EditorPlanoSala({
       });
       if (r.borrador !== borrador) aplicar(r.borrador);
       setSeleccion(r.seleccion);
-      return r.aviso;
+      setAvisoAlta(r.aviso);
     },
     [aplicar, borrador, escena.sillas],
   );
@@ -316,6 +343,7 @@ export function EditorPlanoSala({
         }),
       );
       setSeleccion({ tipo: 'equipo', id });
+      setAvisoAlta(`${articulo.etiqueta} en la lista. Sin guardar todavía.`);
     },
     [aplicar, borrador],
   );
@@ -338,19 +366,19 @@ export function EditorPlanoSala({
     }
 
     const paso = desplazamientoDeTecla(ev.key, ev.shiftKey);
-    if (!paso || !seleccion || soloLectura) return;
+    if (!paso || !seleccionValida || soloLectura) return;
     ev.preventDefault();
 
     // Con Mayúsculas el paso es fino y el ajuste a rejilla estorbaría: se
     // pulsa Mayúsculas justo para salirse de la rejilla.
     const opciones = { ajustar: ajuste && !ev.shiftKey, paso: PASO_REJILLA_M };
-    if (seleccion.tipo === 'equipo') {
-      aplicar(desplazarEquipo(borrador, seleccion.id, paso, opciones));
-    } else if (seleccion.tipo === 'toma') {
-      aplicar(desplazarToma(borrador, seleccion.id, paso, opciones));
-    } else if (seleccion.tipo === 'mueble') {
-      aplicar(desplazarMueble(borrador, seleccion.id, paso, opciones));
-    } else if (seleccion.tipo === 'mesa') {
+    if (seleccionValida.tipo === 'equipo') {
+      aplicar(desplazarEquipo(borrador, seleccionValida.id, paso, opciones));
+    } else if (seleccionValida.tipo === 'toma') {
+      aplicar(desplazarToma(borrador, seleccionValida.id, paso, opciones));
+    } else if (seleccionValida.tipo === 'mueble') {
+      aplicar(desplazarMueble(borrador, seleccionValida.id, paso, opciones));
+    } else if (seleccionValida.tipo === 'mesa') {
       aplicar(desplazarMesa(borrador, paso, opciones));
     }
   };
@@ -370,6 +398,7 @@ export function EditorPlanoSala({
     empezarGuardado(async () => {
       const r = await guardarDiagramaSala(patch);
       if (r.ok) {
+        setConflicto(false);
         // El id temporal de un alta ya no vale: se cambia por el que puso
         // Postgres, o el siguiente guardado la daría de alta otra vez.
         const guardado = aplicarIdsReales(borrador, r.ids);
@@ -385,16 +414,24 @@ export function EditorPlanoSala({
         return;
       }
       setProblema(r.detalle);
+      if (r.motivo === 'conflicto') setConflicto(true);
       setEstado(r.motivo === 'conflicto' ? 'conflicto' : 'error');
     });
   };
 
+  // Descartar deja la pestaña como recién abierta: el borrador vuelve, y con
+  // él se van la selección de lo que ya no existe, el aviso del último alta y
+  // el error del último guardado. Dejar cualquiera de los tres deja en
+  // pantalla una frase sobre algo que ya no está.
   const descartar = () => {
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
     setEstado('limpio');
     setProblema(null);
+    setAvisoAlta(null);
+    setSeleccion(null);
+    setConflicto(false);
   };
 
   const deshacer = () => {
@@ -430,13 +467,13 @@ export function EditorPlanoSala({
 
   const inspector = (
     <>
-      {seleccion === null || seleccion.tipo === 'sala' ? (
+      {seleccionValida === null || seleccionValida.tipo === 'sala' ? (
         <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={soloLectura} />
-      ) : seleccion.tipo === 'mesa' ? (
+      ) : seleccionValida.tipo === 'mesa' ? (
         <InspectorMesa borrador={borrador} alCambiar={aplicar} soloLectura={soloLectura} />
-      ) : seleccion.tipo === 'equipo' ? (
+      ) : seleccionValida.tipo === 'equipo' ? (
         (() => {
-          const e = borrador.equipos.find((x) => x.id === seleccion.id);
+          const e = borrador.equipos.find((x) => x.id === seleccionValida.id);
           return e ? (
             <InspectorEquipo
               equipo={e}
@@ -448,17 +485,17 @@ export function EditorPlanoSala({
             />
           ) : null;
         })()
-      ) : seleccion.tipo === 'mueble' ? (
+      ) : seleccionValida.tipo === 'mueble' ? (
         <InspectorMueble
           borrador={borrador}
-          id={seleccion.id}
+          id={seleccionValida.id}
           alCambiar={aplicar}
           alQuitar={() => setSeleccion(null)}
           soloLectura={soloLectura}
         />
       ) : (
         (() => {
-          const t = borrador.tomas.find((x) => x.id === seleccion.id);
+          const t = borrador.tomas.find((x) => x.id === seleccionValida.id);
           return t ? (
             <InspectorToma
               toma={t}
@@ -473,13 +510,13 @@ export function EditorPlanoSala({
   );
 
   const resumenSeleccion =
-    seleccion === null || seleccion.tipo === 'sala'
+    seleccionValida === null || seleccionValida.tipo === 'sala'
       ? 'Medidas de la sala'
-      : seleccion.tipo === 'mesa'
+      : seleccionValida.tipo === 'mesa'
         ? 'Mesa'
-        : seleccion.tipo === 'equipo'
-          ? (borrador.equipos.find((x) => x.id === seleccion.id)?.nombre ?? 'Equipo')
-          : `Toma ${borrador.tomas.find((x) => x.id === seleccion.id)?.codigo ?? ''}`;
+        : seleccionValida.tipo === 'equipo'
+          ? (borrador.equipos.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Equipo')
+          : `Toma ${borrador.tomas.find((x) => x.id === seleccionValida.id)?.codigo ?? ''}`;
 
   return (
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
@@ -492,7 +529,11 @@ export function EditorPlanoSala({
         </Aviso>
       )}
 
-      {estado === 'conflicto' && (
+      {/* El aviso vive mientras viva el conflicto, no mientras dure el estado
+          de guardado: conservar el borrador deja la pestaña «sucia» y el
+          conflicto sigue existiendo. Ocultarlo ahí escondía justo la
+          explicación de por qué el siguiente guardado va a fallar. */}
+      {conflicto && (
         <Aviso tono="alerta">
           <p>{problema}</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -500,24 +541,29 @@ export function EditorPlanoSala({
               tipo="button"
               variante="principal"
               onClick={() => {
+                setConflicto(false);
                 setEstado('limpio');
                 setProblema(null);
+                setAvisoAlta(null);
+                setSeleccion(null);
                 router.refresh();
               }}
             >
               Recargar y perder mis cambios
             </Boton>
-            <Boton
-              tipo="button"
-              onClick={() => {
-                setEstado('sucio');
-                setProblema(
-                  'Se conserva tu borrador. Guardar volverá a fallar hasta que recargues: abre la sala en otra pestaña para comparar.',
-                );
-              }}
-            >
-              Conservar mi borrador para comparar
-            </Boton>
+            {estado === 'conflicto' && (
+              <Boton
+                tipo="button"
+                onClick={() => {
+                  setEstado('sucio');
+                  setProblema(
+                    'Se conserva tu borrador. Guardar volverá a fallar hasta que recargues: abre la sala en otra pestaña para comparar.',
+                  );
+                }}
+              >
+                Conservar mi borrador para comparar
+              </Boton>
+            )}
           </div>
         </Aviso>
       )}
@@ -587,7 +633,7 @@ export function EditorPlanoSala({
               <LienzoPlano
                 escena={escena}
                 vista={vistaEfectiva}
-                seleccion={seleccion}
+                seleccion={seleccionValida}
                 herramienta={herramienta}
                 rejilla={rejilla}
                 soloLectura={soloLectura}
@@ -641,11 +687,12 @@ export function EditorPlanoSala({
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  aviso={avisoAlta}
                 />
               )}
               <ListaObjetos
                 borrador={borrador}
-                seleccion={seleccion}
+                seleccion={seleccionValida}
                 alSeleccionar={setSeleccion}
                 arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
               />
@@ -660,11 +707,12 @@ export function EditorPlanoSala({
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  aviso={avisoAlta}
                 />
               )}
               <ListaObjetos
                 borrador={borrador}
-                seleccion={seleccion}
+                seleccion={seleccionValida}
                 alSeleccionar={setSeleccion}
                 arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
               />

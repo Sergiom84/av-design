@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { ComboboxRemoto, type OpcionCombobox } from './combobox-remoto';
+import { leerRespuesta } from '@/lib/combobox';
 import type { MuebleCatalogo } from '@/lib/tipos';
 
 type OpcionMueble = OpcionCombobox & { mueble: MuebleCatalogo };
@@ -47,7 +48,9 @@ export function BuscadorMobiliario({
       const parametros = new URLSearchParams({ q: consulta });
       if (categoria) parametros.set('categoria', categoria);
       const respuesta = await fetch(`/api/mobiliario?${parametros}`, { signal });
-      const lista: MuebleCatalogo[] = respuesta.ok ? await respuesta.json() : [];
+      // Un error del servidor sube y se enseña como error: devolver la
+      // lista vacía haría creer que la referencia no está en el catálogo.
+      const lista = await leerRespuesta<MuebleCatalogo>(respuesta);
       return lista.map((m) => ({
         id: m.id,
         etiqueta: m.nombre,

@@ -76,16 +76,16 @@ export function BarraHerramientas({
       )}
 
       <div className="flex items-center gap-1" role="group" aria-label="Zoom">
-        <Boton tipo="button" onClick={alAlejar} aria-label="Alejar">
+        <Boton className="min-h-11 min-w-11" tipo="button" onClick={alAlejar} aria-label="Alejar">
           −
         </Boton>
         <span className="tabular-nums text-tinta-tenue min-w-[3.5rem] text-center">
           {Math.round(zoom * 100)} %
         </span>
-        <Boton tipo="button" onClick={alAcercar} aria-label="Acercar">
+        <Boton className="min-h-11 min-w-11" tipo="button" onClick={alAcercar} aria-label="Acercar">
           +
         </Boton>
-        <Boton tipo="button" onClick={alEncajar}>
+        <Boton className="min-h-11" tipo="button" onClick={alEncajar}>
           Encajar sala
         </Boton>
       </div>
@@ -112,20 +112,21 @@ export function BarraHerramientas({
       {!soloLectura && (
         <>
           <div className="flex items-center gap-1" role="group" aria-label="Historial">
-            <Boton tipo="button" onClick={alDeshacer} disabled={!puedeDeshacer}>
+            <Boton className="min-h-11" tipo="button" onClick={alDeshacer} disabled={!puedeDeshacer}>
               Deshacer
             </Boton>
-            <Boton tipo="button" onClick={alRehacer} disabled={!puedeRehacer}>
+            <Boton className="min-h-11" tipo="button" onClick={alRehacer} disabled={!puedeRehacer}>
               Rehacer
             </Boton>
           </div>
 
           <div className="flex items-center gap-2 sm:ml-auto">
             <EstadoDeGuardado estado={estado} />
-            <Boton tipo="button" onClick={alDescartar} disabled={!hayCambios || guardando}>
+            <Boton className="min-h-11" tipo="button" onClick={alDescartar} disabled={!hayCambios || guardando}>
               Descartar
             </Boton>
             <Boton
+              className="min-h-11"
               tipo="button"
               variante="principal"
               onClick={alGuardar}
@@ -151,6 +152,7 @@ function Selector({
 }) {
   return (
     <Boton
+      className="min-h-11"
       tipo="button"
       variante={activo ? 'principal' : 'secundario'}
       aria-pressed={activo}

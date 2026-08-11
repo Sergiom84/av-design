@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
-  anclarSillasEnLaSala,
   construirEscena,
   mesaDeLaSala,
   normalizarGrados,
   proyectar,
+  repartirSillasEnLaSala,
   sillasAlrededor,
   type MesaCroquis,
 } from './croquis';
@@ -128,8 +128,28 @@ describe('la mesa girada', () => {
     });
 
   it('gira las sillas con ella: quien va en cabecera sigue en cabecera', () => {
-    const recta = girada(0);
-    const noventa = girada(90);
+    // En sala holgada: aquí no hay que repartir por lados, así que el giro se
+    // puede comprobar punto a punto. En la Sala de Batería, que es estrecha,
+    // la mesa girada manda las cabeceras contra la pared y el reparto cambia
+    // de lado: comparar ahí un giro punto a punto exigiría que el croquis
+    // dibujara una silla donde no hay sala.
+    const holgada = (grados: number): Sala => ({
+      ...SALA_BATERIA,
+      largo_m: 10,
+      ancho_m: 10,
+      mesa_x_m: 5,
+      mesa_y_m: 5,
+      mesa_rotacion_grados: grados,
+    });
+    const escena = (grados: number) =>
+      construirEscena({
+        sala: holgada(grados),
+        equipos: [],
+        conexiones: [],
+        tomas: [],
+      });
+    const recta = escena(0);
+    const noventa = escena(90);
     assert.equal(recta.sillas.length, noventa.sillas.length);
 
     // Se comparan coordenadas, no distancias al centro: la distancia es
@@ -140,21 +160,11 @@ describe('la mesa girada', () => {
       ss.map((s) => `${s.x_m.toFixed(2)},${s.y_m.toFixed(2)}`).sort().join(' | ');
 
     // Giro de 90° a mano: (x, y) → (cx − (y − cy), cy + (x − cx)).
-    //
-    // Y anclado a la sala después de girar, con la misma función que usa el
-    // croquis: en la Sala de Batería, que es estrecha, la mesa girada manda
-    // las dos cabeceras fuera de la pared. Comparar contra el giro sin anclar
-    // exigiría que el croquis dibujase una silla donde no hay sala. Lo que
-    // esta prueba comprueba —que las sillas giran con la mesa— lo sigue
-    // comprobando el `notEqual` de abajo.
-    const aMano = anclarSillasEnLaSala(
-      recta.sillas.map((s) => ({
-        x_m: c.x_m - (s.y_m - c.y_m),
-        y_m: c.y_m + (s.x_m - c.x_m),
-        radio_m: s.radio_m,
-      })),
-      SALA_BATERIA,
-    );
+    const aMano = recta.sillas.map((s) => ({
+      x_m: c.x_m - (s.y_m - c.y_m),
+      y_m: c.y_m + (s.x_m - c.x_m),
+      radio_m: s.radio_m,
+    }));
 
     assert.equal(clave(noventa.sillas), clave(aMano));
     assert.notEqual(clave(noventa.sillas), clave(recta.sillas));
@@ -320,6 +330,101 @@ describe('las sillas derivadas caben en la sala', () => {
       tomas: [],
     });
     assert.equal(escena.sillas.length, 8, 'ocho sitios siguen siendo ocho');
+  });
+
+  // ---------------------------------------------------------------- reparto
+  //
+  // Meter cada ancla a la fuerza dentro del rectángulo dejaba las sillas
+  // dentro, sí, pero apiladas: los tres asientos del lado que se salía
+  // acababan los tres contra la misma coordenada, y el croquis dibujaba seis
+  // círculos donde había nueve sillas. Estas pruebas cierran eso: dentro,
+  // todas, y cada una en su sitio.
+
+  const sillasDe = (sala: Sala) =>
+    construirEscena({ sala, equipos: [], conexiones: [], tomas: [] }).sillas;
+
+  const distintas = (ss: { x_m: number; y_m: number }[]) =>
+    new Set(ss.map((s) => `${s.x_m.toFixed(2)},${s.y_m.toFixed(2)}`)).size;
+
+  for (const [nombre, x, y] of [
+    ['izquierda', 0, 2],
+    ['derecha', 4, 2],
+    ['abajo', 2, 0],
+    ['arriba', 2, 4],
+  ] as const) {
+    it(`contra la pared ${nombre} no se apila ninguna silla`, () => {
+      const ss = sillasDe(salaConMesa(x, y));
+      assert.equal(ss.length, 8, 'siguen siendo ocho sitios');
+      assert.equal(distintas(ss), 8, 'y ocho posiciones distintas');
+    });
+  }
+
+  for (const giro of [0, 90, 180, 270]) {
+    it(`mesa girada ${giro}° contra la pared: ocho sitios, ocho posiciones`, () => {
+      const ss = sillasDe(salaConMesa(0, 2, { mesa_rotacion_grados: giro }));
+      assert.equal(ss.length, 8);
+      assert.equal(distintas(ss), 8);
+      assert.ok(
+        ss.every((c) => c.x_m >= 0 && c.x_m <= 4 && c.y_m >= 0 && c.y_m <= 4),
+        'y todas dentro de la sala',
+      );
+    });
+  }
+
+  it('en la esquina se reparten por los dos lados que quedan libres', () => {
+    const ss = sillasDe(salaConMesa(0, 0));
+    assert.equal(ss.length, 8);
+    assert.equal(distintas(ss), 8);
+    // La cabecera izquierda y el lado de abajo de la mesa caen fuera de la
+    // sala: nadie se sienta ahí, y sus asientos se van a los lados que sí
+    // quedan. El único lado largo libre es el de arriba, y ahí acaban las
+    // siete que no van a la cabecera que sobrevive.
+    assert.ok(
+      ss.every((c) => c.x_m >= 0 && c.x_m <= 4 && c.y_m >= 0 && c.y_m <= 4),
+      'todas dentro de la sala',
+    );
+    assert.equal(
+      ss.filter((c) => Math.abs(c.y_m - 0.92) < 0.005).length,
+      7,
+      'siete en el único lado largo que queda libre',
+    );
+  });
+
+  it('lo que no cabe se dice, no se apila', () => {
+    // Una sala tan justa como la mesa: no hay 42 cm por ningún lado.
+    const sala: Sala = {
+      ...SALA_BATERIA,
+      largo_m: 2,
+      ancho_m: 1,
+      aforo: 8,
+      mesa_largo_m: 2,
+      mesa_ancho_m: 1,
+      mesa_x_m: 1,
+      mesa_y_m: 0.5,
+      mesa_rotacion_grados: 0,
+    };
+    const escena = construirEscena({ sala, equipos: [], conexiones: [], tomas: [] });
+    assert.equal(escena.sillas.length, 0, 'no se inventa ninguna posición');
+    assert.ok(
+      escena.avisos.some((a) => a.includes('no caben')),
+      `el croquis lo avisa: ${escena.avisos.join(' / ')}`,
+    );
+  });
+
+  it('el reparto puro cuenta las que no caben en vez de amontonarlas', () => {
+    const mesa = mesaDeLaSala({
+      ...SALA_BATERIA,
+      largo_m: 2,
+      ancho_m: 1,
+      mesa_largo_m: 2,
+      mesa_ancho_m: 1,
+      mesa_x_m: 1,
+      mesa_y_m: 0.5,
+      mesa_rotacion_grados: 0,
+    })!;
+    const r = repartirSillasEnLaSala(mesa, 8, { largo_m: 2, ancho_m: 1 });
+    assert.equal(r.sillas.length, 0);
+    assert.equal(r.sinSitio, 8);
   });
 
   it('una sala sin medir no recorta nada: no hay contra qué', () => {

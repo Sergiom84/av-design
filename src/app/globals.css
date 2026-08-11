@@ -179,6 +179,36 @@ table.datos tbody tr:hover {
   background: var(--superficie-hundida);
 }
 
+/* El schedule es un documento de obra de trece columnas, no una tabla de
+   resumen. Forzarlo a caber en el ancho de la tarjeta convertía los nombres
+   de equipos y las rutas en sílabas verticales. Conserva su ancho de lectura
+   y delega el desplazamiento lateral, también en escritorio, al contenedor
+   técnico que ya lo anuncia y lo acota. */
+table.tabla-cables {
+  width: max-content;
+  min-width: 82rem;
+}
+
+table.tabla-cables td:nth-child(2),
+table.tabla-cables td:nth-child(5),
+table.tabla-cables td:nth-child(9),
+table.tabla-cables td:nth-child(10) {
+  white-space: nowrap;
+}
+
+/* Editar una conexión exige ver de un vistazo los dos equipos, su señal y el
+   cable elegido. La tabla mantiene esas columnas legibles y usa el mismo
+   desplazamiento local que el schedule cuando la tarjeta no alcanza. */
+table.tabla-conexiones {
+  width: max-content;
+  min-width: 72rem;
+}
+
+table.tabla-conexiones td:nth-child(1),
+table.tabla-conexiones td:nth-child(3) {
+  white-space: nowrap;
+}
+
 /* Toda cifra es un dato: va en mono, alineada, con su unidad. */
 .num {
   text-align: right;
@@ -323,13 +353,27 @@ button:focus-visible {
   opacity: 0.7;
 }
 
-/* Objetivo táctil mínimo en móvil (44 × 44 px). En escritorio los controles
-   se quedan compactos: el ratón no necesita el margen que exige el dedo.
+/* Objetivo táctil mínimo (44 × 44 px). En escritorio los controles se quedan
+   compactos: el ratón no necesita el margen que exige el dedo.
    `.boton` ya es `inline-flex` (regla base) para que un `<Link className=
    "boton">` —un `<a>`, elemento en línea que ignora min-height por
-   defecto— también respete el mínimo, igual que el `<button>` nativo. */
-@media (max-width: 640px) {
-  .boton {
+   defecto— también respete el mínimo, igual que el `<button>` nativo.
+
+   El corte está en 768 px y no en 640: a 768 se usa una tableta con el dedo,
+   y con el corte anterior los campos de esa anchura medían 34 px de alto. Que
+   la regla existiera no significaba que entrase donde se estaba midiendo.
+
+   Alcanza a `button` y no solo a `.boton`: hay botones sin esa clase —el de
+   vaciar del combobox, el de reintentar— y son igual de accionables. Un
+   `<button>` es `inline-flex` aquí abajo para que `min-height` le afecte
+   aunque el navegador lo trate como caja en línea. */
+@media (max-width: 768px) {
+  .boton,
+  button,
+  [role="button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 44px;
     min-width: 44px;
   }

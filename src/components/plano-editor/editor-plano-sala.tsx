@@ -77,6 +77,11 @@ export function EditorPlanoSala({
   categoriasMobiliario,
   plantillaBase,
   cerrado,
+  // Cómo se guarda. En la aplicación es la acción de servidor; se deja
+  // inyectar para poder montar el editor en una prueba y provocar el
+  // conflicto, que es un estado que solo existe cuando otra pestaña ha
+  // guardado y no se puede reproducir llamando a la lógica pura.
+  guardarPlano = guardarDiagramaSala,
 }: {
   sala: Sala;
   equipos: EquipoEnSala[];
@@ -87,6 +92,7 @@ export function EditorPlanoSala({
   /** Nombre de la plantilla de la que salió el plano, para el rótulo `Base:`. */
   plantillaBase: string | null;
   cerrado: boolean;
+  guardarPlano?: typeof guardarDiagramaSala;
 }) {
   const router = useRouter();
   const [guardando, empezarGuardado] = useTransition();
@@ -396,7 +402,7 @@ export function EditorPlanoSala({
     setProblema(null);
     setEstado('guardando');
     empezarGuardado(async () => {
-      const r = await guardarDiagramaSala(patch);
+      const r = await guardarPlano(patch);
       if (r.ok) {
         setConflicto(false);
         // El id temporal de un alta ya no vale: se cambia por el que puso
@@ -408,6 +414,10 @@ export function EditorPlanoSala({
         setPasado([]);
         setFuturo([]);
         setEstado('guardado');
+        // «Silla en la lista. Sin guardar todavía» junto a un «Guardado» son
+        // dos frases que se contradicen sobre la misma silla. Lo que decía el
+        // alta deja de ser cierto en cuanto se guarda.
+        setAvisoAlta(null);
         // El plano cambia los metros y el material: se refresca la ficha para
         // que Resumen y Cableado no se queden con lo de antes.
         router.refresh();
@@ -423,6 +433,14 @@ export function EditorPlanoSala({
   // él se van la selección de lo que ya no existe, el aviso del último alta y
   // el error del último guardado. Dejar cualquiera de los tres deja en
   // pantalla una frase sobre algo que ya no está.
+  //
+  // Con un conflicto vivo, «como recién abierta» no es volver al `original`:
+  // ese original y esa versión son los de antes de que otra pestaña guardara,
+  // así que restaurarlos y apagar el aviso dejaba en pantalla un plano viejo
+  // con pinta de estar al día, y el siguiente guardado volvía a chocar por una
+  // versión que ya nadie estaba mirando. Descartar ahí es recargar: se pide al
+  // servidor lo que hay ahora y el editor lo adopta —el estado queda en
+  // `limpio`, que es lo que deja pasar la adopción de más arriba.
   const descartar = () => {
     setPasado([]);
     setFuturo([]);
@@ -431,7 +449,10 @@ export function EditorPlanoSala({
     setProblema(null);
     setAvisoAlta(null);
     setSeleccion(null);
-    setConflicto(false);
+    if (conflicto) {
+      setConflicto(false);
+      router.refresh();
+    }
   };
 
   const deshacer = () => {
@@ -509,14 +530,20 @@ export function EditorPlanoSala({
     </>
   );
 
+  // El rótulo del panel móvil es lo único que dice de qué se está hablando
+  // cuando el inspector está plegado. La rama final no puede ser «Toma» a
+  // secas: con un mueble seleccionado el panel decía «Toma» y el inspector de
+  // debajo enseñaba una silla. Cada tipo dice su nombre.
   const resumenSeleccion =
     seleccionValida === null || seleccionValida.tipo === 'sala'
       ? 'Medidas de la sala'
       : seleccionValida.tipo === 'mesa'
-        ? 'Mesa'
+        ? 'Mesa principal'
         : seleccionValida.tipo === 'equipo'
           ? (borrador.equipos.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Equipo')
-          : `Toma ${borrador.tomas.find((x) => x.id === seleccionValida.id)?.codigo ?? ''}`;
+          : seleccionValida.tipo === 'mueble'
+            ? (borrador.mobiliario.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Mueble')
+            : `Toma ${borrador.tomas.find((x) => x.id === seleccionValida.id)?.codigo ?? ''}`.trim();
 
   return (
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de

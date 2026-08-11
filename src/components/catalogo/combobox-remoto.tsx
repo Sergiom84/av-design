@@ -92,6 +92,14 @@ export function ComboboxRemoto({
   );
 
   const campo = useRef<HTMLInputElement>(null);
+  /**
+   * Todo el bloque: campo, botón de vaciar y panel desplegable.
+   *
+   * Cerrar en el `blur` del campo cerraba el panel antes de que el foco
+   * llegara a `Reintentar`, que vive dentro. Con el bloque entero se puede
+   * preguntar a dónde va el foco: si sigue aquí dentro, no se cierra nada.
+   */
+  const bloque = useRef<HTMLDivElement>(null);
   const base = useId();
   const idCampo = `${base}c`;
   const idLista = `${base}l`;
@@ -208,16 +216,38 @@ export function ComboboxRemoto({
       elegir(resultados[activo]);
       return;
     }
+    // Sin resultados no hay nada que elegir, pero sí hay algo que hacer: si la
+    // búsqueda falló, Enter reintenta. Antes había que llegar al botón con el
+    // ratón, y el botón tampoco se dejaba alcanzar con el tabulador.
+    if (e.key === 'Enter' && abierto && permiteReintentar(estado)) {
+      e.preventDefault();
+      reintentar();
+      return;
+    }
     if (e.key === 'Escape' && abierto) {
       e.preventDefault();
       cerrar();
       return;
     }
-    if (e.key === 'Tab') cerrar();
+    // El tabulador NO cierra aquí. Cerrar en la propia tecla quitaba de la
+    // página el botón `Reintentar` justo antes de que el foco llegara a él, y
+    // dejaba el estado de error sin salida por teclado. Quien cierra es el
+    // `blur` del bloque, que sabe si el foco se ha ido de verdad.
   };
 
   return (
-    <div className={className}>
+    <div
+      ref={bloque}
+      className={className}
+      // El foco que se va a otro control de este mismo bloque —del campo al
+      // botón `Reintentar`— no es salir del combobox. Solo se cierra cuando el
+      // foco se va de verdad. `relatedTarget` nulo es salir del documento.
+      onBlur={(e) => {
+        const destino = e.relatedTarget as Node | null;
+        if (destino && bloque.current?.contains(destino)) return;
+        cerrar();
+      }}
+    >
       <label htmlFor={idCampo} className="t-etiqueta block mb-1">
         {etiqueta}
       </label>
@@ -246,7 +276,6 @@ export function ComboboxRemoto({
             else medir();
           }}
           onFocus={abrir}
-          onBlur={cerrar}
           onKeyDown={teclado}
         />
         {texto !== '' && (
@@ -269,14 +298,13 @@ export function ComboboxRemoto({
         {abierto ? mensajeDeBusqueda(estado, { vacio, nombreColeccion }) : ''}
       </span>
 
-      <ul
-        id={idLista}
-        role="listbox"
-        aria-label={etiquetaLista ?? etiqueta}
+      {/* El panel es el marco; el `listbox` va dentro y solo contiene
+          opciones. Antes el mensaje de «no se pudo buscar» y su botón vivían
+          dentro del `role="listbox"`, y un botón no es una `option`: para un
+          lector de pantalla el desplegable tenía una opción que no se podía
+          elegir, y el patrón ARIA quedaba roto. Ahora son hermanos. */}
+      <div
         hidden={!abierto || caja === null}
-        // Se evita que el clic quite el foco al campo: si lo quitara, el panel
-        // se cerraría antes de que llegara el clic a la opción.
-        onMouseDown={(e) => e.preventDefault()}
         style={
           caja
             ? { top: caja.top, left: caja.left, width: Math.max(caja.width, 240) }
@@ -284,21 +312,16 @@ export function ComboboxRemoto({
         }
         className="fixed z-50 max-h-64 overflow-y-auto border border-linea bg-superficie rounded-md shadow-lg"
       >
-        {!hayResultados(estado) ? (
-          <li className="px-2 py-1.5 text-tinta-tenue">
-            {mensajeDeBusqueda(estado, { vacio, nombreColeccion })}
-            {permiteReintentar(estado) && (
-              <button
-                type="button"
-                onClick={reintentar}
-                className="ml-2 min-h-11 px-3 underline text-acento"
-              >
-                Reintentar
-              </button>
-            )}
-          </li>
-        ) : (
-          resultados.map((o, i) => (
+        <ul
+          id={idLista}
+          role="listbox"
+          aria-label={etiquetaLista ?? etiqueta}
+          hidden={!hayResultados(estado)}
+          // Se evita que el clic quite el foco al campo: si lo quitara, el
+          // panel se cerraría antes de que llegara el clic a la opción.
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {resultados.map((o, i) => (
             <li
               key={o.id}
               id={`${idLista}-${i}`}
@@ -314,9 +337,27 @@ export function ComboboxRemoto({
               {o.sufijo && <span className="text-tinta-tenue"> {o.sufijo}</span>}
               {o.detalle && <span className="block text-tinta-tenue">{o.detalle}</span>}
             </li>
-          ))
+          ))}
+        </ul>
+
+        {!hayResultados(estado) && (
+          <div className="px-2 py-1.5 text-tinta-tenue flex items-center gap-2 flex-wrap">
+            <span>{mensajeDeBusqueda(estado, { vacio, nombreColeccion })}</span>
+            {permiteReintentar(estado) && (
+              // Sin `preventDefault` en el `mousedown` de este bloque: aquí sí
+              // interesa que el clic lleve el foco al botón, y el `blur` del
+              // bloque ya sabe que el foco no ha salido del combobox.
+              <button
+                type="button"
+                onClick={reintentar}
+                className="min-h-11 min-w-11 px-3 underline text-acento"
+              >
+                Reintentar
+              </button>
+            )}
+          </div>
         )}
-      </ul>
+      </div>
     </div>
   );
 }

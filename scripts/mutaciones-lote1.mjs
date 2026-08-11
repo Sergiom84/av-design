@@ -33,12 +33,25 @@ const MUTACIONES = [
     primaria: 'un asiento que no apaga el aforo se rechaza: serían dos fuentes vivas',
   },
   {
-    nombre: 'No anclar las sillas derivadas a la sala',
+    nombre: 'No repartir las sillas derivadas dentro de la sala',
     fichero: 'src/lib/croquis.ts',
-    de: '? anclarSillasEnLaSala(sillasAlrededor(mesa, sala.aforo), rectSala)',
-    a: '? sillasAlrededor(mesa, sala.aforo)',
+    de: '? repartirSillasEnLaSala(mesa, sala.aforo, rectSala)',
+    a: '? { sillas: sillasAlrededor(mesa, sala.aforo), sinSitio: 0 }',
     suite: 'npm test',
     primaria: 'mesa pegada a la pared izquierda',
+  },
+  {
+    // El reparto por lados y el «que quepan» son dos contratos distintos: se
+    // puede cumplir el segundo apilándolas todas contra la misma coordenada,
+    // que es justo lo que hacía la primera versión. Esta mutación deja las
+    // sillas dentro de la sala y las amontona, para que caiga la prueba que
+    // mide posiciones distintas y no la que mide que estén dentro.
+    nombre: 'Amontonar las sillas de un lado en el mismo punto',
+    fichero: 'src/lib/croquis.ts',
+    de: 'const t = (j + 1) / (cuantas + 1);',
+    a: 'const t = 0.5;',
+    suite: 'npm test',
+    primaria: 'contra la pared izquierda no se apila ninguna silla',
   },
   {
     nombre: 'Permitir superar el límite conjunto de altas',

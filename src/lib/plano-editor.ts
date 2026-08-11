@@ -17,7 +17,6 @@
  */
 
 import {
-  anclarSillasEnLaSala,
   normalizarGrados,
   type EntradaCroquis,
   type SillaCroquis,
@@ -1077,10 +1076,14 @@ export function materializarSillas(
   ids: string[],
 ): BorradorPlano {
   if (borrador.sillas_modo === 'manuales') return borrador;
-  // Se vuelven a anclar aquí aunque el croquis ya las entregue ancladas: esta
-  // función es pública y quien la llame con posiciones crudas no puede acabar
-  // escribiendo una silla fuera de la sala. Sobre lo ya ajustado no hace nada.
-  const nuevas = anclarSillasEnLaSala(sillas, borrador)
+  // Se filtra aquí aunque el croquis ya las entregue dentro: esta función es
+  // pública y quien la llame con posiciones crudas no puede acabar escribiendo
+  // una silla fuera de la sala, que el servidor rechazaría entera. Se
+  // DESCARTA la que no cabe en vez de arrimarla a la pared: arrimarla la
+  // dejaría encima de otra, y el croquis dibujaría menos sillas de las que hay
+  // filas. Sobre lo que ya viene del croquis esto no quita ninguna.
+  const nuevas = sillas
+    .filter((s) => dentroDeLaSala(s, borrador))
     .slice(0, ids.length)
     .map((s, i) => ({
       id: ids[i],

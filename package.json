@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/*.test.ts",
+    "test": "node --import tsx --test \"src/lib/*.test.ts\" \"src/pruebas/*.test.ts\" \"src/components/**/*.test.tsx\"",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/generar-seed.mjs",
     "db:up": "docker compose up -d --wait",
@@ -31,11 +31,13 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.7",
     "typescript": "^5"

@@ -305,34 +305,191 @@ export function sillasAlrededor(mesa: MesaCroquis, aforo: number): SillaCroquis[
 }
 
 /**
- * Mete el ancla de cada silla dentro de la sala.
+ * El ancla cae dentro de la sala, con un margen de redondeo.
  *
- * El reparto sienta a la cabecera 42 cm más allá del borde de la mesa. Con la
- * mesa arrimada a una pared —que es como está en media sala pequeña— esa
- * posición cae fuera de la sala, y ahí no se sienta nadie.
- *
- * Mientras las sillas solo se dibujaban, el símbolo asomaba por fuera y
- * parecía un detalle del dibujo. Al poder materializarlas, esa posición se
- * convierte en una fila con coordenadas y el servidor rechaza el guardado
- * entero: el editor construía un borrador que él mismo no podía guardar. Por
- * eso el ajuste vive aquí, en la geometría compartida, y no en el guardado:
- * corregir al guardar dibujaría una cosa y grabaría otra.
- *
- * Se ajusta el ANCLA, como en todo lo demás del plano; el círculo de la silla
- * puede sobresalir, igual que una pantalla pegada a la pared. Una sala sin
- * medir no recorta nada: no hay contra qué.
+ * `plano-editor.ts` tiene su propia versión con el margen del editor: aquella
+ * decide si un guardado se acepta, esta decide si se dibuja. Se parecen y no
+ * son la misma pregunta.
  */
-export function anclarSillasEnLaSala(
-  sillas: readonly SillaCroquis[],
+export function anclaDentroDeLaSala(
+  punto: { x_m: number; y_m: number },
   sala: { largo_m: number; ancho_m: number },
-): SillaCroquis[] {
-  if (!(sala.largo_m > 0) || !(sala.ancho_m > 0)) return [...sillas];
-  const meter = (v: number, maximo: number) => redondear(Math.min(Math.max(v, 0), maximo));
-  return sillas.map((s) => ({
-    x_m: meter(s.x_m, sala.largo_m),
-    y_m: meter(s.y_m, sala.ancho_m),
-    radio_m: s.radio_m,
-  }));
+): boolean {
+  const holgura = 0.005;
+  return (
+    punto.x_m >= -holgura &&
+    punto.x_m <= sala.largo_m + holgura &&
+    punto.y_m >= -holgura &&
+    punto.y_m <= sala.ancho_m + holgura
+  );
+}
+
+interface Segmento {
+  a: { x_m: number; y_m: number };
+  b: { x_m: number; y_m: number };
+}
+
+/**
+ * Recorta un segmento contra el rectángulo de la sala (Liang–Barsky).
+ *
+ * Devuelve el trozo que queda dentro, o `null` si el segmento entero está
+ * fuera. La mesa puede estar girada cualquier ángulo, así que la línea de
+ * asientos no es paralela a las paredes y no vale con comparar coordenadas.
+ */
+function recortarSegmento(
+  seg: Segmento,
+  sala: { largo_m: number; ancho_m: number },
+): Segmento | null {
+  const dx = seg.b.x_m - seg.a.x_m;
+  const dy = seg.b.y_m - seg.a.y_m;
+  let t0 = 0;
+  let t1 = 1;
+  const bordes: Array<[number, number]> = [
+    [-dx, seg.a.x_m],
+    [dx, sala.largo_m - seg.a.x_m],
+    [-dy, seg.a.y_m],
+    [dy, sala.ancho_m - seg.a.y_m],
+  ];
+  for (const [p, q] of bordes) {
+    if (p === 0) {
+      // Paralelo a este borde: si ya está fuera, no hay nada que recortar.
+      if (q < 0) return null;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return null;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return null;
+      if (r < t1) t1 = r;
+    }
+  }
+  return {
+    a: { x_m: seg.a.x_m + t0 * dx, y_m: seg.a.y_m + t0 * dy },
+    b: { x_m: seg.a.x_m + t1 * dx, y_m: seg.a.y_m + t1 * dy },
+  };
+}
+
+/** Lo que sale de repartir el aforo alrededor de la mesa dentro de la sala. */
+export interface RepartoSillas {
+  sillas: SillaCroquis[];
+  /**
+   * Cuántas no caben en ningún lado libre. Cero es lo normal. Cuando no es
+   * cero se dice en un aviso: dibujar una silla donde no hay sitio es peor que
+   * decir que no cabe.
+   */
+  sinSitio: number;
+}
+
+/**
+ * Reparte el aforo alrededor de la mesa SIN salirse de la sala.
+ *
+ * El reparto de `sillasAlrededor()` sienta a la cabecera 42 cm más allá del
+ * borde de la mesa. Con la mesa arrimada a una pared —que es como está en
+ * media sala pequeña— esa posición cae fuera de la sala, y ahí no se sienta
+ * nadie.
+ *
+ * La primera versión de esto metía cada ancla a la fuerza dentro del
+ * rectángulo. Eso dejaba las sillas dentro, sí, pero apiladas: los tres
+ * asientos de un lado que se salía acababan los tres contra la misma
+ * coordenada, y una sala de nueve sillas dibujaba seis círculos con tres
+ * escondidos debajo. Recortar cada punto por su cuenta no es repartir.
+ *
+ * Lo que se hace ahora es elegir POR DÓNDE se sienta la gente: se miran los
+ * cuatro lados de la mesa —los dos largos y las dos cabeceras—, se recorta
+ * cada uno contra la sala y los que quedan sin sitio no reciben a nadie. Los
+ * asientos que iban ahí se reparten entre los lados que sí quedan, que es lo
+ * que se hace de verdad cuando una mesa está contra la pared.
+ *
+ * Si no queda ningún lado libre, no se inventa nada: se devuelven las que
+ * caben y `sinSitio` cuenta el resto, para que el croquis lo diga.
+ *
+ * El ajuste vive aquí, en la geometría compartida, y no en el guardado:
+ * corregir al guardar dibujaría una cosa y grabaría otra. Se ajusta el ANCLA;
+ * el círculo de la silla puede sobresalir, igual que una pantalla pegada a la
+ * pared. Una sala sin medir no recorta nada: no hay contra qué.
+ */
+export function repartirSillasEnLaSala(
+  mesa: MesaCroquis,
+  aforo: number,
+  sala: { largo_m: number; ancho_m: number },
+): RepartoSillas {
+  if (aforo <= 0) return { sillas: [], sinSitio: 0 };
+
+  // El reparto de siempre. Si cabe entero, se queda tal cual: ajustar contra
+  // la pared no puede recolocar lo que ya cabía.
+  const base = sillasAlrededor(mesa, aforo);
+  if (!(sala.largo_m > 0) || !(sala.ancho_m > 0)) return { sillas: base, sinSitio: 0 };
+  if (base.every((s) => anclaDentroDeLaSala(s, sala))) return { sillas: base, sinSitio: 0 };
+
+  const local = (x: number, y: number) =>
+    rotar({ x_m: x, y_m: y }, mesa.centro, mesa.rotacion_grados);
+
+  // Los dos lados largos, como segmentos en coordenadas de la sala. El orden
+  // —arriba y luego abajo— es el mismo que el del reparto de siempre.
+  const largos = (
+    [
+      {
+        a: local(mesa.x_m, mesa.y_m + mesa.ancho_m + SEPARACION_SILLA_M),
+        b: local(mesa.x_m + mesa.largo_m, mesa.y_m + mesa.ancho_m + SEPARACION_SILLA_M),
+      },
+      {
+        a: local(mesa.x_m, mesa.y_m - SEPARACION_SILLA_M),
+        b: local(mesa.x_m + mesa.largo_m, mesa.y_m - SEPARACION_SILLA_M),
+      },
+    ] as Segmento[]
+  )
+    .map((s) => recortarSegmento(s, sala))
+    .filter((s): s is Segmento => s !== null);
+
+  // Las cabeceras son un sitio cada una: o cabe o no cabe.
+  const cabeceras = [
+    local(mesa.x_m - SEPARACION_SILLA_M, mesa.y_m + mesa.ancho_m / 2),
+    local(mesa.x_m + mesa.largo_m + SEPARACION_SILLA_M, mesa.y_m + mesa.ancho_m / 2),
+  ].filter((p) => anclaDentroDeLaSala(p, sala));
+
+  const silla = (p: { x_m: number; y_m: number }): SillaCroquis => ({
+    x_m: redondear(p.x_m),
+    y_m: redondear(p.y_m),
+    radio_m: RADIO_SILLA_M,
+  });
+
+  // Sin ningún lado largo libre solo quedan las cabeceras, y son dos como
+  // mucho. Lo que no cabe se cuenta, no se apila.
+  if (largos.length === 0) {
+    const caben = Math.min(aforo, cabeceras.length);
+    return {
+      sillas: cabeceras.slice(0, caben).map(silla),
+      sinSitio: aforo - caben,
+    };
+  }
+
+  // Con cuatro o más se ocupan las cabeceras que hayan quedado libres; con dos
+  // o tres se sienta uno enfrente de otro, igual que en el reparto de siempre.
+  const nCabeceras = aforo >= 4 ? Math.min(cabeceras.length, 2, aforo) : 0;
+  const porLados = aforo - nCabeceras;
+  const reparto =
+    largos.length === 2
+      ? [Math.ceil(porLados / 2), Math.floor(porLados / 2)]
+      : [porLados];
+
+  const sillas: SillaCroquis[] = [];
+  largos.forEach((lado, i) => {
+    const cuantas = reparto[i];
+    for (let j = 0; j < cuantas; j += 1) {
+      const t = (j + 1) / (cuantas + 1);
+      sillas.push(
+        silla({
+          x_m: lado.a.x_m + (lado.b.x_m - lado.a.x_m) * t,
+          y_m: lado.a.y_m + (lado.b.y_m - lado.a.y_m) * t,
+        }),
+      );
+    }
+  });
+  for (let i = 0; i < nCabeceras; i += 1) sillas.push(silla(cabeceras[i]));
+
+  return { sillas, sinSitio: 0 };
 }
 
 export interface EntradaCroquis {
@@ -383,12 +540,22 @@ export function construirEscena({
   // Ajustadas a la sala aquí y no al materializarlas: el editor materializa
   // lo que el croquis dibuja, así que la única forma de que el dibujo de
   // antes y el de después sean el mismo es que salgan ya bien de aquí.
-  const sillas =
+  const reparto =
     derivadas && mesa && sala.aforo
-      ? anclarSillasEnLaSala(sillasAlrededor(mesa, sala.aforo), rectSala)
-      : [];
+      ? repartirSillasEnLaSala(mesa, sala.aforo, rectSala)
+      : { sillas: [], sinSitio: 0 };
+  const sillas = reparto.sillas;
   if (derivadas && mesa && !sala.aforo) {
     avisos.push('Sin aforo no se colocan las sillas.');
+  }
+  // Lo que no cabe se dice. Dibujarlas amontonadas donde sí hay hueco sería
+  // enseñar un plano con posiciones que nadie puede usar.
+  if (reparto.sinSitio > 0) {
+    avisos.push(
+      reparto.sinSitio === 1
+        ? 'Una silla del aforo no cabe alrededor de la mesa dentro de la sala: no se dibuja.'
+        : `${reparto.sinSitio} sillas del aforo no caben alrededor de la mesa dentro de la sala: no se dibujan.`,
+    );
   }
 
   // Un mueble sin medir o sin colocar no se dibuja: se enseña en el lateral

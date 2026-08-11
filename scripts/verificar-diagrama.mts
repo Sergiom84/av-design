@@ -78,6 +78,22 @@ const salaCerradaId = randomUUID();
 const salaLegadoId = randomUUID();
 const salaVecinaId = randomUUID();
 const salaVaciaId = randomUUID();
+/** Vacía salvo por una roseta: aplicar una plantilla le cambiaría las medidas. */
+const salaSoloTomaId = randomUUID();
+/** Vacía, para la plantilla que solo trae una mesa auxiliar. */
+const salaSinAsientosId = randomUUID();
+/** Vacía, para la plantilla mal medida. */
+const salaPlantillaFueraId = randomUUID();
+/** Vacía pero YA iniciada desde cero: el origen se elige una vez. */
+const salaDesdeCeroId = randomUUID();
+/** Vacía, para la plantilla que trae una mesa principal. */
+const salaMesaPrincipalId = randomUUID();
+/** Con aforo y sin sillas: para el alta de asiento que debe cambiar de modo. */
+const salaAsientosId = randomUUID();
+/** Con aforo y sin sillas: para comprobar que un mueble corriente no lo toca. */
+const salaMuebleCorrienteId = randomUUID();
+/** Con equipos pero SIN iniciar: el único camino que queda al rechazo por ocupada. */
+const salaOcupadaSinIniciarId = randomUUID();
 
 // Catálogo de prueba. Se crea y se borra aquí: el catálogo real cambia y una
 // prueba que dependa de que exista tal referencia falla el día que se corrige.
@@ -87,14 +103,24 @@ const articuloInactivoId = randomUUID();
 const nombreArticuloEquipo = 'TESTMARCA TEST-PANTALLA';
 const sillaCatalogoId = randomUUID();
 const sillaInactivaId = randomUUID();
+/** Un mueble corriente: no es asiento, así que no manda sobre las sillas. */
+const mesaAuxCatalogoId = randomUUID();
+/** La mesa de la sala. Está en el catálogo para encontrarla, no para instanciarla. */
+const mesaPrincipalCatalogoId = randomUUID();
 const plantillaAId = randomUUID();
 const plantillaBId = randomUUID();
+/** Solo trae una mesa auxiliar: sin asientos, el aforo sigue repartiendo sillas. */
+const plantillaSinAsientosId = randomUUID();
+/** Mal medida a propósito: coloca un equipo fuera de la sala que ella misma describe. */
+const plantillaFueraId = randomUUID();
+/** Trae una fila de mobiliario cuyo catálogo es la mesa principal: no puede instanciarse. */
+const plantillaMesaPrincipalId = randomUUID();
 
 async function limpiar() {
-  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId}, ${salaVaciaId})`;
-  await sql`delete from plantillas_sala where id in (${plantillaAId}, ${plantillaBId})`;
+  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId}, ${salaVaciaId}, ${salaSoloTomaId}, ${salaSinAsientosId}, ${salaPlantillaFueraId}, ${salaDesdeCeroId}, ${salaMesaPrincipalId}, ${salaAsientosId}, ${salaMuebleCorrienteId}, ${salaOcupadaSinIniciarId})`;
+  await sql`delete from plantillas_sala where id in (${plantillaAId}, ${plantillaBId}, ${plantillaSinAsientosId}, ${plantillaFueraId}, ${plantillaMesaPrincipalId})`;
   await sql`delete from articulos where id in (${articuloEquipoId}, ${articuloCableId}, ${articuloInactivoId})`;
-  await sql`delete from catalogo_mobiliario where id in (${sillaCatalogoId}, ${sillaInactivaId})`;
+  await sql`delete from catalogo_mobiliario where id in (${sillaCatalogoId}, ${sillaInactivaId}, ${mesaAuxCatalogoId}, ${mesaPrincipalCatalogoId})`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
   await sql`delete from localizaciones where id = ${localizacionId}`;
   await sql`delete from proyectos where id = ${proyectoId}`;
@@ -120,6 +146,29 @@ async function preparar() {
   // Sin medidas, sin equipos y sin tiradas: la sala que puede recibir una
   // plantilla entera.
   await sql`insert into salas (id, nombre) values (${salaVaciaId}, 'TEST diagrama vacia')`;
+  // Diez por diez y con una roseta al fondo: la plantilla mide 6 × 4, así que
+  // aplicarla dejaría la roseta fuera del plano sin que nadie la mueva.
+  await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
+            values (${salaSoloTomaId}, 'TEST diagrama solo toma', 10, 10, 3)`;
+  await sql`insert into tomas_red (sala_id, codigo, x_m, y_m, z_m)
+            values (${salaSoloTomaId}, 'TEST-ROS', 9, 9, 0)`;
+  await sql`insert into salas (id, nombre, aforo) values (${salaSinAsientosId}, 'TEST diagrama sin asientos', 8)`;
+  await sql`insert into salas (id, nombre) values (${salaPlantillaFueraId}, 'TEST diagrama plantilla fuera')`;
+  // Vacía pero ya contestó de dónde sale su plano: la pregunta no se repite y
+  // la respuesta no la puede cambiar una llamada directa a la acción.
+  await sql`insert into salas (id, nombre, diagrama_iniciado_en, diagrama_origen)
+            values (${salaDesdeCeroId}, 'TEST diagrama desde cero', now(), 'desde_cero')`;
+  await sql`insert into salas (id, nombre) values (${salaMesaPrincipalId}, 'TEST diagrama mesa principal')`;
+  // Con aforo y medidas: aquí se comprueba que un asiento no puede convivir
+  // con las sillas derivadas.
+  await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m, aforo, mesa_largo_m, mesa_ancho_m)
+            values (${salaAsientosId}, 'TEST diagrama asientos', 6, 4, 3, 8, 2.4, 1.2)`;
+  await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m, aforo, mesa_largo_m, mesa_ancho_m)
+            values (${salaMuebleCorrienteId}, 'TEST diagrama mueble corriente', 6, 4, 3, 8, 2.4, 1.2)`;
+  // Con equipos y sin iniciar: es el caso que llega al rechazo por ocupada,
+  // porque una sala ya iniciada se rechaza antes y por otro motivo.
+  await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
+            values (${salaOcupadaSinIniciarId}, 'TEST diagrama ocupada sin iniciar', 6, 4, 3)`;
 
   await sql`
     insert into articulos (id, tipo, categoria, marca, modelo, activo) values
@@ -128,9 +177,11 @@ async function preparar() {
       (${articuloInactivoId}, 'equipo', 'PANTALLA', 'TESTMARCA', 'TEST-BAJA',     false)`;
 
   await sql`
-    insert into catalogo_mobiliario (id, clave, nombre, categoria, forma, activo, fuente) values
-      (${sillaCatalogoId}, 'test-silla',   'Silla', 'Asientos', 'circulo', true,  'app'),
-      (${sillaInactivaId}, 'test-silla-x', 'Silla', 'Asientos', 'circulo', false, 'app')`;
+    insert into catalogo_mobiliario (id, clave, nombre, categoria, forma, rol, activo, fuente) values
+      (${sillaCatalogoId},          'test-silla',   'Silla',          'Asientos', 'circulo',    'asiento',        true,  'app'),
+      (${sillaInactivaId},          'test-silla-x', 'Silla',          'Asientos', 'circulo',    'asiento',        false, 'app'),
+      (${mesaAuxCatalogoId},        'test-mesa-aux','Mesa auxiliar',  'Mesas',    'rectangulo', null,             true,  'app'),
+      (${mesaPrincipalCatalogoId},  'test-mesa-pr', 'Mesa principal', 'Mesas',    'rectangulo', 'mesa_principal', true,  'app')`;
 
   // Dos plantillas: la que se aplica y la que se intenta aplicar encima.
   for (const [id, nombre] of [
@@ -167,6 +218,47 @@ async function preparar() {
        x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
     values (${plantillaAId}, ${sillaCatalogoId}, 'Silla', 'circulo', 0.5, 0.5,
             1, 1, 0, 45, true, 0)`;
+
+  // Una plantilla con mobiliario pero SIN asientos: una mesa auxiliar no
+  // sustituye a las sillas del aforo, y darla por sustituta dejaba la sala
+  // con cero sillas dibujadas.
+  await sql`
+    insert into plantillas_sala
+      (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m, mesa_largo_m, mesa_ancho_m)
+    values (${plantillaSinAsientosId}, 'TEST plantilla sin asientos', 'TEST', 8, 6, 4, 3, 2.4, 1.2)`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaSinAsientosId}, ${mesaAuxCatalogoId}, 'Mesa auxiliar', 'rectangulo', 1, 0.6,
+            5, 3, 0, 0, true, 0)`;
+
+  // Una plantilla con una fila cuyo catálogo es la mesa principal. No debería
+  // existir —el editor no la crea— pero una plantilla antigua o manipulada sí
+  // puede tenerla, y copiarla daría la segunda mesa que la guarda del alta
+  // manual impide.
+  await sql`
+    insert into plantillas_sala
+      (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaMesaPrincipalId}, 'TEST plantilla mesa principal', 'TEST', 8, 6, 4, 3)`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaMesaPrincipalId}, ${mesaPrincipalCatalogoId}, 'Mesa principal', 'rectangulo',
+            2.4, 1.2, 3, 2, 0, 0, true, 0)`;
+
+  // Una plantilla mal medida: dice 4 × 4 y coloca el equipo en x = 6.
+  await sql`
+    insert into plantillas_sala
+      (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaFueraId}, 'TEST plantilla fuera', 'TEST', 4, 4, 4, 3)`;
+  await sql`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, x_m, y_m, z_m, posicion_confirmada)
+    values (${plantillaFueraId}, ${articuloEquipoId}, 'PANTALLA', ${nombreArticuloEquipo}, 1, false,
+            'pantalla', 6, 2, 1.4, true)`;
 }
 
 async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
@@ -689,12 +781,24 @@ try {
       orden: 0,
     });
 
+    // El alta de asientos viaja con la transición, que es lo que manda el
+    // editor después de materializar las del aforo. Sin ella el guardado se
+    // rechaza entero, y eso se comprueba en el bloque 12: dejar aquí un alta
+    // de sillas que conserva `derivadas` sería fijar por prueba el estado que
+    // dibuja cada silla dos veces.
     const r = await invocar({
       ...patchBase(salaLegadoId, version),
       mobiliario_alta: [silla(tmpA, 1), silla(tmpB, 2)],
       sillas_modo: 'manuales',
     });
-    afirmar(r.ok, 'dos sillas se dan de alta a la vez');
+    afirmar(r.ok, 'dos sillas se dan de alta a la vez, con su transición de modo');
+
+    const [modoTrasAlta] = await sql<Array<{ sillas_modo: string }>>`
+      select sillas_modo from salas where id = ${salaLegadoId}`;
+    afirmar(
+      modoTrasAlta.sillas_modo === 'manuales',
+      'y la sala queda con una sola fuente de sillas',
+    );
 
     const filas = await sql<Array<{ id: string; nombre: string; x_m: string; rotacion_grados: string }>>`
       select id, nombre, x_m, rotacion_grados from sala_mobiliario
@@ -755,6 +859,29 @@ try {
     afirmar(
       !inactivo.ok && inactivo.motivo === 'catalogo',
       'un mueble dado de baja del catálogo no se puede añadir',
+    );
+
+    // La mesa de la sala vive en `salas.mesa_*` y es una sola. El buscador la
+    // ofrece para poder encontrarla y seleccionarla; instanciarla daría dos
+    // mesas principales dibujadas.
+    const dosMesas = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_alta: [{ ...silla(randomUUID(), 1), mobiliario_id: mesaPrincipalCatalogoId }],
+    });
+    afirmar(
+      !dosMesas.ok && dosMesas.motivo === 'catalogo',
+      'no se puede instanciar una segunda mesa principal',
+    );
+
+    // Sin referencia de catálogo el servidor no tendría de dónde releer el
+    // nombre ni la forma, y se quedaría con los que manda el navegador.
+    const sinReferencia = await invocar({
+      ...patchBase(salaLegadoId, version3),
+      mobiliario_alta: [{ ...silla(randomUUID(), 1), mobiliario_id: null }],
+    });
+    afirmar(
+      !sinReferencia.ok && sinReferencia.motivo === 'invalido',
+      'un alta de mueble sin referencia de catálogo se rechaza entera',
     );
 
     // El mismo id en un alta y en un cambio es un borrador roto.
@@ -891,14 +1018,32 @@ try {
       'y no aparece nada por duplicado',
     );
 
-    // Otra plantilla sobre una sala ocupada se bloquea y no muta nada.
+    // Otra plantilla sobre una sala ya preparada se bloquea y no muta nada.
+    // El motivo es `iniciada` y no `ocupada` porque la sala ya contestó de
+    // dónde sale su plano: se rechaza antes de mirar lo que tiene dentro.
     const otra = await aplicar(salaVaciaId, plantillaBId, await versionDe(salaVaciaId));
     afirmar(
-      !otra.ok && otra.motivo === 'ocupada',
-      'otra plantilla sobre una sala con equipos se rechaza',
+      !otra.ok && otra.motivo === 'iniciada',
+      'otra plantilla sobre una sala ya preparada se rechaza',
     );
     const c3 = await contar(salaVaciaId);
     afirmar(c3.equipos === c1.equipos && c3.conexiones === c1.conexiones, 'y no borra nada');
+
+    // El rechazo por ocupada sigue vivo para la sala que nunca pasó por
+    // Diagrama y a la que alguien ya metió equipos desde Equipamiento.
+    await nuevoEquipo(salaOcupadaSinIniciarId, 'TEST equipo suelto');
+    const versionOcupada = await versionDe(salaOcupadaSinIniciarId);
+    const ocupada = await aplicar(salaOcupadaSinIniciarId, plantillaAId, versionOcupada);
+    afirmar(
+      !ocupada.ok && ocupada.motivo === 'ocupada',
+      'una sala sin iniciar pero con equipos rechaza la plantilla por ocupada',
+    );
+    const [trasOcupada] = await sql<Array<{ largo_m: string; version: number }>>`
+      select largo_m, diagrama_version as version from salas where id = ${salaOcupadaSinIniciarId}`;
+    afirmar(
+      Number(trasOcupada.largo_m) === 6 && Number(trasOcupada.version) === versionOcupada,
+      'y conserva medidas y versión',
+    );
 
     // Obra cerrada y versión obsoleta.
     const cerrada = await aplicar(salaCerradaId, plantillaAId, await versionDe(salaCerradaId));
@@ -906,6 +1051,244 @@ try {
 
     const conflicto = await aplicar(salaVaciaId, plantillaAId, 0);
     afirmar(!conflicto.ok && conflicto.motivo === 'conflicto', 'una versión obsoleta se rechaza');
+
+    // ---------------------------------------------------------------------
+    // Una plantilla con mobiliario pero sin asientos
+    //
+    // La regla es «las sillas de la sala ya son filas», no «hay muebles». Una
+    // mesa auxiliar heredada apagaba el aforo y dejaba la sala con cero
+    // sillas dibujadas, que es peor que dibujar de más: no se ve que falten.
+    // ---------------------------------------------------------------------
+    const sinAsientos = await aplicar(
+      salaSinAsientosId,
+      plantillaSinAsientosId,
+      await versionDe(salaSinAsientosId),
+    );
+    afirmar(sinAsientos.ok, 'una plantilla de solo mesa auxiliar se aplica');
+
+    const [modoSinAsientos] = await sql<Array<{ sillas_modo: string; aforo: number }>>`
+      select sillas_modo, aforo from salas where id = ${salaSinAsientosId}`;
+    afirmar(
+      modoSinAsientos.sillas_modo === 'derivadas',
+      'y el aforo sigue repartiendo las sillas: una mesa auxiliar no las sustituye',
+    );
+    const [mueblesSinAsientos] = await sql<Array<{ cuantos: string }>>`
+      select count(*)::text as cuantos from sala_mobiliario where sala_id = ${salaSinAsientosId}`;
+    afirmar(Number(mueblesSinAsientos.cuantos) === 1, 'la mesa auxiliar sí se copió');
+
+    // ---------------------------------------------------------------------
+    // Una sala con roseta no está vacía
+    //
+    // Aplicar una plantilla sustituye las medidas. Una roseta de 10 × 10 en
+    // (9,9) se quedaba fuera de una plantilla de 6 × 4 sin que nadie la
+    // moviera, porque la ocupación solo contaba equipos, tiradas y muebles.
+    // ---------------------------------------------------------------------
+    const conRoseta = await aplicar(
+      salaSoloTomaId,
+      plantillaAId,
+      await versionDe(salaSoloTomaId),
+    );
+    afirmar(
+      !conRoseta.ok && conRoseta.motivo === 'ocupada',
+      'una sala con rosetas medidas no acepta una plantilla que le cambie las medidas',
+    );
+    const [salaRoseta] = await sql<Array<{ largo_m: string }>>`
+      select largo_m from salas where id = ${salaSoloTomaId}`;
+    afirmar(Number(salaRoseta.largo_m) === 10, 'y conserva sus medidas');
+    const [roseta] = await sql<Array<{ x_m: string; y_m: string }>>`
+      select x_m, y_m from tomas_red where sala_id = ${salaSoloTomaId}`;
+    afirmar(
+      Number(roseta.x_m) === 9 && Number(roseta.y_m) === 9,
+      'y la roseta sigue dentro de la sala, donde alguien la midió',
+    );
+
+    // ---------------------------------------------------------------------
+    // Una plantilla mal medida no se aplica a medias
+    //
+    // Copiar escribe la sala primero y los equipos después, así que el
+    // rechazo llega con filas ya insertadas: tiene que deshacerlo todo. Es la
+    // misma exigencia que el guardado manual, que no acepta un equipo fuera.
+    // ---------------------------------------------------------------------
+    const versionFuera = await versionDe(salaPlantillaFueraId);
+    const malMedida = await aplicar(salaPlantillaFueraId, plantillaFueraId, versionFuera);
+    afirmar(
+      !malMedida.ok && malMedida.motivo === 'fuera',
+      'una plantilla que coloca un equipo fuera de su propia sala se rechaza',
+    );
+    const [restos] = await sql<Array<{ equipos: string; largo_m: string | null; version: number }>>`
+      select
+        (select count(*) from sala_equipos where sala_id = ${salaPlantillaFueraId})::text as equipos,
+        (select largo_m from salas where id = ${salaPlantillaFueraId})::text as largo_m,
+        (select diagrama_version from salas where id = ${salaPlantillaFueraId}) as version`;
+    afirmar(Number(restos.equipos) === 0, 'y no deja ni un equipo escrito');
+    afirmar(Number(restos.largo_m ?? 0) === 0, 'ni las medidas de la plantilla');
+    afirmar(Number(restos.version) === versionFuera, 'ni sube la versión');
+
+    const [sinIniciar] = await sql<Array<{ diagrama_iniciado_en: Date | null }>>`
+      select diagrama_iniciado_en from salas where id = ${salaPlantillaFueraId}`;
+    afirmar(
+      sinIniciar.diagrama_iniciado_en === null,
+      'ni da el diagrama por iniciado: la pregunta sigue sin contestar',
+    );
+
+    // ---------------------------------------------------------------------
+    // El origen se elige una vez
+    //
+    // La tarjeta de origen deja de aparecer en cuanto la sala está iniciada,
+    // pero ocultar un control no es una guarda: la acción se puede llamar
+    // directamente. Una sala que dijo «desde cero» y todavía está vacía no
+    // puede recibir una plantilla por la espalda, porque eso le cambiaría las
+    // medidas y la procedencia sin que nadie lo decidiera.
+    // ---------------------------------------------------------------------
+    const versionCero = await versionDe(salaDesdeCeroId);
+    const sobreDesdeCero = await aplicar(salaDesdeCeroId, plantillaAId, versionCero);
+    afirmar(
+      !sobreDesdeCero.ok && sobreDesdeCero.motivo === 'iniciada',
+      'una sala que ya eligió Desde cero no acepta una plantilla, aunque esté vacía',
+    );
+    const [trasIntento] = await sql<Array<{
+      diagrama_origen: string | null;
+      diagrama_plantilla_id: string | null;
+      largo_m: string | null;
+      diagrama_version: number;
+      equipos: string;
+    }>>`
+      select diagrama_origen, diagrama_plantilla_id, largo_m, diagrama_version,
+             (select count(*) from sala_equipos e where e.sala_id = salas.id)::text as equipos
+      from salas where id = ${salaDesdeCeroId}`;
+    afirmar(trasIntento.diagrama_origen === 'desde_cero', 'y conserva su origen');
+    afirmar(trasIntento.diagrama_plantilla_id === null, 'y no se le apunta ninguna plantilla');
+    afirmar(Number(trasIntento.largo_m ?? 0) === 0, 'y no le cambian las medidas');
+    afirmar(Number(trasIntento.equipos) === 0, 'y no le entra ningún equipo');
+    afirmar(Number(trasIntento.diagrama_version) === versionCero, 'y la versión no sube');
+
+    // ---------------------------------------------------------------------
+    // La mesa principal tampoco entra por la puerta de atrás
+    //
+    // El alta manual ya se rechaza. Una fila de `plantilla_mobiliario` cuyo
+    // catálogo sea la mesa principal es la misma segunda mesa por otro
+    // camino, y copiarla en silencio dejaría dos mesas dibujadas.
+    // ---------------------------------------------------------------------
+    const versionMesa = await versionDe(salaMesaPrincipalId);
+    const conMesaPrincipal = await aplicar(
+      salaMesaPrincipalId,
+      plantillaMesaPrincipalId,
+      versionMesa,
+    );
+    afirmar(
+      !conMesaPrincipal.ok && conMesaPrincipal.motivo === 'catalogo',
+      'una plantilla con una mesa principal como mueble se rechaza entera',
+    );
+    const [trasMesa] = await sql<Array<{ muebles: string; largo_m: string | null; version: number }>>`
+      select
+        (select count(*) from sala_mobiliario m where m.sala_id = ${salaMesaPrincipalId})::text as muebles,
+        (select largo_m from salas where id = ${salaMesaPrincipalId})::text as largo_m,
+        (select diagrama_version from salas where id = ${salaMesaPrincipalId}) as version`;
+    afirmar(Number(trasMesa.muebles) === 0, 'y no se crea ninguna segunda mesa');
+    afirmar(Number(trasMesa.largo_m ?? 0) === 0, 'ni se copian sus medidas');
+    afirmar(Number(trasMesa.version) === versionMesa, 'ni sube la versión');
+  }
+
+  // ------------------------------- 12 · una sola fuente de sillas, en servidor
+  //
+  // La decisión de materializar es del editor, pero el estado imposible lo
+  // tiene que impedir el servidor: sillas explícitas Y el aforo repartiendo a
+  // la vez dibujan cada silla dos veces, y una petición escrita a mano no pasa
+  // por el editor.
+  {
+    const asiento = (id: string, x: number) => ({
+      id,
+      mobiliario_id: sillaCatalogoId,
+      nombre: 'Silla',
+      forma: 'circulo' as const,
+      largo_m: 0.5,
+      ancho_m: 0.5,
+      alto_m: null,
+      x_m: x,
+      y_m: 2,
+      z_m: 0,
+      rotacion_grados: 0,
+      posicion_confirmada: true,
+      orden: 0,
+    });
+
+    const version = await versionDe(salaAsientosId);
+    const sinTransicion = await invocar({
+      ...patchBase(salaAsientosId, version),
+      mobiliario_alta: [asiento(randomUUID(), 1)],
+    });
+    afirmar(
+      !sinTransicion.ok && sinTransicion.motivo === 'sillas',
+      'un asiento que no apaga el aforo se rechaza: serían dos fuentes vivas',
+    );
+
+    const [trasRechazo] = await sql<Array<{ muebles: string; modo: string; version: number }>>`
+      select
+        (select count(*) from sala_mobiliario m where m.sala_id = ${salaAsientosId})::text as muebles,
+        (select sillas_modo from salas where id = ${salaAsientosId}) as modo,
+        (select diagrama_version from salas where id = ${salaAsientosId}) as version`;
+    afirmar(Number(trasRechazo.muebles) === 0, 'y no deja la silla escrita');
+    afirmar(trasRechazo.modo === 'derivadas', 'ni cambia el modo por su cuenta');
+    afirmar(Number(trasRechazo.version) === version, 'ni sube la versión');
+
+    const conTransicion = await invocar({
+      ...patchBase(salaAsientosId, version),
+      mobiliario_alta: [asiento(randomUUID(), 1)],
+      sillas_modo: 'manuales',
+    });
+    afirmar(conTransicion.ok, 'con la transición declarada, el asiento entra');
+    const [trasAlta] = await sql<Array<{ muebles: string; modo: string }>>`
+      select
+        (select count(*) from sala_mobiliario m where m.sala_id = ${salaAsientosId})::text as muebles,
+        (select sillas_modo from salas where id = ${salaAsientosId}) as modo`;
+    afirmar(Number(trasAlta.muebles) === 1 && trasAlta.modo === 'manuales', 'y queda una sola fuente');
+
+    // Un mueble corriente no obliga a nada: la sala sigue derivando sus sillas
+    // desde el aforo, que es lo que hacía antes de añadir la mesa.
+    const mesaAux = await invocar({
+      ...patchBase(salaMuebleCorrienteId, await versionDe(salaMuebleCorrienteId)),
+      mobiliario_alta: [
+        {
+          ...asiento(randomUUID(), 1),
+          mobiliario_id: mesaAuxCatalogoId,
+          nombre: 'Mesa auxiliar',
+          forma: 'rectangulo' as const,
+        },
+      ],
+    });
+    afirmar(mesaAux.ok, 'un mueble corriente entra sin declarar transición');
+    const [trasMesaAux] = await sql<Array<{ sillas_modo: string; muebles: string }>>`
+      select sillas_modo,
+             (select count(*) from sala_mobiliario m where m.sala_id = salas.id)::text as muebles
+      from salas where id = ${salaMuebleCorrienteId}`;
+    afirmar(trasMesaAux.sillas_modo === 'derivadas', 'y el aforo sigue repartiendo las sillas');
+    afirmar(Number(trasMesaAux.muebles) === 1, 'con la mesa ya puesta');
+
+    // Una sala que YA está en el estado imposible —sillas de verdad y el aforo
+    // repartiendo— no puede guardarse aunque el patch no toque las sillas. Es
+    // lo que distingue comprobar el estado final de comprobar el patch: aquí
+    // el patch es inocente y la sala no.
+    await sql`
+      insert into sala_mobiliario (sala_id, mobiliario_id, nombre, forma, x_m, y_m, posicion_confirmada)
+      values (${salaMuebleCorrienteId}, ${sillaCatalogoId}, 'Silla', 'circulo', 1, 1, true)`;
+    const equipoSuelto = await nuevoEquipo(salaMuebleCorrienteId, 'TEST equipo aparte');
+    const versionImposible = await versionDe(salaMuebleCorrienteId);
+    const estadoImposible = await invocar({
+      ...patchBase(salaMuebleCorrienteId, versionImposible),
+      equipos: [
+        { id: equipoSuelto, x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
+      ],
+    });
+    afirmar(
+      !estadoImposible.ok && estadoImposible.motivo === 'sillas',
+      'una sala con sillas de verdad y el aforo activo no guarda nada, ni aunque el patch no las toque',
+    );
+    const [trasImposible] = await sql<Array<{ x_m: string; version: number }>>`
+      select
+        (select x_m from sala_equipos where id = ${equipoSuelto})::text as x_m,
+        (select diagrama_version from salas where id = ${salaMuebleCorrienteId}) as version`;
+    afirmar(Number(trasImposible.x_m) === 0, 'y el equipo no se movió: la transacción se deshizo');
+    afirmar(Number(trasImposible.version) === versionImposible, 'ni subió la versión');
   }
 } finally {
   await limpiar();

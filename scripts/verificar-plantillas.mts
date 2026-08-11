@@ -53,9 +53,11 @@ const afirmar = (cond: boolean, mensaje: string) => {
 const NOMBRE_SALA = 'TEST plantillas origen';
 const NOMBRE_PLANTILLA = 'TEST plantillas tipo';
 const NOMBRE_RECREADA = 'TEST plantillas recreada';
+const NOMBRE_SIN_ASIENTOS = 'TEST plantillas sin asientos';
+const NOMBRE_MESA_PRINCIPAL = 'TEST plantillas mesa principal';
 
 async function limpiar() {
-  await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA})`;
+  await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL})`;
   await sql`delete from plantillas_sala where nombre like ${NOMBRE_PLANTILLA + '%'}`;
 }
 
@@ -252,6 +254,87 @@ try {
     console.log('\n  antes:  ', JSON.stringify(antes));
     console.log('  después:', JSON.stringify(despues));
   }
+
+  // =====================================================================
+  // Crear sala desde plantilla es la SEGUNDA ruta que copia mobiliario
+  //
+  // La otra es `aplicarPlantillaAlDiagrama`. Las dos deciden lo mismo —qué
+  // manda sobre las sillas y qué muebles se pueden instanciar— y las dos
+  // tienen que decidirlo igual. Una regla escrita dos veces con una sola
+  // prueba es una regla con la mitad de la cobertura: se puede romper la
+  // copia sin que caiga nada.
+  // =====================================================================
+  const [mesaAuxCat] = await sql<Array<{ id: string }>>`
+    select id from catalogo_mobiliario where clave = 'mesa-rectangular'`;
+  const [mesaPrincipalCat] = await sql<Array<{ id: string }>>`
+    select id from catalogo_mobiliario where clave = 'mesa-principal'`;
+
+  const plantillaSoloMesa = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m,
+                                 mesa_largo_m, mesa_ancho_m, mesa_alto_cm)
+    values (${plantillaSoloMesa}, ${NOMBRE_PLANTILLA + ' solo mesa'}, 'TEST', 8, 6, 4, 3,
+            2.4, 1.2, 73)`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaSoloMesa}, ${mesaAuxCat.id}, 'Mesa rectangular', 'rectangulo', 1, 0.6,
+            5, 3, 0, 0, true, 0)`;
+
+  const aSalaSoloMesa = new FormData();
+  aSalaSoloMesa.set('plantilla_id', plantillaSoloMesa);
+  aSalaSoloMesa.set('nombre', NOMBRE_SIN_ASIENTOS);
+  aSalaSoloMesa.set('tipologia', 'TEST');
+  aSalaSoloMesa.set('aforo', '8');
+  aSalaSoloMesa.set('largo_m', '6');
+  aSalaSoloMesa.set('ancho_m', '4');
+  aSalaSoloMesa.set('alto_m', '3');
+  aSalaSoloMesa.set('mesa_largo_m', '2.4');
+  aSalaSoloMesa.set('mesa_ancho_m', '1.2');
+  aSalaSoloMesa.set('mesa_alto_cm', '73');
+  await invocar(crearSala, aSalaSoloMesa);
+
+  const [sinAsientos] = await sql<Array<{ id: string; sillas_modo: string; aforo: number }>>`
+    select id, sillas_modo, aforo from salas where nombre = ${NOMBRE_SIN_ASIENTOS}`;
+  afirmar(Boolean(sinAsientos), 'la sala nace de una plantilla que solo trae una mesa auxiliar');
+  afirmar(
+    sinAsientos?.sillas_modo === 'derivadas',
+    'y el aforo sigue repartiendo sus sillas: una mesa auxiliar no las sustituye',
+  );
+  afirmar(sinAsientos?.aforo === 8, 'con su aforo intacto');
+  const [mueblesSinAsientos] = await sql<Array<{ cuantos: string }>>`
+    select count(*)::text as cuantos from sala_mobiliario where sala_id = ${sinAsientos?.id}`;
+  afirmar(Number(mueblesSinAsientos.cuantos) === 1, 'y la mesa auxiliar sí se copia');
+
+  // La mesa principal no se instancia por ninguna de las dos rutas.
+  const plantillaConMesaPrincipal = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaConMesaPrincipal}, ${NOMBRE_PLANTILLA + ' mesa principal'}, 'TEST', 8, 6, 4, 3)`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaConMesaPrincipal}, ${mesaPrincipalCat.id}, 'Mesa principal', 'rectangulo',
+            2.4, 1.2, 3, 2, 0, 0, true, 0)`;
+
+  const aSalaMesaPrincipal = new FormData();
+  aSalaMesaPrincipal.set('plantilla_id', plantillaConMesaPrincipal);
+  aSalaMesaPrincipal.set('nombre', NOMBRE_MESA_PRINCIPAL);
+  aSalaMesaPrincipal.set('tipologia', 'TEST');
+  aSalaMesaPrincipal.set('aforo', '8');
+  aSalaMesaPrincipal.set('largo_m', '6');
+  aSalaMesaPrincipal.set('ancho_m', '4');
+  aSalaMesaPrincipal.set('alto_m', '3');
+  await invocar(crearSala, aSalaMesaPrincipal);
+
+  const [conMesaPrincipal] = await sql<Array<{ id: string }>>`
+    select id from salas where nombre = ${NOMBRE_MESA_PRINCIPAL}`;
+  afirmar(
+    !conMesaPrincipal,
+    'una plantilla con una mesa principal como mueble no crea sala: daría dos mesas',
+  );
 } finally {
   await limpiar();
   await sql.end();

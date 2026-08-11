@@ -7,8 +7,8 @@ import {
   acercar,
   afectaAlCalculo,
   avisosDelBorrador,
+  anadirDelCatalogo,
   anadirEquipo,
-  anadirMuebles,
   aplicarIdsReales,
   borradorDesde,
   confirmarEstimadas,
@@ -281,15 +281,24 @@ export function EditorPlanoSala({
   // resto. Deshacer lo quita, que es lo que espera quien acaba de teclear
   // «silla» y ve que no era esa.
 
+  // Devuelve el aviso para que lo enseñe la biblioteca: el alta no siempre
+  // crea una fila —`Mesa principal` selecciona la que ya hay— y añadir una
+  // silla convierte de paso las del aforo en filas editables. Decir «añadida»
+  // en los dos casos sería mentir en uno.
   const anadirMobiliario = useCallback(
-    (mueble: MuebleCatalogo, cantidad: number) => {
-      const ids = Array.from({ length: Math.max(1, cantidad) }, () =>
-        crypto.randomUUID(),
-      );
-      aplicar(anadirMuebles(borrador, mueble, ids));
-      setSeleccion({ tipo: 'mueble', id: ids[0] });
+    (mueble: MuebleCatalogo, cantidad: number): string => {
+      const r = anadirDelCatalogo(borrador, mueble, cantidad, {
+        nuevoId: () => crypto.randomUUID(),
+        // Las sillas que el croquis está dibujando AHORA, con la geometría con
+        // pruebas: materializarlas con otro reparto movería sillas que nadie
+        // tocó.
+        sillasDerivadas: escena.sillas,
+      });
+      if (r.borrador !== borrador) aplicar(r.borrador);
+      setSeleccion(r.seleccion);
+      return r.aviso;
     },
-    [aplicar, borrador],
+    [aplicar, borrador, escena.sillas],
   );
 
   const anadirEquipamiento = useCallback(

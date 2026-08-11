@@ -13,7 +13,10 @@ import {
   cambiarMedidasSala,
   comoViewBox,
   confirmarEstimadas,
+  MAXIMO_AFORO_MATERIALIZABLE,
   MAXIMO_ALTA_MOBILIARIO,
+  MAXIMO_MOBILIARIO_POR_PATCH,
+  anadirDelCatalogo,
   anadirEquipo,
   anadirMuebles,
   colocarEnElCentro,
@@ -58,6 +61,7 @@ const SILLA: MuebleCatalogo = {
   categoria: 'Asientos',
   palabras_clave: 'silla asiento butaca',
   forma: 'circulo',
+  rol: 'asiento',
   largo_m_defecto: 0.5,
   ancho_m_defecto: 0.5,
   alto_m_defecto: null,
@@ -71,8 +75,18 @@ const MESA_AUX: MuebleCatalogo = {
   nombre: 'Mesa rectangular',
   categoria: 'Mesas',
   forma: 'rectangulo',
+  rol: null,
   largo_m_defecto: null,
   ancho_m_defecto: null,
+};
+
+/** La mesa de la sala. Existe en el catálogo para poder encontrarla, no para instanciarla. */
+const MESA_PRINCIPAL: MuebleCatalogo = {
+  ...MESA_AUX,
+  id: 'cat-mesa-principal',
+  clave: 'mesa-principal',
+  nombre: 'Mesa principal',
+  rol: 'mesa_principal',
 };
 
 const ids = (n: number, prefijo = 'tmp') =>
@@ -812,6 +826,300 @@ describe('las sillas derivadas se materializan sin moverse', () => {
       escena.muebles.map((m) => [m.x_m, m.y_m]).sort(),
       sillas.map((s) => [s.x_m, s.y_m]).sort(),
     );
+  });
+});
+
+/**
+ * El alta tal y como la hace la interfaz.
+ *
+ * Estas pruebas no construyen el borrador a mano ni le ponen
+ * `sillas_modo: 'manuales'`: llaman a lo mismo que llama el botón `Añadir`,
+ * que es donde estaba el fallo. Una prueba que inyecta el modo que la
+ * interfaz nunca manda pasa con el fallo dentro.
+ */
+describe('añadir desde el buscador de mobiliario', () => {
+  /** Un generador determinista: la lógica es pura y no puede inventar uuid. */
+  const contador = () => {
+    let n = 0;
+    return () => `nuevo-${n++}`;
+  };
+
+  const sillasQueDibujaElCroquis = (b = base()) =>
+    construirEscena(entradaCroquisDe(b, SALA, [])).sillas;
+
+  it('añadir una silla no duplica las del aforo', () => {
+    const antes = base();
+    const derivadas = sillasQueDibujaElCroquis(antes);
+    assert.equal(derivadas.length, 8, 'la sala de partida dibuja las ocho del aforo');
+
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: derivadas,
+    });
+
+    const escena = construirEscena(entradaCroquisDe(r.borrador, SALA, []));
+    assert.equal(escena.sillas.length, 0, 'ya no se derivan del aforo');
+    // La nueva todavía no se dibuja: entra en `Por colocar` y se sitúa
+    // arrastrándola. Las dibujadas son las ocho de siempre, no dieciséis.
+    assert.equal(escena.muebles.length, 8, 'las ocho de antes, ni una más');
+    assert.equal(r.borrador.mobiliario.length, 9, 'ocho materializadas y la nueva en la lista');
+    assert.equal(r.borrador.sillas_modo, 'manuales');
+  });
+
+  it('las ocho que se materializan caen donde ya estaban', () => {
+    const antes = base();
+    const derivadas = sillasQueDibujaElCroquis(antes);
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: derivadas,
+    });
+
+    const colocadas = r.borrador.mobiliario
+      .filter((m) => m.posicion_confirmada)
+      .map((m) => [m.x_m, m.y_m]);
+    assert.deepEqual(
+      colocadas,
+      derivadas.map((s) => [s.x_m, s.y_m]),
+      'el croquis de antes y el de después dibujan las mismas sillas en el mismo sitio',
+    );
+  });
+
+  it('el patch que sale de ese alta lleva el modo, sin que nadie se lo ponga', () => {
+    const antes = base();
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: sillasQueDibujaElCroquis(antes),
+    });
+    const patch = construirPatch('sala-1', 3, antes, r.borrador);
+
+    assert.equal(patch.sillas_modo, 'manuales');
+    assert.equal(patch.mobiliario_alta.length, 9);
+    assert.ok(
+      patch.mobiliario_alta.every((m) => m.mobiliario_id === SILLA.id),
+      'toda alta lleva su referencia de catálogo: el servidor relee por ahí',
+    );
+  });
+
+  it('un mueble que no es asiento deja el aforo en paz', () => {
+    const antes = base();
+    const r = anadirDelCatalogo(antes, MESA_AUX, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: sillasQueDibujaElCroquis(antes),
+    });
+
+    assert.equal(r.borrador.sillas_modo, 'derivadas');
+    const escena = construirEscena(entradaCroquisDe(r.borrador, SALA, []));
+    assert.equal(escena.sillas.length, 8, 'las ocho del aforo siguen dibujándose');
+  });
+
+  it('Mesa principal selecciona la que hay y no crea una segunda', () => {
+    const antes = base();
+    const r = anadirDelCatalogo(antes, MESA_PRINCIPAL, 1, { nuevoId: contador() });
+
+    assert.equal(r.borrador, antes, 'el borrador no se toca siquiera');
+    assert.deepEqual(r.seleccion, { tipo: 'mesa' });
+    assert.match(r.aviso, /mesa principal/i);
+  });
+
+  it('la cantidad se recorta antes de inventar identificadores', () => {
+    let pedidos = 0;
+    const r = anadirDelCatalogo(base(), MESA_AUX, 5000, {
+      nuevoId: () => `nuevo-${pedidos++}`,
+    });
+
+    assert.equal(r.borrador.mobiliario.length, MAXIMO_ALTA_MOBILIARIO);
+    assert.equal(pedidos, MAXIMO_ALTA_MOBILIARIO, 'cincuenta identificadores, no cinco mil');
+  });
+
+  it('una cantidad absurda no rompe: cero, texto o infinito dan uno', () => {
+    for (const cantidad of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const r = anadirDelCatalogo(base(), MESA_AUX, cantidad, { nuevoId: contador() });
+      assert.equal(r.borrador.mobiliario.length, 1, `cantidad ${cantidad}`);
+    }
+  });
+
+  it('lo añadido queda seleccionado, que es lo que abre su inspector', () => {
+    const r = anadirDelCatalogo(base(), MESA_AUX, 3, { nuevoId: contador() });
+    assert.deepEqual(r.seleccion, { tipo: 'mueble', id: r.borrador.mobiliario[0].id });
+  });
+
+  it('añadir un asiento a una sala que ya es manual no vuelve a materializar', () => {
+    const antes = base();
+    const primera = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: sillasQueDibujaElCroquis(antes),
+    }).borrador;
+
+    const segunda = anadirDelCatalogo(primera, SILLA, 1, {
+      nuevoId: contador(),
+      // Aunque se le pasen: con el modo ya en manuales no hay nada que derivar.
+      sillasDerivadas: sillasQueDibujaElCroquis(),
+    }).borrador;
+
+    assert.equal(segunda.mobiliario.length, 10, 'nueve y una, no nueve y nueve');
+  });
+});
+
+/**
+ * Lo que construye la interfaz tiene que poder guardarse.
+ *
+ * Estas dos familias de pruebas cierran el círculo: la primera comprueba que
+ * las sillas materializadas caen dentro de la sala —y por tanto pasan la misma
+ * validación que aplica el servidor—, y la segunda que la interfaz no puede
+ * construir un patch que el esquema rechace por cantidad. Un editor que crea
+ * borradores irguardables gasta el trabajo de quien los hizo.
+ */
+describe('el borrador que hace la interfaz lo acepta el servidor', () => {
+  const contador = () => {
+    let n = 0;
+    return () => `nuevo-${n++}`;
+  };
+
+  /** Sala de 4 × 4 con la mesa arrimada a la pared izquierda. */
+  const SALA_ARRIMADA: Sala = {
+    ...SALA,
+    largo_m: 4,
+    ancho_m: 4,
+    aforo: 8,
+    mesa_largo_m: 2,
+    mesa_ancho_m: 1,
+    mesa_x_m: 0,
+    mesa_y_m: 2,
+  };
+
+  const borradorArrimado = () => borradorDesde(SALA_ARRIMADA, [], [], []);
+
+  const sillasDibujadas = (b: BorradorPlano, sala: Sala) =>
+    construirEscena(entradaCroquisDe(b, sala, [])).sillas;
+
+  it('materializar junto a la pared no saca ninguna silla de la sala', () => {
+    const antes = borradorArrimado();
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: sillasDibujadas(antes, SALA_ARRIMADA),
+    });
+
+    const fuera = r.borrador.mobiliario.filter(
+      (m) =>
+        m.posicion_confirmada &&
+        (m.x_m == null || m.y_m == null || m.x_m < 0 || m.x_m > 4 || m.y_m < 0 || m.y_m > 4),
+    );
+    assert.deepEqual(fuera, [], 'ninguna silla materializada fuera de la sala');
+  });
+
+  it('y el patch resultante pasa la validación del servidor', () => {
+    const antes = borradorArrimado();
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: sillasDibujadas(antes, SALA_ARRIMADA),
+    });
+    const patch = construirPatch('sala-1', 3, antes, r.borrador);
+
+    assert.deepEqual(
+      coordenadasFueraDeSala(patch, { largo_m: 4, ancho_m: 4, alto_m: 2.7 }),
+      [],
+      'lo que dibuja el editor es guardable: la misma función que corre en el servidor',
+    );
+  });
+
+  it('el dibujo de antes y el de después de materializar es el mismo', () => {
+    const antes = borradorArrimado();
+    const dibujadasAntes = sillasDibujadas(antes, SALA_ARRIMADA);
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: dibujadasAntes,
+    });
+    const dibujadasDespues = construirEscena(
+      entradaCroquisDe(r.borrador, SALA_ARRIMADA, []),
+    ).muebles;
+
+    assert.equal(dibujadasDespues.length, dibujadasAntes.length, 'el mismo número de sillas');
+    assert.deepEqual(
+      dibujadasDespues.map((m) => [m.x_m, m.y_m]),
+      dibujadasAntes.map((s) => [s.x_m, s.y_m]),
+      'y en las mismas coordenadas',
+    );
+  });
+});
+
+describe('los límites de alta son uno solo, no tres', () => {
+  const contador = () => {
+    let n = 0;
+    return () => `nuevo-${n++}`;
+  };
+
+  const conAforo = (aforo: number): Sala => ({ ...SALA, aforo });
+
+  /** Las sillas que dibujaría el croquis con ese aforo. */
+  const derivadasDe = (sala: Sala) =>
+    construirEscena(entradaCroquisDe(borradorDesde(sala, [], [], []), sala, [])).sillas;
+
+  it('el máximo del patch cubre el aforo materializable más un alta entera', () => {
+    assert.equal(
+      MAXIMO_MOBILIARIO_POR_PATCH,
+      MAXIMO_AFORO_MATERIALIZABLE + MAXIMO_ALTA_MOBILIARIO,
+      'si no, la interfaz puede construir un patch que el esquema rechaza',
+    );
+  });
+
+  it('un aforo por encima del límite no materializa ni inventa identificadores', () => {
+    const sala = conAforo(MAXIMO_AFORO_MATERIALIZABLE + 1);
+    const antes = borradorDesde(sala, [], [], []);
+    let pedidos = 0;
+
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: () => `nuevo-${pedidos++}`,
+      sillasDerivadas: derivadasDe(sala),
+    });
+
+    assert.equal(r.borrador, antes, 'el borrador no se toca');
+    assert.equal(pedidos, 0, 'no se genera ni un identificador');
+    assert.equal(r.borrador.sillas_modo, 'derivadas', 'y las sillas del aforo siguen ahí');
+  });
+
+  it('y lo explica con el número, no con «datos inválidos»', () => {
+    const sala = conAforo(MAXIMO_AFORO_MATERIALIZABLE + 1);
+    const r = anadirDelCatalogo(borradorDesde(sala, [], [], []), SILLA, 1, {
+      nuevoId: () => 'no-deberia-pedirse',
+      sillasDerivadas: derivadasDe(sala),
+    });
+    assert.match(r.aviso, new RegExp(String(MAXIMO_AFORO_MATERIALIZABLE)));
+    assert.doesNotMatch(r.aviso, /inválid/i);
+  });
+
+  it('el aforo justo en el límite sí se materializa', () => {
+    const sala = conAforo(MAXIMO_AFORO_MATERIALIZABLE);
+    const antes = borradorDesde(sala, [], [], []);
+    const r = anadirDelCatalogo(antes, SILLA, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: derivadasDe(sala),
+    });
+    assert.equal(r.borrador.mobiliario.length, MAXIMO_AFORO_MATERIALIZABLE + 1);
+    assert.equal(r.borrador.sillas_modo, 'manuales');
+  });
+
+  it('aforo en el límite más un alta de cincuenta cabe en el patch', () => {
+    const sala = conAforo(MAXIMO_AFORO_MATERIALIZABLE);
+    const antes = borradorDesde(sala, [], [], []);
+    const r = anadirDelCatalogo(antes, SILLA, MAXIMO_ALTA_MOBILIARIO, {
+      nuevoId: contador(),
+      sillasDerivadas: derivadasDe(sala),
+    });
+    const patch = construirPatch('sala-1', 3, antes, r.borrador);
+    assert.ok(
+      patch.mobiliario_alta.length <= MAXIMO_MOBILIARIO_POR_PATCH,
+      `${patch.mobiliario_alta.length} altas no pueden pasar de ${MAXIMO_MOBILIARIO_POR_PATCH}`,
+    );
+  });
+
+  it('un mueble corriente no mira el aforo: no materializa nada', () => {
+    const sala = conAforo(MAXIMO_AFORO_MATERIALIZABLE + 1);
+    const antes = borradorDesde(sala, [], [], []);
+    const r = anadirDelCatalogo(antes, MESA_AUX, 1, {
+      nuevoId: contador(),
+      sillasDerivadas: derivadasDe(sala),
+    });
+    assert.equal(r.borrador.mobiliario.length, 1, 'la mesa entra aunque el aforo sea enorme');
   });
 });
 

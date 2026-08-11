@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  anclarSillasEnLaSala,
   construirEscena,
   mesaDeLaSala,
   normalizarGrados,
@@ -139,10 +140,21 @@ describe('la mesa girada', () => {
       ss.map((s) => `${s.x_m.toFixed(2)},${s.y_m.toFixed(2)}`).sort().join(' | ');
 
     // Giro de 90° a mano: (x, y) → (cx − (y − cy), cy + (x − cx)).
-    const aMano = recta.sillas.map((s) => ({
-      x_m: c.x_m - (s.y_m - c.y_m),
-      y_m: c.y_m + (s.x_m - c.x_m),
-    }));
+    //
+    // Y anclado a la sala después de girar, con la misma función que usa el
+    // croquis: en la Sala de Batería, que es estrecha, la mesa girada manda
+    // las dos cabeceras fuera de la pared. Comparar contra el giro sin anclar
+    // exigiría que el croquis dibujase una silla donde no hay sala. Lo que
+    // esta prueba comprueba —que las sillas giran con la mesa— lo sigue
+    // comprobando el `notEqual` de abajo.
+    const aMano = anclarSillasEnLaSala(
+      recta.sillas.map((s) => ({
+        x_m: c.x_m - (s.y_m - c.y_m),
+        y_m: c.y_m + (s.x_m - c.x_m),
+        radio_m: s.radio_m,
+      })),
+      SALA_BATERIA,
+    );
 
     assert.equal(clave(noventa.sillas), clave(aMano));
     assert.notEqual(clave(noventa.sillas), clave(recta.sillas));
@@ -217,6 +229,103 @@ describe('las sillas alrededor de la mesa', () => {
 
   it('sin aforo no hay sillas', () => {
     assert.deepEqual(sillasAlrededor(mesa, 0), []);
+  });
+});
+
+/**
+ * Una silla puede tocar la pared, pero su ancla no puede salirse de la sala.
+ *
+ * Con la mesa arrimada, el reparto de siempre pone la cabecera 42 cm más allá
+ * del borde de la mesa, y ahí ya no hay sala. Mientras eso solo se dibujaba no
+ * se notaba —el símbolo asomaba por fuera y parecía un detalle del dibujo—,
+ * pero al materializar las sillas esa posición se convierte en una fila con
+ * coordenadas, y el servidor rechaza el guardado entero por elementos fuera
+ * de la sala. El editor construía un borrador que él mismo no podía guardar.
+ */
+describe('las sillas derivadas caben en la sala', () => {
+  const salaConMesa = (
+    mesa_x_m: number,
+    mesa_y_m: number,
+    extra: Partial<Sala> = {},
+  ): Sala => ({
+    ...SALA_BATERIA,
+    largo_m: 4,
+    ancho_m: 4,
+    aforo: 8,
+    mesa_largo_m: 2,
+    mesa_ancho_m: 1,
+    mesa_x_m,
+    mesa_y_m,
+    ...extra,
+  });
+
+  const dentro = (sala: Sala) => {
+    const escena = construirEscena({ sala, equipos: [], conexiones: [], tomas: [] });
+    return escena.sillas.every(
+      (s) => s.x_m >= 0 && s.x_m <= sala.largo_m && s.y_m >= 0 && s.y_m <= sala.ancho_m,
+    );
+  };
+
+  // El caso que reprodujo la auditoría: mesa de 2 × 1 centrada en (0,2) de una
+  // sala de 4 × 4. La cabecera izquierda cae en x negativa.
+  it('mesa pegada a la pared izquierda', () => {
+    assert.ok(dentro(salaConMesa(0, 2)), 'ninguna silla en x negativa');
+  });
+
+  it('mesa pegada a la pared derecha', () => {
+    assert.ok(dentro(salaConMesa(4, 2)), 'ninguna silla más allá del largo');
+  });
+
+  it('mesa pegada a la pared inferior', () => {
+    assert.ok(dentro(salaConMesa(2, 0)), 'ninguna silla en y negativa');
+  });
+
+  it('mesa pegada a la pared superior', () => {
+    assert.ok(dentro(salaConMesa(2, 4)), 'ninguna silla más allá del ancho');
+  });
+
+  for (const [x, y] of [
+    [0, 0],
+    [4, 0],
+    [0, 4],
+    [4, 4],
+  ] as const) {
+    it(`mesa en la esquina (${x}, ${y})`, () => {
+      assert.ok(dentro(salaConMesa(x, y)));
+    });
+  }
+
+  for (const giro of [90, 180, 270]) {
+    it(`mesa arrimada y girada ${giro}°`, () => {
+      assert.ok(dentro(salaConMesa(0, 2, { mesa_rotacion_grados: giro })));
+    });
+  }
+
+  it('en una sala holgada no se mueve ninguna silla', () => {
+    const sala = { ...SALA_BATERIA, largo_m: 10, ancho_m: 10, mesa_x_m: 5, mesa_y_m: 5 };
+    const escena = construirEscena({ sala, equipos: [], conexiones: [], tomas: [] });
+    const mesa = mesaDeLaSala(sala)!;
+    assert.deepEqual(
+      escena.sillas.map((s) => [s.x_m, s.y_m]),
+      sillasAlrededor(mesa, 8).map((s) => [s.x_m, s.y_m]),
+      'ajustar contra la pared no puede recolocar lo que ya cabía',
+    );
+  });
+
+  it('el número de sillas no cambia al ajustarlas', () => {
+    const escena = construirEscena({
+      sala: salaConMesa(0, 2),
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+    });
+    assert.equal(escena.sillas.length, 8, 'ocho sitios siguen siendo ocho');
+  });
+
+  it('una sala sin medir no recorta nada: no hay contra qué', () => {
+    const sala = { ...salaConMesa(0, 2), largo_m: 0, ancho_m: 0 };
+    const escena = construirEscena({ sala, equipos: [], conexiones: [], tomas: [] });
+    assert.equal(escena.sillas.length, 8);
   });
 });
 

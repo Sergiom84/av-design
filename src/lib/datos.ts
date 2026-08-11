@@ -138,7 +138,7 @@ export async function buscarMobiliario(
     .map((t) => t.replace(/[\\%_]/g, (c) => `\\${c}`));
 
   const filas = await sql<Fila[]>`
-    select id, clave, nombre, categoria, palabras_clave, forma,
+    select id, clave, nombre, categoria, palabras_clave, forma, rol,
            largo_m_defecto, ancho_m_defecto, alto_m_defecto
     from catalogo_mobiliario
     where activo
@@ -159,6 +159,9 @@ export async function buscarMobiliario(
     categoria: String(f.categoria),
     palabras_clave: s(f.palabras_clave),
     forma: f.forma === 'circulo' ? 'circulo' : 'rectangulo',
+    // Un rol desconocido se lee como nulo: el mueble se comporta como
+    // corriente, que es lo inocuo. Adivinarlo apagaría sillas de verdad.
+    rol: f.rol === 'asiento' || f.rol === 'mesa_principal' ? f.rol : null,
     largo_m_defecto: n(f.largo_m_defecto),
     ancho_m_defecto: n(f.ancho_m_defecto),
     alto_m_defecto: n(f.alto_m_defecto),

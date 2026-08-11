@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { sql } from '@/lib/db';
 import { esUuid } from '@/lib/uuid';
 import { normalizarGrados } from '@/lib/croquis';
-import { coordenadasFueraDeSala, type PatchPlano } from '@/lib/plano-editor';
+import {
+  MAXIMO_MOBILIARIO_POR_PATCH,
+  coordenadasFueraDeSala,
+  type PatchPlano,
+} from '@/lib/plano-editor';
 import { extremoPorCategoria } from '@/lib/tipos';
 
 /**
@@ -101,8 +105,15 @@ const esquemaMueble = z.object({
   orden: z.number().int().min(0).max(10000),
 });
 
+/**
+ * Un alta de mueble. La referencia del catálogo es obligatoria por lo mismo
+ * que en el equipamiento: sin ella el servidor no tendría de dónde releer el
+ * nombre ni la forma y se quedaría con los que manda el navegador, que es
+ * justo lo que no se hace. `nombre` y `forma` viajan para pintar el borrador
+ * antes de guardar; al insertar se releen del catálogo.
+ */
 const esquemaMuebleAlta = esquemaMueble.extend({
-  mobiliario_id: z.string().refine(esUuid, 'mobiliario_id no es un uuid').nullable(),
+  mobiliario_id: z.string().refine(esUuid, 'mobiliario_id no es un uuid'),
   forma: z.enum(['rectangulo', 'circulo']),
 });
 
@@ -112,7 +123,10 @@ const esquemaPatch = z.object({
   sala: esquemaSala.nullable(),
   equipos: z.array(esquemaEquipo).max(500),
   equipos_alta: z.array(esquemaEquipoAlta).max(200),
-  mobiliario_alta: z.array(esquemaMuebleAlta).max(200),
+  // El tope sale de `plano-editor.ts` y no de un número escrito aquí: es el
+  // mismo que respeta el editor al construir el borrador, así que la interfaz
+  // no puede fabricar un patch que este esquema rechace solo por cantidad.
+  mobiliario_alta: z.array(esquemaMuebleAlta).max(MAXIMO_MOBILIARIO_POR_PATCH),
   mobiliario_cambio: z.array(esquemaMueble).max(500),
   mobiliario_baja: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(500),
   tomas: z.array(esquemaToma).max(500),
@@ -144,7 +158,8 @@ export type ResultadoGuardado =
         | 'conflicto'
         | 'ajeno'
         | 'fuera'
-        | 'catalogo';
+        | 'catalogo'
+        | 'sillas';
       detalle: string;
     };
 
@@ -157,9 +172,27 @@ const MENSAJE: Record<Exclude<ResultadoGuardado & { ok: false }, never>['motivo'
   fuera: 'Hay elementos colocados fuera de la sala.',
   catalogo:
     'Alguna referencia no vale: tiene que ser un equipo activo del catálogo, o un mueble activo.',
+  sillas:
+    'La sala reparte sus sillas desde el aforo. Añadir sillas de verdad exige dejar de repartirlas, o se dibujarían dos veces.',
 };
 
-const fallo = (motivo: Exclude<ResultadoGuardado & { ok: false }, never>['motivo']): ResultadoGuardado => ({
+/**
+ * Rechazo posterior a una escritura en el guardado del plano.
+ *
+ * Mismo motivo que en la plantilla: `sql.begin()` hace commit cuando la
+ * función resuelve, así que una postcondición que se comprueba con las filas
+ * ya insertadas solo puede rechazar lanzando.
+ */
+class GuardadoRechazado extends Error {
+  constructor(readonly resultado: Extract<ResultadoGuardado, { ok: false }>) {
+    super(resultado.detalle);
+    this.name = 'GuardadoRechazado';
+  }
+}
+
+type GuardadoFallido = Extract<ResultadoGuardado, { ok: false }>;
+
+const fallo = (motivo: GuardadoFallido['motivo']): GuardadoFallido => ({
   ok: false,
   motivo,
   detalle: MENSAJE[motivo],
@@ -201,7 +234,7 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
   // es un borrador roto.
   if (p.mobiliario_cambio.some((m) => p.mobiliario_baja.includes(m.id))) return fallo('ajeno');
 
-  const resultado = await sql.begin(async (tx): Promise<ResultadoGuardado> => {
+  const transaccion = sql.begin(async (tx): Promise<ResultadoGuardado> => {
     // `for update` bloquea la fila hasta el commit: dos guardados simultáneos
     // se ponen en fila y el segundo lee la versión que dejó el primero, así
     // que el conflicto se detecta en vez de colarse entre la lectura y el
@@ -214,9 +247,10 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         largo_m: string | null;
         ancho_m: string | null;
         alto_m: string | null;
+        sillas_modo: string;
       }>
     >`
-      select id, diagrama_version, localizacion_id, largo_m, ancho_m, alto_m
+      select id, diagrama_version, localizacion_id, largo_m, ancho_m, alto_m, sillas_modo
       from salas where id = ${p.sala_id}
       for update`;
     if (!sala) return fallo('no_existe');
@@ -292,17 +326,28 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       }
     }
 
-    const muebles = new Map<string, { nombre: string; forma: string }>();
+    const muebles = new Map<string, { nombre: string; forma: string; rol: string | null }>();
     if (p.mobiliario_alta.length > 0) {
-      const ids = [...new Set(p.mobiliario_alta.map((m) => m.mobiliario_id).filter(Boolean))] as string[];
-      if (ids.length > 0) {
-        const filas = await tx<Array<{ id: string; nombre: string; forma: string }>>`
-          select id, nombre, forma from catalogo_mobiliario
-          where id in ${tx(ids)} and activo`;
-        if (filas.length !== ids.length) return fallo('catalogo');
-        for (const m of filas) muebles.set(m.id, { nombre: m.nombre, forma: m.forma });
+      const ids = [...new Set(p.mobiliario_alta.map((m) => m.mobiliario_id))];
+      const filas = await tx<
+        Array<{ id: string; nombre: string; forma: string; rol: string | null }>
+      >`
+        select id, nombre, forma, rol from catalogo_mobiliario
+        where id in ${tx(ids)} and activo`;
+      if (filas.length !== ids.length) return fallo('catalogo');
+      // La mesa principal de la sala vive en `salas.mesa_*` y es una sola. El
+      // buscador ofrece la referencia para poder encontrarla y seleccionarla,
+      // pero instanciarla daría dos mesas principales dibujadas, y el croquis
+      // repartiría las sillas alrededor de una de las dos.
+      if (filas.some((m) => m.rol === 'mesa_principal')) return fallo('catalogo');
+      for (const m of filas) {
+        muebles.set(m.id, { nombre: m.nombre, forma: m.forma, rol: m.rol });
       }
     }
+
+    // El rol del catálogo se conserva en el mapa porque decide más cosas que
+    // el nombre: la comprobación de fuente única de sillas, más abajo, se hace
+    // sobre el estado final de la sala.
 
     if (p.inicio_diagrama?.plantilla_id) {
       const [existe] = await tx<Array<{ id: string }>>`
@@ -369,16 +414,15 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
     }
 
     for (const m of p.mobiliario_alta) {
-      // El nombre y la forma salen del catálogo cuando hay catálogo. Un mueble
-      // sin referencia —no debería llegar hoy— conserva lo que trae, que es lo
-      // único que hay.
-      const cat = m.mobiliario_id ? muebles.get(m.mobiliario_id) : undefined;
+      // El nombre y la forma salen del catálogo, no del navegador: de un alta
+      // solo se cree el identificador, igual que en el equipamiento.
+      const cat = muebles.get(m.mobiliario_id)!;
       const [fila] = await tx<Array<{ id: string }>>`
         insert into sala_mobiliario
           (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, alto_m,
            x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
-        values (${p.sala_id}, ${m.mobiliario_id}, ${cat?.nombre ?? m.nombre},
-                ${cat?.forma ?? m.forma}, ${m.largo_m}, ${m.ancho_m}, ${m.alto_m},
+        values (${p.sala_id}, ${m.mobiliario_id}, ${cat.nombre},
+                ${cat.forma}, ${m.largo_m}, ${m.ancho_m}, ${m.alto_m},
                 ${m.x_m}, ${m.y_m}, ${m.z_m},
                 ${normalizarGrados(m.rotacion_grados)}, ${m.posicion_confirmada},
                 ${m.orden})
@@ -431,6 +475,36 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         where id = ${p.sala_id} and sillas_modo = 'derivadas'`;
     }
 
+    // ------------------------------- una sola fuente de sillas, comprobada
+    //
+    // Quién manda sobre las sillas lo decide el editor, que es quien sabe
+    // dónde están dibujadas y puede materializarlas sin moverlas. El estado
+    // imposible lo impide el servidor: sillas explícitas y el aforo
+    // repartiendo a la vez dibujan cada silla dos veces, y una petición
+    // escrita a mano no pasa por el editor.
+    //
+    // Se mira el estado REAL de la sala ya con todo aplicado, y no lo que
+    // decía el patch, porque es lo único que cubre TODOS los caminos: el alta
+    // de un asiento sin declarar la transición, una sala que ya venía con
+    // sillas y el aforo activo, o dos peticiones cruzadas. Una guarda previa
+    // sobre el patch sería más barata y no cubriría ni un caso más: se probó,
+    // y quitarla no hacía caer ninguna prueba porque esta la caza igual. Dos
+    // comprobaciones donde basta una son dos sitios que mantener y uno que se
+    // queda atrás.
+    //
+    // No se corrige en silencio poniendo `manuales`: si el patch no trae las
+    // sillas del aforo materializadas, apagarlo aquí las haría desaparecer del
+    // croquis sin que nadie lo pidiera. Se rechaza y se explica.
+    const [estado] = await tx<Array<{ asientos: string; sillas_modo: string }>>`
+      select
+        (select count(*) from sala_mobiliario m
+          join catalogo_mobiliario c on c.id = m.mobiliario_id
+         where m.sala_id = ${p.sala_id} and c.rol = 'asiento')::text as asientos,
+        (select sillas_modo from salas where id = ${p.sala_id}) as sillas_modo`;
+    if (Number(estado.asientos) > 0 && estado.sillas_modo !== 'manuales') {
+      throw new GuardadoRechazado(fallo('sillas'));
+    }
+
     // La versión sube aunque el patch venga vacío: guardar es un hecho, y dos
     // pestañas que guardan "nada" a la vez tienen el mismo derecho a enterarse.
     const [nueva] = await tx<Array<{ diagrama_version: number }>>`
@@ -440,6 +514,16 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
 
     return { ok: true, version: Number(nueva.diagrama_version), ids };
   });
+
+  let resultado: ResultadoGuardado;
+  try {
+    resultado = await transaccion;
+  } catch (error) {
+    // La postcondición rechaza con filas ya escritas: llega aquí con la
+    // transacción deshecha, así que no queda ni una silla ni sube la versión.
+    if (error instanceof GuardadoRechazado) return error.resultado;
+    throw error;
+  }
 
   if (resultado.ok) {
     // El plano cambia los metros y el material: se refresca la ficha entera,
@@ -509,9 +593,32 @@ export type ResultadoPlantilla =
   | { ok: true; version: number; copiado: boolean }
   | {
       ok: false;
-      motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'catalogo' | 'ocupada';
+      motivo:
+        | 'invalido'
+        | 'no_existe'
+        | 'cerrado'
+        | 'conflicto'
+        | 'catalogo'
+        | 'ocupada'
+        | 'fuera'
+        | 'iniciada';
       detalle: string;
     };
+
+/**
+ * Rechazo posterior a una escritura.
+ *
+ * `sql.begin()` hace commit cuando la función RESUELVE, así que un `return`
+ * con el rechazo dejaría escrito lo que ya se hubiera insertado. Después de
+ * copiar la plantilla el único rechazo posible es un `throw`: se lanza, la
+ * transacción se deshace entera y el resultado se devuelve fuera.
+ */
+class PlantillaRechazada extends Error {
+  constructor(readonly resultado: Extract<ResultadoPlantilla, { ok: false }>) {
+    super(resultado.detalle);
+    this.name = 'PlantillaRechazada';
+  }
+}
 
 export async function aplicarPlantillaAlDiagrama(
   salaId: string,
@@ -522,7 +629,7 @@ export async function aplicarPlantillaAlDiagrama(
     return { ok: false, motivo: 'invalido', detalle: MENSAJE.invalido };
   }
 
-  const resultado = await sql.begin(async (tx): Promise<ResultadoPlantilla> => {
+  const transaccion = sql.begin(async (tx): Promise<ResultadoPlantilla> => {
     const [sala] = await tx<
       Array<{
         id: string;
@@ -530,9 +637,12 @@ export async function aplicarPlantillaAlDiagrama(
         localizacion_id: string | null;
         plantilla_id: string | null;
         diagrama_plantilla_id: string | null;
+        diagrama_iniciado_en: Date | null;
+        diagrama_origen: string | null;
       }>
     >`
-      select id, diagrama_version, localizacion_id, plantilla_id, diagrama_plantilla_id
+      select id, diagrama_version, localizacion_id, plantilla_id, diagrama_plantilla_id,
+             diagrama_iniciado_en, diagrama_origen
       from salas where id = ${salaId}
       for update`;
     if (!sala) return { ok: false, motivo: 'no_existe', detalle: MENSAJE.no_existe };
@@ -567,15 +677,24 @@ export async function aplicarPlantillaAlDiagrama(
     >`select * from plantillas_sala where id = ${plantillaId}`;
     if (!plantilla) return { ok: false, motivo: 'catalogo', detalle: MENSAJE.catalogo };
 
-    const [ocupacion] = await tx<Array<{ equipos: string; conexiones: string; muebles: string }>>`
+    // Las rosetas cuentan como ocupación por lo mismo que los equipos: son de
+    // la sala concreta, alguien las midió, y aplicar una plantilla sustituye
+    // las medidas. Sin contarlas, una sala de 10 × 10 con una roseta en (9,9)
+    // aceptaba una plantilla de 4 × 4 y la roseta se quedaba fuera del plano
+    // sin que nadie la moviera.
+    const [ocupacion] = await tx<
+      Array<{ equipos: string; conexiones: string; muebles: string; tomas: string }>
+    >`
       select
         (select count(*) from sala_equipos    where sala_id = ${salaId})::text as equipos,
         (select count(*) from conexiones      where sala_id = ${salaId})::text as conexiones,
-        (select count(*) from sala_mobiliario where sala_id = ${salaId})::text as muebles`;
+        (select count(*) from sala_mobiliario where sala_id = ${salaId})::text as muebles,
+        (select count(*) from tomas_red       where sala_id = ${salaId})::text as tomas`;
     const vacia =
       Number(ocupacion.equipos) === 0 &&
       Number(ocupacion.conexiones) === 0 &&
-      Number(ocupacion.muebles) === 0;
+      Number(ocupacion.muebles) === 0 &&
+      Number(ocupacion.tomas) === 0;
 
     // La sala que nació de esta misma plantilla ya la tiene aplicada, se mire
     // por `plantilla_id` (el alta) o por `diagrama_plantilla_id` (una
@@ -583,16 +702,59 @@ export async function aplicarPlantillaAlDiagrama(
     const yaEsSuya =
       sala.plantilla_id === plantillaId || sala.diagrama_plantilla_id === plantillaId;
 
+    // ------------------------------------------------ el origen se elige una vez
+    //
+    // La tarjeta de origen deja de aparecer en cuanto la sala está iniciada,
+    // pero ocultar un control no es una guarda: esta acción se puede llamar
+    // directamente. Una sala que ya contestó «desde cero» y todavía está
+    // vacía recibía la plantilla entera, con sus medidas y su procedencia, y
+    // la respuesta que alguien dio se perdía sin rastro.
+    //
+    // Reconocer la plantilla de la que ya nació la sala sigue valiendo, pero
+    // no copia ni reescribe nada: es contestar que sí a algo que ya estaba
+    // contestado.
+    if (sala.diagrama_iniciado_en) {
+      if (!yaEsSuya) {
+        return {
+          ok: false,
+          motivo: 'iniciada',
+          detalle:
+            'Esta sala ya tiene decidido de dónde sale su plano. Para partir de otra plantilla hay que hacerlo desde el alta de la sala.',
+        };
+      }
+      return { ok: true, version: Number(sala.diagrama_version), copiado: false };
+    }
+
     if (!vacia && !yaEsSuya) {
       return {
         ok: false,
         motivo: 'ocupada',
         detalle:
-          'La sala ya tiene equipos o tiradas. Aplicar otra plantilla borraría trabajo medido, así que no se hace desde aquí.',
+          'La sala ya tiene equipos, tiradas, mobiliario o rosetas. Aplicar otra plantilla cambiaría las medidas y borraría trabajo medido, así que no se hace desde aquí.',
       };
     }
 
     if (vacia) {
+      // La mesa principal no se instancia por ninguna vía. El alta manual ya
+      // se rechaza; una fila de `plantilla_mobiliario` cuyo catálogo sea la
+      // mesa principal es la misma segunda mesa por otro camino, y una
+      // plantilla antigua o manipulada puede tenerla. Se rechaza entera en
+      // vez de saltarse la fila: copiar una plantilla a medias deja una sala
+      // que nadie diseñó y nadie se entera.
+      const [mesaEnPlantilla] = await tx<Array<{ nombre: string }>>`
+        select pm.nombre from plantilla_mobiliario pm
+        join catalogo_mobiliario c on c.id = pm.mobiliario_id
+        where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'
+        limit 1`;
+      if (mesaEnPlantilla) {
+        return {
+          ok: false,
+          motivo: 'catalogo',
+          detalle:
+            'La plantilla trae la mesa principal como mueble, y la mesa de la sala es una sola. Corrige la plantilla antes de aplicarla.',
+        };
+      }
+
       const num = (v: string | null) => (v == null ? null : Number(v));
       await tx`
         update salas set
@@ -689,23 +851,94 @@ export async function aplicarPlantillaAlDiagrama(
           values (${salaId}, ${origen}, ${destino}, ${t.articulo_cable_id},
                   ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas})`;
       }
+
+      // ------------------------------------------------- la sala resultante
+      //
+      // Copiar sustituye las medidas de la sala Y coloca elementos, así que
+      // el resultado se juzga entero y con la misma regla que el guardado
+      // manual: la plantilla no es una fuente de confianza distinta. Una
+      // plantilla mal medida —un equipo a 6 m en una sala de 4— dejaría la
+      // sala en un estado que el editor no deja crear y que el cálculo de
+      // cable daría por bueno.
+      //
+      // Se lanza en vez de devolver: aquí ya hay filas escritas, y `sql.begin`
+      // hace commit de todo lo que resuelva.
+      const medidas = {
+        largo_m: num(plantilla.largo_m) ?? 0,
+        ancho_m: num(plantilla.ancho_m) ?? 0,
+        alto_m: num(plantilla.alto_m) ?? 0,
+      };
+
+      const colocados = await tx<
+        Array<{ id: string; x_m: string | null; y_m: string | null; z_m: string | null; posicion_confirmada: boolean }>
+      >`
+        select id, x_m, y_m, z_m, posicion_confirmada from sala_equipos where sala_id = ${salaId}`;
+      const puestos = await tx<
+        Array<{ id: string; x_m: string | null; y_m: string | null; z_m: string | null; posicion_confirmada: boolean }>
+      >`
+        select id, x_m, y_m, z_m, posicion_confirmada from sala_mobiliario where sala_id = ${salaId}`;
+      const rosetas = await tx<
+        Array<{ id: string; x_m: string | null; y_m: string | null; z_m: string | null }>
+      >`select id, x_m, y_m, z_m from tomas_red where sala_id = ${salaId}`;
+
+      const problemas = coordenadasFueraDeSala(
+        {
+          sala: {
+            mesa_x_m: num(plantilla.mesa_x_m),
+            mesa_y_m: num(plantilla.mesa_y_m),
+          },
+          equipos: colocados.map((e) => ({
+            id: e.id,
+            x_m: Number(e.x_m ?? 0),
+            y_m: Number(e.y_m ?? 0),
+            z_m: Number(e.z_m ?? 0),
+            posicion_confirmada: e.posicion_confirmada,
+          })),
+          mobiliario_cambio: puestos.map((m) => ({
+            id: m.id,
+            x_m: num(m.x_m),
+            y_m: num(m.y_m),
+            z_m: num(m.z_m),
+            posicion_confirmada: m.posicion_confirmada,
+          })),
+          tomas: rosetas.map((t) => ({
+            id: t.id,
+            x_m: num(t.x_m),
+            y_m: num(t.y_m),
+            z_m: num(t.z_m),
+          })),
+        },
+        medidas,
+      );
+
+      if (problemas.length > 0) {
+        throw new PlantillaRechazada({
+          ok: false,
+          motivo: 'fuera',
+          detalle: `La plantilla deja elementos fuera de la sala que describe, así que no se aplica: ${problemas[0]}`,
+        });
+      }
     }
 
     // Se marca iniciado en los dos casos: reconocer una plantilla ya heredada
     // también es contestar a la pregunta, y no volver a hacerla.
     //
-      // Si la plantilla trae mobiliario, las sillas de esta sala ya son filas
-      // reales y el aforo deja de repartir nada: sin esto el croquis dibujaba
-      // las ocho derivadas del aforo MÁS las de la plantilla, dos fuentes
-      // activas y cada silla dos veces. Se vio en el navegador con una sala
-      // recién creada desde plantilla.
+    // El aforo deja de repartir sillas cuando la plantilla trae SILLAS, no
+    // cuando trae cualquier mueble: una plantilla con una mesa auxiliar y sin
+    // asientos apagaba las ocho del aforo y dejaba la sala con cero sillas.
+    // Con las sillas heredadas sí hay que apagarlo, o el croquis dibuja las
+    // ocho derivadas MÁS las de la plantilla, cada silla dos veces.
     await tx`
       update salas set
         diagrama_iniciado_en  = coalesce(diagrama_iniciado_en, now()),
         diagrama_origen       = 'plantilla',
         diagrama_plantilla_id = ${plantillaId},
         sillas_modo = case
-          when exists (select 1 from sala_mobiliario m where m.sala_id = ${salaId})
+          when exists (
+            select 1 from sala_mobiliario m
+            join catalogo_mobiliario c on c.id = m.mobiliario_id
+            where m.sala_id = ${salaId} and c.rol = 'asiento'
+          )
           then 'manuales' else sillas_modo end
       where id = ${salaId}`;
 
@@ -716,6 +949,16 @@ export async function aplicarPlantillaAlDiagrama(
 
     return { ok: true, version: Number(nueva.diagrama_version), copiado: vacia };
   });
+
+  let resultado: ResultadoPlantilla;
+  try {
+    resultado = await transaccion;
+  } catch (error) {
+    // El rechazo posterior a una escritura llega aquí con la transacción ya
+    // deshecha: la sala no cambió, no se copió nada y la versión no subió.
+    if (error instanceof PlantillaRechazada) return error.resultado;
+    throw error;
+  }
 
   if (resultado.ok) revalidarLaFicha();
   return resultado;

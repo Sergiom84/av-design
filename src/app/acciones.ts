@@ -116,6 +116,21 @@ export async function crearSala(datos: FormData) {
     ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
   };
 
+  // La mesa principal de una sala es una sola y vive en `salas.mesa_*`. Una
+  // fila de `plantilla_mobiliario` cuyo catálogo sea la mesa principal daría
+  // una segunda mesa dibujada en cada sala de la serie. Se comprueba aquí,
+  // antes de crear nada, y no solo en la ruta de Diagrama: son dos caminos
+  // distintos hacia la misma copia, y una regla escrita en uno solo se rompe
+  // por el otro sin que nadie se entere.
+  if (plantillaId) {
+    const [mesaEnPlantilla] = await sql<Array<{ nombre: string }>>`
+      select pm.nombre from plantilla_mobiliario pm
+      join catalogo_mobiliario c on c.id = pm.mobiliario_id
+      where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'
+      limit 1`;
+    if (mesaEnPlantilla) return;
+  }
+
   const ids = await sql.begin(async (tx) => {
     // El equipamiento estándar de la plantilla se lee una vez y se copia a
     // todas las salas de la serie. Lo marcado como `no en todas` no se hereda.
@@ -216,18 +231,22 @@ export async function crearSala(datos: FormData) {
         // Nacer de una plantilla ya contesta a «de dónde sale el plano»: la
         // pestaña Diagrama abre el editor en vez de volver a preguntarlo.
         //
-      // Si la plantilla trae mobiliario, las sillas de esta sala ya son filas
-      // reales y el aforo deja de repartir nada: sin esto el croquis dibujaba
-      // las ocho derivadas del aforo MÁS las de la plantilla, dos fuentes
-      // activas y cada silla dos veces. Se vio en el navegador con una sala
-      // recién creada desde plantilla.
+        // El aforo deja de repartir sillas cuando la plantilla trae SILLAS, no
+        // cuando trae cualquier mueble: una plantilla con una mesa auxiliar y
+        // sin asientos apagaba las ocho del aforo y dejaba la sala con cero
+        // sillas. Con las sillas heredadas sí hay que apagarlo, o el croquis
+        // dibuja las ocho derivadas MÁS las de la plantilla.
         await tx`
           update salas set
             diagrama_iniciado_en  = now(),
             diagrama_origen       = 'plantilla',
             diagrama_plantilla_id = ${plantillaId},
             sillas_modo = case
-              when exists (select 1 from sala_mobiliario m where m.sala_id = ${sala.id})
+              when exists (
+                select 1 from sala_mobiliario m
+                join catalogo_mobiliario c on c.id = m.mobiliario_id
+                where m.sala_id = ${sala.id} and c.rol = 'asiento'
+              )
               then 'manuales' else sillas_modo end
           where id = ${sala.id}`;
       }

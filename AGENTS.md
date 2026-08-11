@@ -110,7 +110,13 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   nada. `Plantilla` copia medidas, mesa, mobiliario, equipos, giros y tiradas,
   y solo si la sala está vacía: aplicar otra plantilla sobre una sala con
   equipos se bloquea y se explica, porque el merge sería adivinar a qué equipo
-  corresponde cada línea y equivocarse borra trabajo medido.
+  corresponde cada línea y equivocarse borra trabajo medido. **Vacía incluye no
+  tener rosetas**: aplicar una plantilla sustituye las medidas, y una roseta
+  medida en (9,9) de una sala de 10 × 10 se quedaba fuera de una plantilla de
+  6 × 4. Lo copiado se valida entero contra las medidas nuevas con la misma
+  `coordenadasFueraDeSala()` del guardado manual, y el rechazo posterior a una
+  escritura se lanza —no se devuelve—, porque `sql.begin` hace commit de todo lo
+  que resuelva.
 - **De un alta solo se cree el identificador.** Un equipo añadido desde el
   plano manda su `articulo_id`; el nombre, la categoría y el extremo los relee
   el servidor del catálogo, exigiendo activo y `tipo = 'equipo'`. Los ids
@@ -119,15 +125,29 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 - **El mobiliario no es catálogo AV.** Una silla no se pide a un proveedor de
   audiovisuales, no tiene puertos y no entra en ninguna tirada: vive en
   `catalogo_mobiliario` con su fuente editable `data/mobiliario.csv`, y las
-  instancias en `sala_mobiliario`. Una silla física es una fila —ocho sillas
+  instancias en `sala_mobiliario`. De un alta solo se cree el identificador,
+  igual que en el equipamiento: el nombre y la forma los relee el servidor del
+  catálogo, y un alta sin referencia se rechaza entera. Una silla física es una fila —ocho sillas
   son ocho filas arrastrables, no una línea con `cantidad = 8`— y sus medidas
   son un snapshot del catálogo, para que corregirlo mañana no deforme los
   planos ya dibujados.
 - **Las sillas tienen una sola fuente activa.** `salas.sillas_modo` decide:
   `derivadas` = las reparte el croquis desde el aforo; `manuales` = mandan las
-  filas de `sala_mobiliario` y el aforo vuelve a ser solo la capacidad.
-  Copiar una plantilla con mobiliario pasa la sala a `manuales`. Con las dos
-  fuentes vivas el croquis dibujaba cada silla dos veces.
+  filas de `sala_mobiliario` y el aforo vuelve a ser solo la capacidad. Con las
+  dos fuentes vivas el croquis dibujaba cada silla dos veces. **Quien apaga el
+  aforo es el asiento, no el mueble**: lo dice `catalogo_mobiliario.rol`
+  (`asiento`, `mesa_principal` o nulo, desde `data/mobiliario.csv`). Una
+  plantilla con una mesa auxiliar y sin sillas dejaba la sala con cero sillas;
+  una plantilla con sillas sí pasa la sala a `manuales`. Y añadir una silla a
+  mano **materializa antes las del aforo en su sitio** con la misma
+  `sillasAlrededor()`: sin eso una sala de aforo ocho pasaba a dibujar nueve, y
+  apagarlas sin materializarlas las habría hecho desaparecer.
+- **La mesa principal es una y no se instancia.** Vive en `salas.mesa_*` y es el
+  elemento canónico. El buscador ofrece `Mesa principal` para poder encontrarla:
+  elegirla selecciona la que hay y abre su inspector, no crea una fila. El
+  servidor rechaza el alta de un mueble con `rol = 'mesa_principal'`, porque
+  ocultar el control no es una guarda. Las mesas adicionales sí son filas de
+  `sala_mobiliario`.
 - **Todo lo que se coloca puede girar; lo que no se nota girado, no.** Mesa,
   mobiliario y equipamiento tienen `rotacion_grados` normalizado a `[0,360)` y
   comparten `ControlRotacion`. Girar no mueve: el SVG rota alrededor del ancla

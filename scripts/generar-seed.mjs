@@ -726,6 +726,11 @@ if (hayCsvTecnicos) {
 // --------------------------------------------------------------------------
 const hayCsvMobiliario = existsSync(data('mobiliario.csv'));
 const FORMAS_MOBILIARIO = new Set(['rectangulo', 'circulo']);
+// Qué papel juega el mueble en la sala. Un rol que no está en esta lista se
+// descarta en vez de viajar a la base: la columna la escribe quien corrige el
+// CSV en Excel, y una errata que llegue a `rol` apagaría las sillas de todas
+// las salas o convertiría un armario en la mesa de la sala.
+const ROLES_MOBILIARIO = new Set(['asiento', 'mesa_principal']);
 const mobiliario = hayCsvMobiliario
   ? leerCsv(data('mobiliario.csv'))
       .filter((r) => r.clave && r.nombre)
@@ -737,6 +742,9 @@ const mobiliario = hayCsvMobiliario
         forma: FORMAS_MOBILIARIO.has((r.forma || '').toLowerCase())
           ? r.forma.toLowerCase()
           : 'rectangulo',
+        rol: ROLES_MOBILIARIO.has((r.rol || '').trim().toLowerCase())
+          ? r.rol.trim().toLowerCase()
+          : null,
         // Vacío = sin medida por defecto. No se inventan las medidas del
         // mobiliario del departamento: la instancia nace «Sin medir».
         largo_m: r.largo_m,
@@ -757,13 +765,14 @@ if (hayCsvMobiliario) {
   for (const m of mobiliario) {
     sql.push(
       `insert into catalogo_mobiliario ` +
-        `(clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)\n` +
+        `(clave, nombre, categoria, palabras_clave, forma, rol, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)\n` +
         `values (${txt(m.clave)}, ${txt(m.nombre)}, ${txt(m.categoria)}, ${txt(m.palabras_clave)}, ` +
-        `${txt(m.forma)}, ${num(m.largo_m)}, ${num(m.ancho_m)}, ${num(m.alto_m)}, ` +
+        `${txt(m.forma)}, ${txt(m.rol)}, ${num(m.largo_m)}, ${num(m.ancho_m)}, ${num(m.alto_m)}, ` +
         `${num(m.orden) === 'null' ? 100 : num(m.orden)}, 'csv')\n` +
         `on conflict (clave) do update set\n` +
         `  nombre = excluded.nombre, categoria = excluded.categoria,\n` +
         `  palabras_clave = excluded.palabras_clave, forma = excluded.forma,\n` +
+        `  rol = excluded.rol,\n` +
         `  largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,\n` +
         `  alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true\n` +
         `where catalogo_mobiliario.fuente = 'csv';`,

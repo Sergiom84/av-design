@@ -30,5 +30,6 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "//exclude": "`output/` son artefactos locales ignorados por git —copias del árbol que dejan las auditorías, informes, capturas—. Comprobarles los tipos hace fallar el build por código viejo que ya no es el del repositorio.",
+  "exclude": ["node_modules", "output"]
 }

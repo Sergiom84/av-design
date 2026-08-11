@@ -342,6 +342,19 @@ export type OrigenDiagrama = 'desde_cero' | 'plantilla';
 export type SillasModo = 'derivadas' | 'manuales';
 
 /**
+ * Qué papel juega el mueble en la sala, que no es lo mismo que cómo se llama
+ * ni cómo se dibuja.
+ *
+ * - `asiento`: su presencia apaga las sillas derivadas del aforo. La mesa
+ *   auxiliar de una plantilla no las apaga; una silla sí, y las dos fuentes
+ *   a la vez dibujan cada silla dos veces.
+ * - `mesa_principal`: es la mesa canónica, la que vive en `salas.mesa_*`. Se
+ *   busca y se selecciona, pero no se instancia: una sala tiene una.
+ * - Nulo: mueble corriente, que es el caso normal.
+ */
+export type RolMueble = 'asiento' | 'mesa_principal';
+
+/**
  * Una referencia del catálogo de mobiliario.
  *
  * Deliberadamente fuera de `articulos`: una silla no se pide a un proveedor
@@ -356,6 +369,7 @@ export interface MuebleCatalogo {
   categoria: string;
   palabras_clave: string | null;
   forma: FormaMueble;
+  rol: RolMueble | null;
   /** Nulas = sin medida por defecto. La instancia nace «Sin medir». */
   largo_m_defecto: number | null;
   ancho_m_defecto: number | null;

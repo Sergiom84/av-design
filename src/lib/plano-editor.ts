@@ -16,7 +16,12 @@
  * planta. Todo lo que sale de aquí está en METROS.
  */
 
-import { normalizarGrados, type EntradaCroquis, type SillaCroquis } from './croquis';
+import {
+  anclarSillasEnLaSala,
+  normalizarGrados,
+  type EntradaCroquis,
+  type SillaCroquis,
+} from './croquis';
 import type {
   Conexion,
   Extremo,
@@ -623,14 +628,49 @@ export function girarMesa(borrador: BorradorPlano, grados: number): BorradorPlan
 // era esa.
 // ---------------------------------------------------------------------
 
+// ---------------------------------------------------------------------
+// Los tres límites del mobiliario, en un solo sitio
+//
+// Estaban repartidos entre el componente (50), el esquema del servidor (200)
+// y ningún sitio (el aforo, que llegaba a 10.000). Con los números sueltos,
+// la interfaz podía construir un borrador que el servidor rechazaba solo por
+// cantidad: aforo 300 + una silla = 301 altas contra un tope de 200, y el
+// técnico se enteraba al pulsar Guardar, con el trabajo ya hecho.
+//
+// Los valores salen de los datos reales, no de una intuición: el aforo más
+// alto del inventario es 8 en las salas y 24 en las plantillas
+// (`data/plantillas-salas.csv`). Ninguna sala real se acerca al tope, así que
+// no se trunca nada; una sala de más de 150 sitios es un auditorio, y un
+// auditorio no se amuebla silla a silla desde este editor.
+// ---------------------------------------------------------------------
+
 /**
  * Máximo de muebles que se dan de alta de una vez.
  *
- * Es un tope de teclazo, no un límite del dominio: la sala más grande del
- * inventario no llega a cincuenta sillas, y un 500 escrito de más en la
- * casilla de cantidad no puede convertirse en 500 filas arrastrables.
+ * Es un tope de teclazo: un 500 escrito de más en la casilla de cantidad no
+ * puede convertirse en 500 filas arrastrables.
  */
 export const MAXIMO_ALTA_MOBILIARIO = 50;
+
+/**
+ * Hasta qué aforo se convierten las sillas derivadas en filas editables.
+ *
+ * Por encima, añadir una silla no materializa nada y se explica por qué: es
+ * preferible decir que no se puede a dejar el editor generando ciento de
+ * filas que después no caben en un guardado.
+ */
+export const MAXIMO_AFORO_MATERIALIZABLE = 150;
+
+/**
+ * Máximo de altas de mobiliario que admite un guardado.
+ *
+ * Se DERIVA de los otros dos en vez de escribirse a mano, que es lo que
+ * garantiza que el peor caso de la interfaz —materializar el aforo entero y
+ * añadir un alta completa en el mismo borrador— siga cabiendo. Cambiar uno de
+ * los dos ajusta este solo.
+ */
+export const MAXIMO_MOBILIARIO_POR_PATCH =
+  MAXIMO_AFORO_MATERIALIZABLE + MAXIMO_ALTA_MOBILIARIO;
 
 /**
  * Da de alta uno o varios muebles.
@@ -667,6 +707,125 @@ export function anadirMuebles(
   }));
   if (nuevos.length === 0) return borrador;
   return { ...borrador, mobiliario: [...borrador.mobiliario, ...nuevos] };
+}
+
+/**
+ * Lo que hay que hacer con un mueble elegido en el buscador.
+ *
+ * Devuelve la selección además del borrador porque el alta no siempre crea
+ * una fila: elegir `Mesa principal` selecciona la mesa que la sala ya tiene.
+ * El aviso es el texto que se enseña; nulo cuando no hay nada que explicar
+ * más allá de que la fila apareció en la lista.
+ */
+export interface ResultadoAlta {
+  borrador: BorradorPlano;
+  seleccion: Seleccion;
+  aviso: string;
+}
+
+/**
+ * Añadir un mueble del catálogo al plano, con las tres reglas que no se ven
+ * mirando el SVG:
+ *
+ * 1. `Mesa principal` no se instancia. La mesa de la sala vive en
+ *    `salas.mesa_*` y es el elemento canónico: crear una fila más daría dos
+ *    mesas principales editables, las dos dibujadas, y ninguna de las dos
+ *    sería la que usa el croquis para repartir las sillas. Se selecciona la
+ *    que hay y se abre su inspector.
+ * 2. Un asiento apaga las sillas derivadas del aforo, pero antes las
+ *    MATERIALIZA en su sitio. Sin esto, añadir una silla a una sala de aforo
+ *    ocho dibujaba nueve: las ocho del aforo más la nueva. Y apagarlas sin
+ *    materializarlas las habría hecho desaparecer.
+ * 3. La cantidad se recorta ANTES de inventar identificadores. Un 5000
+ *    pegado en la casilla no puede convertirse en cinco mil `randomUUID()`
+ *    antes de quedarse en cincuenta.
+ *
+ * Las sillas derivadas que se materializan se quedan con la referencia de
+ * asiento que se acaba de elegir, que es la única que hay a mano y la que el
+ * técnico está usando. El nombre se edita después como el de cualquier fila.
+ *
+ * El generador de identificadores se inyecta porque esto es lógica pura y no
+ * puede llamar a `crypto.randomUUID()`: el navegador lo pasa, la prueba pasa
+ * un contador.
+ */
+export function anadirDelCatalogo(
+  borrador: BorradorPlano,
+  catalogo: MuebleCatalogo,
+  cantidad: number,
+  opciones: { nuevoId: () => string; sillasDerivadas?: readonly SillaCroquis[] },
+): ResultadoAlta {
+  if (catalogo.rol === 'mesa_principal') {
+    return {
+      borrador,
+      seleccion: { tipo: 'mesa' },
+      aviso:
+        'La sala ya tiene su mesa principal: se abre para editarla. Para una segunda mesa, elige Mesa rectangular o Mesa redonda.',
+    };
+  }
+
+  const cuantos = Math.min(
+    MAXIMO_ALTA_MOBILIARIO,
+    Math.max(1, Math.floor(Number.isFinite(cantidad) ? cantidad : 1)),
+  );
+
+  // Cuántas sillas del aforo habría que convertir en filas para que el alta no
+  // deje dos fuentes vivas. Se cuenta ANTES de generar nada.
+  const materializa = catalogo.rol === 'asiento' && borrador.sillas_modo === 'derivadas';
+  const derivadas = materializa ? (opciones.sillasDerivadas ?? []) : [];
+
+  if (derivadas.length > MAXIMO_AFORO_MATERIALIZABLE) {
+    return {
+      borrador,
+      seleccion: null,
+      aviso: `Esta sala tiene ${derivadas.length} sillas repartidas por el aforo y el editor convierte como mucho ${MAXIMO_AFORO_MATERIALIZABLE}. Baja el aforo o coloca las sillas desde una plantilla.`,
+    };
+  }
+
+  // El borrador puede traer altas de guardados anteriores todavía sin guardar:
+  // el tope es del patch entero, no de cada pulsación. Sin esta cuenta, añadir
+  // cincuenta cuatro veces seguidas construía un borrador de doscientas altas
+  // que el servidor rechazaba al guardar, con el trabajo ya hecho.
+  const altasPendientes = borrador.mobiliario.filter((m) => m.es_nuevo).length;
+  const totalAltas = altasPendientes + derivadas.length + cuantos;
+  if (totalAltas > MAXIMO_MOBILIARIO_POR_PATCH) {
+    return {
+      borrador,
+      seleccion: null,
+      aviso: `Un guardado admite ${MAXIMO_MOBILIARIO_POR_PATCH} altas de mobiliario y con esto serían ${totalAltas}. Guarda lo que ya has añadido y sigue después.`,
+    };
+  }
+
+  // El asiento manda sobre el aforo, así que primero se convierten en filas
+  // las sillas que el croquis está dibujando ahora mismo: el dibujo de antes
+  // y el de después son el mismo, más la que se acaba de añadir.
+  let base = borrador;
+  let materializadas = 0;
+  if (materializa) {
+    base = materializarSillas(
+      borrador,
+      [...derivadas],
+      catalogo,
+      derivadas.map(() => opciones.nuevoId()),
+    );
+    materializadas = derivadas.length;
+  }
+
+  const ids = Array.from({ length: cuantos }, () => opciones.nuevoId());
+  const siguiente = anadirMuebles(base, catalogo, ids);
+
+  // «Silla en la lista» y no «Silla añadida»: el catálogo crece con armarios y
+  // atriles, y una plantilla de texto con género acaba diciendo «Armario
+  // añadida». El estado se cuenta sin concordar.
+  const alta = cuantos === 1 ? catalogo.nombre : `${cuantos} × ${catalogo.nombre}`;
+
+  return {
+    borrador: siguiente,
+    seleccion: { tipo: 'mueble', id: ids[0] },
+    aviso:
+      materializadas > 0
+        ? `${alta} en la lista. Las ${materializadas} sillas del aforo pasan a ser filas editables: a partir de ahora manda la lista, no el aforo. Sin guardar todavía.`
+        : `${alta} en la lista. Sin guardar todavía.`,
+  };
 }
 
 /**
@@ -874,25 +1033,30 @@ export function materializarSillas(
   ids: string[],
 ): BorradorPlano {
   if (borrador.sillas_modo === 'manuales') return borrador;
-  const nuevas = sillas.slice(0, ids.length).map((s, i) => ({
-    id: ids[i],
-    mobiliario_id: catalogo.id,
-    nombre: catalogo.nombre,
-    forma: catalogo.forma,
-    // El diámetro del círculo que ya dibuja el croquis, no una medida
-    // inventada: es la misma silla, ahora editable.
-    largo_m: alCentimetro(s.radio_m * 2),
-    ancho_m: alCentimetro(s.radio_m * 2),
-    alto_m: catalogo.alto_m_defecto,
-    x_m: alCentimetro(s.x_m),
-    y_m: alCentimetro(s.y_m),
-    z_m: 0,
-    rotacion_grados: 0,
-    posicion_confirmada: true,
-    origen_plantilla_mobiliario_id: null,
-    orden: borrador.mobiliario.length + i,
-    es_nuevo: true,
-  }));
+  // Se vuelven a anclar aquí aunque el croquis ya las entregue ancladas: esta
+  // función es pública y quien la llame con posiciones crudas no puede acabar
+  // escribiendo una silla fuera de la sala. Sobre lo ya ajustado no hace nada.
+  const nuevas = anclarSillasEnLaSala(sillas, borrador)
+    .slice(0, ids.length)
+    .map((s, i) => ({
+      id: ids[i],
+      mobiliario_id: catalogo.id,
+      nombre: catalogo.nombre,
+      forma: catalogo.forma,
+      // El diámetro del círculo que ya dibuja el croquis, no una medida
+      // inventada: es la misma silla, ahora editable.
+      largo_m: alCentimetro(s.radio_m * 2),
+      ancho_m: alCentimetro(s.radio_m * 2),
+      alto_m: catalogo.alto_m_defecto,
+      x_m: alCentimetro(s.x_m),
+      y_m: alCentimetro(s.y_m),
+      z_m: 0,
+      rotacion_grados: 0,
+      posicion_confirmada: true,
+      origen_plantilla_mobiliario_id: null,
+      orden: borrador.mobiliario.length + i,
+      es_nuevo: true,
+    }));
   return {
     ...borrador,
     sillas_modo: 'manuales',
@@ -1080,6 +1244,12 @@ export interface PatchMueblePlano {
 
 /** Un mueble nuevo. `mobiliario_id` es lo único que el servidor relee. */
 export interface PatchMuebleAlta extends PatchMueblePlano {
+  /**
+   * Nulo no es un alta válida y el servidor la rechaza entera: sin referencia
+   * del catálogo no hay de dónde releer el nombre ni la forma, y quedarse con
+   * los que manda el navegador sería confiar en el navegador. Se tipa nulable
+   * porque un mueble legado puede no tenerla, pero uno legado nunca es alta.
+   */
   mobiliario_id: string | null;
   forma: FormaMueble;
 }

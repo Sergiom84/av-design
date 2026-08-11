@@ -1,5 +1,5 @@
-clave;nombre;categoria;palabras_clave;forma;largo_m;ancho_m;alto_m;orden
-silla;Silla;Asientos;silla sillas asiento butaca puesto;circulo;0,50;0,50;;10
-mesa-principal;Mesa principal;Mesas;mesa principal junta reunion central;rectangulo;;;;20
-mesa-rectangular;Mesa rectangular;Mesas;mesa rectangular auxiliar apoyo;rectangulo;;;;30
-mesa-redonda;Mesa redonda;Mesas;mesa redonda circular;circulo;;;;40
+clave;nombre;categoria;palabras_clave;forma;rol;largo_m;ancho_m;alto_m;orden
+silla;Silla;Asientos;silla sillas asiento butaca puesto;circulo;asiento;0,50;0,50;;10
+mesa-principal;Mesa principal;Mesas;mesa principal junta reunion central;rectangulo;mesa_principal;;;;20
+mesa-rectangular;Mesa rectangular;Mesas;mesa rectangular auxiliar apoyo;rectangulo;;;;;30
+mesa-redonda;Mesa redonda;Mesas;mesa redonda circular;circulo;;;;;40

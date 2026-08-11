@@ -304,6 +304,37 @@ export function sillasAlrededor(mesa: MesaCroquis, aforo: number): SillaCroquis[
   return sillas.map((s) => ({ ...rotar(s, mesa.centro, mesa.rotacion_grados), radio_m: s.radio_m }));
 }
 
+/**
+ * Mete el ancla de cada silla dentro de la sala.
+ *
+ * El reparto sienta a la cabecera 42 cm más allá del borde de la mesa. Con la
+ * mesa arrimada a una pared —que es como está en media sala pequeña— esa
+ * posición cae fuera de la sala, y ahí no se sienta nadie.
+ *
+ * Mientras las sillas solo se dibujaban, el símbolo asomaba por fuera y
+ * parecía un detalle del dibujo. Al poder materializarlas, esa posición se
+ * convierte en una fila con coordenadas y el servidor rechaza el guardado
+ * entero: el editor construía un borrador que él mismo no podía guardar. Por
+ * eso el ajuste vive aquí, en la geometría compartida, y no en el guardado:
+ * corregir al guardar dibujaría una cosa y grabaría otra.
+ *
+ * Se ajusta el ANCLA, como en todo lo demás del plano; el círculo de la silla
+ * puede sobresalir, igual que una pantalla pegada a la pared. Una sala sin
+ * medir no recorta nada: no hay contra qué.
+ */
+export function anclarSillasEnLaSala(
+  sillas: readonly SillaCroquis[],
+  sala: { largo_m: number; ancho_m: number },
+): SillaCroquis[] {
+  if (!(sala.largo_m > 0) || !(sala.ancho_m > 0)) return [...sillas];
+  const meter = (v: number, maximo: number) => redondear(Math.min(Math.max(v, 0), maximo));
+  return sillas.map((s) => ({
+    x_m: meter(s.x_m, sala.largo_m),
+    y_m: meter(s.y_m, sala.ancho_m),
+    radio_m: s.radio_m,
+  }));
+}
+
 export interface EntradaCroquis {
   sala: Sala;
   equipos: EquipoEnSala[];
@@ -349,7 +380,13 @@ export function construirEscena({
   // y el aforo vuelve a ser solo la capacidad: dibujar las dos daría dos
   // sillas por cada sitio.
   const derivadas = sala.sillas_modo !== 'manuales';
-  const sillas = derivadas && mesa && sala.aforo ? sillasAlrededor(mesa, sala.aforo) : [];
+  // Ajustadas a la sala aquí y no al materializarlas: el editor materializa
+  // lo que el croquis dibuja, así que la única forma de que el dibujo de
+  // antes y el de después sean el mismo es que salgan ya bien de aquí.
+  const sillas =
+    derivadas && mesa && sala.aforo
+      ? anclarSillasEnLaSala(sillasAlrededor(mesa, sala.aforo), rectSala)
+      : [];
   if (derivadas && mesa && !sala.aforo) {
     avisos.push('Sin aforo no se colocan las sillas.');
   }

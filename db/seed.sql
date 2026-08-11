@@ -1984,35 +1984,39 @@ on conflict do nothing;
 -- Mobiliario: 4 referencias (data/mobiliario.csv)
 -- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.
 update catalogo_mobiliario set activo = false where fuente = 'csv' and clave not in ('silla', 'mesa-principal', 'mesa-rectangular', 'mesa-redonda');
-insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
-values ('silla', 'Silla', 'Asientos', 'silla sillas asiento butaca puesto', 'circulo', 0.5, 0.5, null, 10, 'csv')
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, rol, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('silla', 'Silla', 'Asientos', 'silla sillas asiento butaca puesto', 'circulo', 'asiento', 0.5, 0.5, null, 10, 'csv')
 on conflict (clave) do update set
   nombre = excluded.nombre, categoria = excluded.categoria,
   palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  rol = excluded.rol,
   largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
   alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
 where catalogo_mobiliario.fuente = 'csv';
-insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
-values ('mesa-principal', 'Mesa principal', 'Mesas', 'mesa principal junta reunion central', 'rectangulo', null, null, null, 20, 'csv')
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, rol, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-principal', 'Mesa principal', 'Mesas', 'mesa principal junta reunion central', 'rectangulo', 'mesa_principal', null, null, null, 20, 'csv')
 on conflict (clave) do update set
   nombre = excluded.nombre, categoria = excluded.categoria,
   palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  rol = excluded.rol,
   largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
   alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
 where catalogo_mobiliario.fuente = 'csv';
-insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
-values ('mesa-rectangular', 'Mesa rectangular', 'Mesas', 'mesa rectangular auxiliar apoyo', 'rectangulo', null, null, null, 30, 'csv')
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, rol, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-rectangular', 'Mesa rectangular', 'Mesas', 'mesa rectangular auxiliar apoyo', 'rectangulo', null, null, null, null, 30, 'csv')
 on conflict (clave) do update set
   nombre = excluded.nombre, categoria = excluded.categoria,
   palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  rol = excluded.rol,
   largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
   alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
 where catalogo_mobiliario.fuente = 'csv';
-insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
-values ('mesa-redonda', 'Mesa redonda', 'Mesas', 'mesa redonda circular', 'circulo', null, null, null, 40, 'csv')
+insert into catalogo_mobiliario (clave, nombre, categoria, palabras_clave, forma, rol, largo_m_defecto, ancho_m_defecto, alto_m_defecto, orden, fuente)
+values ('mesa-redonda', 'Mesa redonda', 'Mesas', 'mesa redonda circular', 'circulo', null, null, null, null, 40, 'csv')
 on conflict (clave) do update set
   nombre = excluded.nombre, categoria = excluded.categoria,
   palabras_clave = excluded.palabras_clave, forma = excluded.forma,
+  rol = excluded.rol,
   largo_m_defecto = excluded.largo_m_defecto, ancho_m_defecto = excluded.ancho_m_defecto,
   alto_m_defecto = excluded.alto_m_defecto, orden = excluded.orden, activo = true
 where catalogo_mobiliario.fuente = 'csv';

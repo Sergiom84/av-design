@@ -18,7 +18,8 @@
     "catalogo:normalizar": "node scripts/normalizar-catalogo.mjs",
     "test:guardas-sala": "tsx scripts/verificar-guarda-equipos.mts",
     "test:diagrama": "tsx scripts/verificar-diagrama.mts",
-    "test:plantillas": "tsx scripts/verificar-plantillas.mts"
+    "test:plantillas": "tsx scripts/verificar-plantillas.mts",
+    "test:migracion": "tsx scripts/verificar-migracion-rol.mts"
   },
   "dependencies": {
     "next": "16.3.0",

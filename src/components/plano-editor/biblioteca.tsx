@@ -28,7 +28,13 @@ export function BibliotecaElementos({
 }: {
   /** Las secciones del catálogo de mobiliario, para el filtro. */
   categorias: string[];
-  alAnadirMuebles: (mueble: MuebleCatalogo, cantidad: number) => void;
+  /**
+   * Devuelve qué pasó, que no siempre es «se añadió una fila»: elegir `Mesa
+   * principal` selecciona la mesa que la sala ya tiene, y añadir una silla
+   * convierte de paso las del aforo en filas editables. Lo decide el editor,
+   * que es quien tiene el borrador; aquí solo se enseña.
+   */
+  alAnadirMuebles: (mueble: MuebleCatalogo, cantidad: number) => string;
   alAnadirEquipo: (articulo: ArticuloElegible) => void;
 }) {
   const [categoria, setCategoria] = useState('');
@@ -39,10 +45,7 @@ export function BibliotecaElementos({
 
   const anadirMuebles = () => {
     if (!elegido) return;
-    alAnadirMuebles(elegido, cantidad);
-    setAnadido(
-      cantidad === 1 ? `${elegido.nombre} añadida` : `${cantidad} × ${elegido.nombre} añadidas`,
-    );
+    setAnadido(alAnadirMuebles(elegido, cantidad));
     setElegido(null);
     setCantidad(1);
   };
@@ -134,7 +137,7 @@ export function BibliotecaElementos({
             alElegir={(a) => {
               if (!a) return;
               alAnadirEquipo(a);
-              setAnadido(`${a.etiqueta} añadido`);
+              setAnadido(`${a.etiqueta} en la lista. Sin guardar todavía.`);
             }}
           />
           <p className="mt-2 text-tinta-tenue text-[0.75rem]">
@@ -147,7 +150,7 @@ export function BibliotecaElementos({
       <span className="sr-only" role="status" aria-live="polite">
         {anadido ?? ''}
       </span>
-      {anadido && <p className="text-tinta-tenue">{anadido}. Sin guardar todavía.</p>}
+      {anadido && <p className="text-tinta-tenue">{anadido}</p>}
     </div>
   );
 }

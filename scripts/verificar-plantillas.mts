@@ -23,6 +23,7 @@
 import Module from 'node:module';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
+import { MENSAJE_MESA_EN_PLANTILLA } from '../src/lib/tipos';
 
 process.env.DATABASE_URL ??= 'postgres://av_design:av_design_local@localhost:5433/av_design';
 
@@ -55,9 +56,14 @@ const NOMBRE_PLANTILLA = 'TEST plantillas tipo';
 const NOMBRE_RECREADA = 'TEST plantillas recreada';
 const NOMBRE_SIN_ASIENTOS = 'TEST plantillas sin asientos';
 const NOMBRE_MESA_PRINCIPAL = 'TEST plantillas mesa principal';
+const NOMBRE_CARRERA = 'TEST plantillas carrera';
 
 async function limpiar() {
   await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL})`;
+  await sql`delete from salas where nombre like ${NOMBRE_CARRERA + '%'}`;
+  await sql.unsafe(
+    'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
+  );
   await sql`delete from plantillas_sala where nombre like ${NOMBRE_PLANTILLA + '%'}`;
 }
 
@@ -97,9 +103,12 @@ try {
   const { crearPlantillaDesdeSala, crearSala } = await import('../src/app/acciones');
 
   /** Tolera la señal de `revalidatePath()` y la de `redirect()`; nada más. */
-  const invocar = async (accion: (d: FormData) => Promise<void>, datos: FormData) => {
+  const invocar = async (
+    accion: (d: FormData) => Promise<unknown>,
+    datos: FormData,
+  ): Promise<unknown> => {
     try {
-      await accion(datos);
+      return await accion(datos);
     } catch (e) {
       const mensaje = e instanceof Error ? e.message : String(e);
       const codigo = (e as { ['__NEXT_ERROR_CODE']?: string })?.['__NEXT_ERROR_CODE'];
@@ -108,8 +117,19 @@ try {
         (mensaje.startsWith(PREFIJO_SEÑAL_REVALIDATE) && codigo === CODIGO_SEÑAL_REVALIDATE) ||
         String(digest).startsWith(DIGEST_REDIRECT);
       if (!esperada) throw e;
+      return undefined;
     }
   };
+
+  /**
+   * `crearSala` es una accion de `useActionState`: recibe el estado anterior
+   * antes del formulario y DEVUELVE el fallo en vez de terminar en silencio.
+   * Aqui se le pasa el estado inicial y se recoge lo que devuelve.
+   */
+  const altaDeSala = (datos: FormData) =>
+    invocar((d) => crearSala({ error: null }, d), datos) as Promise<
+      { error: string | null } | undefined
+    >;
 
   // ------------------------------------------------- la sala de partida
   const salaId = randomUUID();
@@ -216,7 +236,7 @@ try {
   aSala.set('mesa_largo_m', String(plantilla.mesa_largo_m));
   aSala.set('mesa_ancho_m', String(plantilla.mesa_ancho_m));
   aSala.set('mesa_alto_cm', String(plantilla.mesa_alto_cm));
-  await invocar(crearSala, aSala);
+  await altaDeSala(aSala);
 
   const [recreada] = await sql<Array<{ id: string }>>`
     select id from salas where nombre = ${NOMBRE_RECREADA}`;
@@ -293,7 +313,7 @@ try {
   aSalaSoloMesa.set('mesa_largo_m', '2.4');
   aSalaSoloMesa.set('mesa_ancho_m', '1.2');
   aSalaSoloMesa.set('mesa_alto_cm', '73');
-  await invocar(crearSala, aSalaSoloMesa);
+  await altaDeSala(aSalaSoloMesa);
 
   const [sinAsientos] = await sql<Array<{ id: string; sillas_modo: string; aforo: number }>>`
     select id, sillas_modo, aforo from salas where nombre = ${NOMBRE_SIN_ASIENTOS}`;
@@ -327,13 +347,116 @@ try {
   aSalaMesaPrincipal.set('largo_m', '6');
   aSalaMesaPrincipal.set('ancho_m', '4');
   aSalaMesaPrincipal.set('alto_m', '3');
-  await invocar(crearSala, aSalaMesaPrincipal);
+  const rechazoMesa = await altaDeSala(aSalaMesaPrincipal);
 
   const [conMesaPrincipal] = await sql<Array<{ id: string }>>`
     select id from salas where nombre = ${NOMBRE_MESA_PRINCIPAL}`;
   afirmar(
     !conMesaPrincipal,
     'una plantilla con una mesa principal como mueble no crea sala: daría dos mesas',
+  );
+  afirmar(
+    rechazoMesa?.error === MENSAJE_MESA_EN_PLANTILLA,
+    'y el alta lo dice en vez de terminar en silencio',
+  );
+  const [huellaMesaPrincipal] = await sql<Array<{ cuantos: string }>>`
+    select (
+      (select count(*) from sala_equipos    e where e.origen_plantilla_linea_id in
+        (select id from plantilla_articulos where plantilla_id = ${plantillaConMesaPrincipal})) +
+      (select count(*) from sala_mobiliario m where m.origen_plantilla_mobiliario_id in
+        (select id from plantilla_mobiliario where plantilla_id = ${plantillaConMesaPrincipal}))
+    )::text as cuantos`;
+  afirmar(
+    Number(huellaMesaPrincipal.cuantos) === 0,
+    'y no deja ni equipos ni muebles sueltos de esa plantilla',
+  );
+
+  // ------------------------------------------ la carrera de la mesa principal
+  //
+  // La comprobación previa mira `plantilla_mobiliario` ANTES de abrir la
+  // transacción. Aquí se reproduce lo que pasa cuando la fila aparece DESPUÉS
+  // de esa mirada y antes de la copia: un disparador mete la mesa principal en
+  // la plantilla en cuanto se ha insertado el equipo de la segunda sala de la
+  // serie. La primera sala ya está escrita, así que además de rechazar tiene
+  // que deshacerla: es el rollback posterior a una escritura.
+  const plantillaCarrera = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaCarrera}, ${NOMBRE_PLANTILLA + ' carrera'}, 'TEST', 8, 6, 4, 3)`;
+  const [lineaCarrera] = await sql<Array<{ id: string }>>`
+    insert into plantilla_articulos (plantilla_id, articulo_id, categoria, cantidad, opcional)
+    values (${plantillaCarrera}, ${articulo.id}, 'PANTALLAS', 1, false)
+    returning id`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaCarrera}, ${mesaAuxCat.id}, 'Mesa rectangular', 'rectangulo', 1, 0.6,
+            5, 3, 0, 0, true, 0)`;
+
+  await sql.unsafe(`
+    create or replace function test_mesa_tardia() returns trigger as $$
+    begin
+      insert into plantilla_mobiliario
+        (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+         x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+      select '${plantillaCarrera}', '${mesaPrincipalCat.id}', 'Mesa principal', 'rectangulo',
+             2.4, 1.2, 3, 2, 0, 0, true, 9
+      where (select count(*) from sala_equipos
+             where origen_plantilla_linea_id = '${lineaCarrera.id}') >= 2
+        and not exists (select 1 from plantilla_mobiliario
+                        where plantilla_id = '${plantillaCarrera}'
+                          and mobiliario_id = '${mesaPrincipalCat.id}');
+      return NEW;
+    end $$ language plpgsql;
+    create trigger test_mesa_tardia after insert on sala_equipos
+      for each row execute function test_mesa_tardia();`);
+
+  let rechazoCarrera: { error: string | null } | undefined;
+  try {
+    const aSalaCarrera = new FormData();
+    aSalaCarrera.set('plantilla_id', plantillaCarrera);
+    aSalaCarrera.set('nombre', NOMBRE_CARRERA);
+    aSalaCarrera.set('copias', '3');
+    aSalaCarrera.set('tipologia', 'TEST');
+    aSalaCarrera.set('aforo', '8');
+    aSalaCarrera.set('largo_m', '6');
+    aSalaCarrera.set('ancho_m', '4');
+    aSalaCarrera.set('alto_m', '3');
+    rechazoCarrera = await altaDeSala(aSalaCarrera);
+  } finally {
+    await sql.unsafe(
+      'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
+    );
+  }
+
+  const [salasCarrera] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from salas where nombre like ${NOMBRE_CARRERA + '%'}`;
+  afirmar(
+    Number(salasCarrera.cuantas) === 0,
+    'la mesa principal que aparece después de la comprobación previa se rechaza igual: no queda ninguna sala de la serie',
+  );
+  afirmar(
+    rechazoCarrera?.error === MENSAJE_MESA_EN_PLANTILLA,
+    'y el alta lo explica en vez de crear la serie a medias',
+  );
+  const [huellaCarrera] = await sql<Array<{ cuantos: string }>>`
+    select (
+      (select count(*) from sala_equipos    where origen_plantilla_linea_id = ${lineaCarrera.id}) +
+      (select count(*) from sala_mobiliario m
+        join plantilla_mobiliario pm on pm.id = m.origen_plantilla_mobiliario_id
+        where pm.plantilla_id = ${plantillaCarrera})
+    )::text as cuantos`;
+  afirmar(
+    Number(huellaCarrera.cuantos) === 0,
+    'y la sala que ya se había copiado antes del fallo se deshace con el resto',
+  );
+  const [mesaSobrante] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from plantilla_mobiliario
+    where plantilla_id = ${plantillaCarrera} and mobiliario_id = ${mesaPrincipalCat.id}`;
+  afirmar(
+    Number(mesaSobrante.cuantas) === 0,
+    'y el rollback se lleva por delante también la fila que el disparador metió',
   );
 } finally {
   await limpiar();

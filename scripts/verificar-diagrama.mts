@@ -94,6 +94,8 @@ const salaAsientosId = randomUUID();
 const salaMuebleCorrienteId = randomUUID();
 /** Con equipos pero SIN iniciar: el único camino que queda al rechazo por ocupada. */
 const salaOcupadaSinIniciarId = randomUUID();
+/** Vacía: para la mesa principal que aparece DESPUÉS de la comprobación previa. */
+const salaCarreraId = randomUUID();
 
 // Catálogo de prueba. Se crea y se borra aquí: el catálogo real cambia y una
 // prueba que dependa de que exista tal referencia falla el día que se corrige.
@@ -115,10 +117,15 @@ const plantillaSinAsientosId = randomUUID();
 const plantillaFueraId = randomUUID();
 /** Trae una fila de mobiliario cuyo catálogo es la mesa principal: no puede instanciarse. */
 const plantillaMesaPrincipalId = randomUUID();
+/** Sana al mirarla y con mesa principal al copiarla: la carrera. */
+const plantillaCarreraId = randomUUID();
 
 async function limpiar() {
-  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId}, ${salaVaciaId}, ${salaSoloTomaId}, ${salaSinAsientosId}, ${salaPlantillaFueraId}, ${salaDesdeCeroId}, ${salaMesaPrincipalId}, ${salaAsientosId}, ${salaMuebleCorrienteId}, ${salaOcupadaSinIniciarId})`;
-  await sql`delete from plantillas_sala where id in (${plantillaAId}, ${plantillaBId}, ${plantillaSinAsientosId}, ${plantillaFueraId}, ${plantillaMesaPrincipalId})`;
+  await sql`delete from salas where id in (${salaCerradaId}, ${salaLegadoId}, ${salaVecinaId}, ${salaVaciaId}, ${salaSoloTomaId}, ${salaSinAsientosId}, ${salaPlantillaFueraId}, ${salaDesdeCeroId}, ${salaMesaPrincipalId}, ${salaAsientosId}, ${salaMuebleCorrienteId}, ${salaOcupadaSinIniciarId}, ${salaCarreraId})`;
+  await sql`delete from plantillas_sala where id in (${plantillaAId}, ${plantillaBId}, ${plantillaSinAsientosId}, ${plantillaFueraId}, ${plantillaMesaPrincipalId}, ${plantillaCarreraId})`;
+  await sql.unsafe(
+    'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
+  );
   await sql`delete from articulos where id in (${articuloEquipoId}, ${articuloCableId}, ${articuloInactivoId})`;
   await sql`delete from catalogo_mobiliario where id in (${sillaCatalogoId}, ${sillaInactivaId}, ${mesaAuxCatalogoId}, ${mesaPrincipalCatalogoId})`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
@@ -159,6 +166,7 @@ async function preparar() {
   await sql`insert into salas (id, nombre, diagrama_iniciado_en, diagrama_origen)
             values (${salaDesdeCeroId}, 'TEST diagrama desde cero', now(), 'desde_cero')`;
   await sql`insert into salas (id, nombre) values (${salaMesaPrincipalId}, 'TEST diagrama mesa principal')`;
+  await sql`insert into salas (id, nombre) values (${salaCarreraId}, 'TEST diagrama carrera mesa')`;
   // Con aforo y medidas: aquí se comprueba que un asiento no puede convivir
   // con las sillas derivadas.
   await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m, aforo, mesa_largo_m, mesa_ancho_m)
@@ -247,6 +255,27 @@ async function preparar() {
        x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
     values (${plantillaMesaPrincipalId}, ${mesaPrincipalCatalogoId}, 'Mesa principal', 'rectangulo',
             2.4, 1.2, 3, 2, 0, 0, true, 0)`;
+
+  // Sana mientras se la mira: un equipo y un mueble corriente, sin mesa
+  // principal por ninguna parte. La mesa se la mete un disparador cuando la
+  // copia ya ha empezado, que es la carrera que la comprobación previa no
+  // puede ver.
+  await sql`
+    insert into plantillas_sala
+      (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m, mesa_largo_m, mesa_ancho_m)
+    values (${plantillaCarreraId}, 'TEST plantilla carrera', 'TEST', 8, 6, 4, 3, 2.4, 1.2)`;
+  await sql`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, x_m, y_m, z_m, posicion_confirmada)
+    values (${plantillaCarreraId}, ${articuloEquipoId}, 'PANTALLA', ${nombreArticuloEquipo}, 1, false,
+            'pantalla', 3, 2, 1.4, true)`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaCarreraId}, ${mesaAuxCatalogoId}, 'Mesa auxiliar', 'rectangulo', 1, 0.6,
+            5, 3, 0, 0, true, 0)`;
 
   // Una plantilla mal medida: dice 4 × 4 y coloca el equipo en x = 6.
   await sql`
@@ -1187,6 +1216,77 @@ try {
     afirmar(Number(trasMesa.muebles) === 0, 'y no se crea ninguna segunda mesa');
     afirmar(Number(trasMesa.largo_m ?? 0) === 0, 'ni se copian sus medidas');
     afirmar(Number(trasMesa.version) === versionMesa, 'ni sube la versión');
+
+    // -------------------------------------------------------------------
+    // La misma mesa, pero apareciendo DESPUÉS de la comprobación previa
+    //
+    // La comprobación previa lee `plantilla_mobiliario` y el
+    // `insert ... select` lo vuelve a leer. Entre las dos lecturas otra
+    // operación puede añadir la mesa principal a la plantilla, y en READ
+    // COMMITTED la segunda lectura sí ve esa fila. Aquí lo provoca un
+    // disparador que la mete en cuanto se ha insertado el primer equipo: la
+    // comprobación previa ya pasó y la copia todavía no ha llegado al
+    // mobiliario.
+    //
+    // Lo que tiene que rechazarlo es la postcondición, y como para entonces
+    // ya hay medidas y equipos escritos, tiene que deshacerlo todo.
+    // -------------------------------------------------------------------
+    await sql.unsafe(`
+      create or replace function test_mesa_tardia() returns trigger as $$
+      begin
+        insert into plantilla_mobiliario
+          (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+           x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+        select '${plantillaCarreraId}', '${mesaPrincipalCatalogoId}', 'Mesa principal',
+               'rectangulo', 2.4, 1.2, 3, 2, 0, 0, true, 9
+        where not exists (select 1 from plantilla_mobiliario
+                          where plantilla_id = '${plantillaCarreraId}'
+                            and mobiliario_id = '${mesaPrincipalCatalogoId}');
+        return NEW;
+      end $$ language plpgsql;
+      create trigger test_mesa_tardia after insert on sala_equipos
+        for each row execute function test_mesa_tardia();`);
+
+    const versionCarrera = await versionDe(salaCarreraId);
+    let carrera: ResPlantilla;
+    try {
+      carrera = await aplicar(salaCarreraId, plantillaCarreraId, versionCarrera);
+    } finally {
+      await sql.unsafe(
+        'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
+      );
+    }
+    afirmar(
+      !carrera.ok && carrera.motivo === 'catalogo',
+      'la mesa principal que aparece después de la comprobación previa se rechaza igual',
+    );
+    const [trasCarrera] = await sql<
+      Array<{
+        muebles: string;
+        equipos: string;
+        largo_m: string | null;
+        version: number;
+        iniciado: Date | null;
+      }>
+    >`
+      select
+        (select count(*) from sala_mobiliario m where m.sala_id = ${salaCarreraId})::text as muebles,
+        (select count(*) from sala_equipos e where e.sala_id = ${salaCarreraId})::text as equipos,
+        (select largo_m from salas where id = ${salaCarreraId})::text as largo_m,
+        (select diagrama_version from salas where id = ${salaCarreraId}) as version,
+        (select diagrama_iniciado_en from salas where id = ${salaCarreraId}) as iniciado`;
+    afirmar(Number(trasCarrera.muebles) === 0, 'y la sala se queda sin muebles');
+    afirmar(Number(trasCarrera.equipos) === 0, 'y sin los equipos que ya se habían copiado');
+    afirmar(Number(trasCarrera.largo_m ?? 0) === 0, 'y sin las medidas de la plantilla');
+    afirmar(Number(trasCarrera.version) === versionCarrera, 'y la versión no sube');
+    afirmar(trasCarrera.iniciado === null, 'y sigue sin haber elegido de dónde sale su plano');
+    const [mesaSobrante] = await sql<Array<{ cuantas: string }>>`
+      select count(*)::text as cuantas from plantilla_mobiliario
+      where plantilla_id = ${plantillaCarreraId} and mobiliario_id = ${mesaPrincipalCatalogoId}`;
+    afirmar(
+      Number(mesaSobrante.cuantas) === 0,
+      'y el rollback se lleva también la fila que metió el disparador',
+    );
   }
 
   // ------------------------------- 12 · una sola fuente de sillas, en servidor

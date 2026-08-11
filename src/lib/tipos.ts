@@ -355,6 +355,18 @@ export type SillasModo = 'derivadas' | 'manuales';
 export type RolMueble = 'asiento' | 'mesa_principal';
 
 /**
+ * Lo que se dice cuando una plantilla trae la mesa principal como mueble.
+ *
+ * Vive aquí y no en las acciones porque lo comparten las dos rutas que copian
+ * una plantilla —el alta de sala y la pestaña Diagrama—, y un fichero
+ * `'use server'` solo puede exportar funciones. El texto es el mismo lo cace
+ * la comprobación previa o la postcondición de la transacción: quien lo lee no
+ * tiene por qué saber cuál de las dos fue, y el arreglo es el mismo.
+ */
+export const MENSAJE_MESA_EN_PLANTILLA =
+  'La plantilla trae la mesa principal como mueble, y la mesa de la sala es una sola. Corrige la plantilla antes de aplicarla.';
+
+/**
  * Una referencia del catálogo de mobiliario.
  *
  * Deliberadamente fuera de `articulos`: una silla no se pide a un proveedor

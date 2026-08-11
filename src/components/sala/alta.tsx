@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { crearSala } from '@/app/acciones';
+import { useActionState, useState } from 'react';
+import { crearSala, type EstadoAlta } from '@/app/acciones';
 import { Aviso, Boton, Campo, ContenedorTabla, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { MAXIMO_COPIAS, resumirSerie, serieDeNombres } from '@/lib/nombres-serie';
 import {
@@ -91,6 +91,13 @@ export function AltaDeSala({
   /** Viniendo de la portada de una obra (`?proyecto=`), llega preseleccionada. */
   proyectoInicial?: string;
 }) {
+  // El alta correcta no vuelve: redirige. Lo que vuelve es siempre un fallo, y
+  // se pinta arriba del formulario con lo tecleado intacto para corregirlo.
+  const [estadoAlta, enviarAlta, enviando] = useActionState<EstadoAlta, FormData>(
+    crearSala,
+    { error: null },
+  );
+
   const inicial = plantillas.find((p) => p.id === plantillaInicial);
   const proyectoDePartida = proyectos.find((p) => p.id === proyectoInicial);
 
@@ -132,15 +139,24 @@ export function AltaDeSala({
 
   return (
     <>
+      {estadoAlta.error && (
+        <div className="mb-4" role="alert">
+          <Aviso tono="alerta">{estadoAlta.error}</Aviso>
+        </div>
+      )}
       <form
         id="alta-sala"
-        action={crearSala}
+        action={enviarAlta}
         className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0"
       >
       <div className="space-y-6 min-w-0">
         <Tarjeta
           titulo="Origen y serie"
-          pie="Las 144 salas TP de aforo 8 del inventario son la misma sala repetida. Se crean de una vez y luego se corrige la que se salga."
+          pie={
+            plantillas.length > 0
+              ? 'Las 144 salas TP de aforo 8 del inventario son la misma sala repetida. Se crean de una vez y luego se corrige la que se salga.'
+              : 'Empieza con una sala en blanco. Cuando una configuración se repita, guárdala como plantilla desde la propia sala.'
+          }
         >
           <Campo
             etiqueta="Plantilla"
@@ -182,7 +198,7 @@ export function AltaDeSala({
                 className="w-24 num"
               />
             </Campo>
-            {[3, 10, 144].map((n) => (
+            {plantillas.length > 0 && [3, 10, 144].map((n) => (
               <Boton
                 key={n}
                 tipo="button"
@@ -434,7 +450,13 @@ export function AltaDeSala({
           </p>
 
           <div className="mt-4">
-            <Boton>{copias === 1 ? 'Crear sala' : `Crear ${copias} salas`}</Boton>
+            <Boton disabled={enviando}>
+              {enviando
+                ? 'Creando…'
+                : copias === 1
+                  ? 'Crear sala'
+                  : `Crear ${copias} salas`}
+            </Boton>
           </div>
         </Tarjeta>
 
@@ -496,8 +518,12 @@ export function AltaDeSala({
         className="lg:hidden fixed inset-x-0 md:left-64 md:right-0 bottom-0 z-10 border-t border-linea-suave bg-superficie px-4 py-3"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
-        <Boton form="alta-sala" className="w-full min-h-11">
-          {copias === 1 ? 'Crear sala' : `Crear ${copias} salas`}
+        <Boton form="alta-sala" className="w-full min-h-11" disabled={enviando}>
+          {enviando
+            ? 'Creando…'
+            : copias === 1
+              ? 'Crear sala'
+              : `Crear ${copias} salas`}
         </Boton>
       </div>
     </>

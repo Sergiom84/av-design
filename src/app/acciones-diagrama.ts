@@ -10,7 +10,7 @@ import {
   coordenadasFueraDeSala,
   type PatchPlano,
 } from '@/lib/plano-editor';
-import { extremoPorCategoria } from '@/lib/tipos';
+import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
 
 /**
  * El guardado del plano: una acción, una transacción, todo o nada.
@@ -747,12 +747,7 @@ export async function aplicarPlantillaAlDiagrama(
         where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'
         limit 1`;
       if (mesaEnPlantilla) {
-        return {
-          ok: false,
-          motivo: 'catalogo',
-          detalle:
-            'La plantilla trae la mesa principal como mueble, y la mesa de la sala es una sola. Corrige la plantilla antes de aplicarla.',
-        };
+        return { ok: false, motivo: 'catalogo', detalle: MENSAJE_MESA_EN_PLANTILLA };
       }
 
       const num = (v: string | null) => (v == null ? null : Number(v));
@@ -825,6 +820,33 @@ export async function aplicarPlantillaAlDiagrama(
                pm.orden, pm.id
         from plantilla_mobiliario pm
         where pm.plantilla_id = ${plantillaId}`;
+
+      // ------------------------------------- postcondición: una sola mesa
+      //
+      // La comprobación previa mira `plantilla_mobiliario` ANTES de copiarlo,
+      // y entre las dos consultas la plantilla puede cambiar: alguien la
+      // edita desde otra pestaña y añade la mesa principal. En READ COMMITTED
+      // el `insert ... select` ve la fila recién comprometida que el `select`
+      // de validación no vio, y la sala acaba con dos mesas.
+      //
+      // Por eso la garantía no es la comprobación previa —que sigue estando
+      // para dar el error claro antes de escribir nada— sino esto: se mira el
+      // estado REAL copiado, dentro de la misma transacción, y si aparece la
+      // mesa se lanza. `sql.begin` hace commit de lo que resuelva, así que
+      // devolver el rechazo aquí dejaría escrita justo la sala que se está
+      // rechazando.
+      const [mesaCopiada] = await tx<Array<{ nombre: string }>>`
+        select m.nombre from sala_mobiliario m
+        join catalogo_mobiliario c on c.id = m.mobiliario_id
+        where m.sala_id = ${salaId} and c.rol = 'mesa_principal'
+        limit 1`;
+      if (mesaCopiada) {
+        throw new PlantillaRechazada({
+          ok: false,
+          motivo: 'catalogo',
+          detalle: MENSAJE_MESA_EN_PLANTILLA,
+        });
+      }
 
       const tiradas = await tx<
         Array<{

@@ -5,7 +5,15 @@ import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
-import { extremoPorCategoria } from '@/lib/tipos';
+import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
+
+/**
+ * Lo que el alta devuelve al formulario. `error` nulo es «no ha pasado nada»:
+ * el alta correcta no vuelve, redirige.
+ */
+export interface EstadoAlta {
+  error: string | null;
+}
 
 const numero = (v: FormDataEntryValue | null): number | null => {
   if (v == null || String(v).trim() === '') return null;
@@ -37,6 +45,21 @@ export async function guardarMedidasPlantilla(datos: FormData) {
 // --------------------------------------------------------------------- salas
 
 /**
+ * Rechazo posterior a una escritura, igual que en la ruta de Diagrama.
+ *
+ * `sql.begin()` hace commit cuando la función RESUELVE. Después de insertar la
+ * sala, sus equipos y su mobiliario el único rechazo posible es un `throw`: se
+ * lanza, la transacción se deshace entera —ninguna sala de la serie sobrevive—
+ * y el mensaje se devuelve fuera.
+ */
+class AltaRechazada extends Error {
+  constructor(readonly detalle: string) {
+    super(detalle);
+    this.name = 'AltaRechazada';
+  }
+}
+
+/**
  * Da de alta la sala, con plantilla o sin ella, y tantas copias como se pidan.
  *
  * Dos diferencias deliberadas con el flujo de XTEN-AV (docs/06, apartados 2 y 6):
@@ -48,8 +71,15 @@ export async function guardarMedidasPlantilla(datos: FormData) {
  * - **`copias`** es el `Number of Designs` de ellos. Con 144 salas de la misma
  *   tipología es la diferencia entre un clic y ciento cuarenta y cuatro; el
  *   patrón de nombre evita que salgan 144 salas llamadas igual.
+ *
+ * Lo que sale mal se DEVUELVE, no se calla: el formulario lo pinta con
+ * `useActionState`. Un `return` seco dejaba la página igual que antes de
+ * pulsar, sin sala y sin explicación.
  */
-export async function crearSala(datos: FormData) {
+export async function crearSala(
+  _previo: EstadoAlta | null,
+  datos: FormData,
+): Promise<EstadoAlta> {
   const plantillaId = texto(datos.get('plantilla_id'));
   const copias = Math.min(
     MAXIMO_COPIAS,
@@ -73,9 +103,21 @@ export async function crearSala(datos: FormData) {
       from localizaciones l
       join proyectos p on p.id = l.proyecto_id
       where l.id = ${localizacionId}`;
-    if (!fila) return;
+    // Terminar en silencio deja el formulario como si no hubiera pasado nada:
+    // ni sala, ni error, ni pista. Se dice qué ha fallado.
+    if (!fila) {
+      return {
+        error:
+          'La localización elegida ya no existe. Vuelve a abrir la obra y elige una de las suyas.',
+      };
+    }
     // En una obra cerrada no nacen salas: se reabre borrando el cierre.
-    if (fila.cerrado) return;
+    if (fila.cerrado) {
+      return {
+        error:
+          'La obra está cerrada: no nacen salas en ella. Para añadir una se reabre borrando el cierre desde su portada.',
+      };
+    }
     proyectoId = fila.proyecto_id;
     sede = fila.sede_id;
   } else {
@@ -122,16 +164,20 @@ export async function crearSala(datos: FormData) {
   // antes de crear nada, y no solo en la ruta de Diagrama: son dos caminos
   // distintos hacia la misma copia, y una regla escrita en uno solo se rompe
   // por el otro sin que nadie se entere.
+  //
+  // Esto es la cortesía, no la garantía: entre esta consulta y la copia la
+  // plantilla puede cambiar. Lo que de verdad cierra el agujero es la
+  // postcondición de dentro de la transacción, más abajo.
   if (plantillaId) {
     const [mesaEnPlantilla] = await sql<Array<{ nombre: string }>>`
       select pm.nombre from plantilla_mobiliario pm
       join catalogo_mobiliario c on c.id = pm.mobiliario_id
       where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'
       limit 1`;
-    if (mesaEnPlantilla) return;
+    if (mesaEnPlantilla) return { error: MENSAJE_MESA_EN_PLANTILLA };
   }
 
-  const ids = await sql.begin(async (tx) => {
+  const resultado = await sql.begin(async (tx) => {
     // El equipamiento estándar de la plantilla se lee una vez y se copia a
     // todas las salas de la serie. Lo marcado como `no en todas` no se hereda.
     const lineas = plantillaId
@@ -228,6 +274,24 @@ export async function crearSala(datos: FormData) {
           from plantilla_mobiliario pm
           where pm.plantilla_id = ${plantillaId}`;
 
+        // --------------------------------- postcondición: una sola mesa
+        //
+        // La comprobación previa mira la plantilla ANTES de abrir la
+        // transacción. Entre las dos consultas alguien puede añadirle la mesa
+        // principal desde otra pestaña, y en READ COMMITTED el
+        // `insert ... select` de arriba ve esa fila recién comprometida que la
+        // comprobación no vio: la sala nace con dos mesas.
+        //
+        // Se mira lo REALMENTE copiado, dentro de la misma transacción, y se
+        // lanza. Devolver el rechazo aquí dejaría escritas la sala y todas las
+        // anteriores de la serie, que es justo lo que se está rechazando.
+        const [mesaCopiada] = await tx<Array<{ nombre: string }>>`
+          select m.nombre from sala_mobiliario m
+          join catalogo_mobiliario c on c.id = m.mobiliario_id
+          where m.sala_id = ${sala.id} and c.rol = 'mesa_principal'
+          limit 1`;
+        if (mesaCopiada) throw new AltaRechazada(MENSAJE_MESA_EN_PLANTILLA);
+
         // Nacer de una plantilla ya contesta a «de dónde sale el plano»: la
         // pestaña Diagrama abre el editor en vez de volver a preguntarlo.
         //
@@ -271,7 +335,16 @@ export async function crearSala(datos: FormData) {
     }
 
     return creadas;
+  }).catch((error: unknown) => {
+    // El rechazo posterior a una escritura llega aquí con la transacción ya
+    // deshecha: no queda ninguna sala de la serie, ni sus equipos, ni su
+    // mobiliario.
+    if (error instanceof AltaRechazada) return error;
+    throw error;
   });
+
+  if (resultado instanceof AltaRechazada) return { error: resultado.detalle };
+  const ids = resultado;
 
   revalidatePath('/salas');
   revalidatePath('/proyectos');

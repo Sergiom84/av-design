@@ -57,20 +57,25 @@ const MUTACIONES = [
     primaria: 'una sala que ya eligió Desde cero no acepta una plantilla, aunque esté vacía',
   },
   {
-    nombre: 'Permitir Mesa principal desde plantilla · ruta Diagrama',
+    // Se muta SOLO la postcondición, no la comprobación previa. La
+    // comprobación previa sigue en pie y sigue cazando la plantilla que ya
+    // tenía la mesa antes de empezar, así que lo único que cae es el caso que
+    // solo la postcondición puede ver: la fila que aparece a mitad de la copia.
+    nombre: 'Quitar la postcondición de una sola mesa · ruta Diagrama',
     fichero: 'src/app/acciones-diagrama.ts',
-    de: "where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'",
-    a: 'where pm.plantilla_id = ${plantillaId} and false',
+    de: 'if (mesaCopiada) {',
+    a: 'if (false) {',
     suite: 'npm run test:diagrama',
-    primaria: 'una plantilla con una mesa principal como mueble se rechaza entera',
+    primaria: 'la mesa principal que aparece después de la comprobación previa se rechaza igual',
   },
   {
-    nombre: 'Permitir Mesa principal desde plantilla · ruta crearSala',
+    nombre: 'Quitar la postcondición de una sola mesa · ruta crearSala',
     fichero: 'src/app/acciones.ts',
-    de: "where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'",
-    a: 'where pm.plantilla_id = ${plantillaId} and false',
+    de: 'if (mesaCopiada) throw new AltaRechazada(MENSAJE_MESA_EN_PLANTILLA);',
+    a: '// mutado: sin postcondición',
     suite: 'npm run test:plantillas',
-    primaria: 'una plantilla con una mesa principal como mueble no crea sala: daría dos mesas',
+    primaria:
+      'la mesa principal que aparece después de la comprobación previa se rechaza igual: no queda ninguna sala de la serie',
   },
   {
     nombre: 'Cualquier mueble apaga el aforo · ruta Diagrama',
@@ -119,13 +124,20 @@ function escribirConReintento(ruta, contenido, intentos = 20) {
 const filas = [];
 
 for (const m of MUTACIONES) {
+  // Los patrones se escriben con `\n` y el checkout de Windows tiene CRLF: sin
+  // normalizar, toda mutación de más de una línea decía «patrón no encontrado»
+  // y la guarda se daba por probada sin haberla roto nunca. Se busca y se
+  // sustituye sobre el texto normalizado, y se RESTAURAN los bytes originales
+  // al terminar, así que el fichero del repositorio conserva sus finales de
+  // línea sea cual sea el checkout.
   const original = readFileSync(m.fichero, 'utf8');
-  if (!original.includes(m.de)) {
+  const normalizado = original.replace(/\r\n/g, '\n');
+  if (!normalizado.includes(m.de)) {
     console.error(`\n### ${m.nombre}\n  PATRÓN NO ENCONTRADO en ${m.fichero}`);
     filas.push({ ...m, error: 'patrón no encontrado' });
     continue;
   }
-  escribirConReintento(m.fichero, original.replace(m.de, m.a));
+  escribirConReintento(m.fichero, normalizado.replace(m.de, m.a));
   let salida = '';
   try {
     salida = execSync(m.suite, { encoding: 'utf8', stdio: 'pipe' });

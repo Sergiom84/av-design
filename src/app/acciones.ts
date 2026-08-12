@@ -2,9 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type postgres from 'postgres';
 import { sql } from '@/lib/db';
 import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
+import { coordenadasFueraDeSala } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
 
 /**
@@ -24,6 +26,134 @@ const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
   return s === '' ? null : s;
 };
+
+// --------------------------------------------------- la versión del plano
+//
+// La ficha de sala son seis pestañas por ruta, pero el plano es uno solo. La
+// pestaña Diagrama guarda con `salas.diagrama_version` optimista: lee la
+// versión, la compara al guardar y avisa si otra pestaña se le adelantó
+// (`guardarDiagramaSala`, en `acciones-diagrama.ts`).
+//
+// Resumen, Equipamiento y Tomas escriben los MISMOS datos con acciones
+// sueltas. Mientras no tocaban la versión, editar desde ellas dejaba a una
+// pestaña de Diagrama abierta creyendo que su número seguía vigente: guardaba
+// y sobrescribía el cambio de la otra superficie sin que saltara el aviso,
+// porque el número no se había movido.
+//
+// Qué sube la versión y qué no: sube lo que el editor de plano ESCRIBE —las
+// medidas de la sala, la mesa, el aforo, las coordenadas y el giro de un
+// equipo, las de una roseta, y el alta o la baja de cualquiera de los dos—,
+// porque es lo único que un guardado del plano puede pisar. No sube lo que se
+// dibuja pero el editor nunca guarda (una tirada nueva, la cantidad de un
+// equipo) ni lo que no se dibuja (una nota, un pedido): convertir cada alta de
+// cable en un conflicto haría perder el borrador del plano por un cambio que
+// no lo amenaza.
+
+/** Una transacción de `postgres.js`, que es lo que recibe el callback de `sql.begin`. */
+type Transaccion = postgres.TransactionSql<Record<string, unknown>>;
+
+/**
+ * Deja constancia de que el plano de la sala cambió.
+ *
+ * Va SIEMPRE dentro de la misma transacción que la escritura que lo cambió: si
+ * la escritura se deshace, la versión no puede haber subido, o la pestaña de
+ * Diagrama recibiría un conflicto por un cambio que no llegó a existir.
+ */
+async function subirVersionDelPlano(tx: Transaccion, salaId: string): Promise<void> {
+  await tx`
+    update salas set diagrama_version = diagrama_version + 1
+    where id = ${salaId}`;
+}
+
+/**
+ * El orden de bloqueo, que es uno solo para todas las superficies.
+ *
+ * `guardarDiagramaSala` abre su transacción bloqueando la fila de `salas` con
+ * `for update` y toca los equipos después. Estas acciones hacían lo contrario:
+ * escribían primero en la tabla hija y actualizaban `salas` al final. Dos
+ * transacciones simultáneas —una por cada camino— podían quedarse cada una con
+ * el cerrojo que la otra esperaba, y eso es un abrazo mortal: Postgres mata a
+ * una de las dos y el técnico ve un error que no puede explicar.
+ *
+ * Aquí el orden es siempre el mismo, y por eso no hay ciclo posible:
+ *
+ *   1. abrir transacción;
+ *   2. bloquear la fila de la sala (`select ... for update`);
+ *   3. comprobar DENTRO de la transacción que la sala existe y que su obra no
+ *      está cerrada;
+ *   4. escribir las filas hijas;
+ *   5. subir `diagrama_version` en la misma transacción;
+ *   6. commit.
+ *
+ * El paso 3 no es una repetición de `proyectoCerradoDeSala()`: comprobar el
+ * cierre fuera de la transacción deja una ventana entre la comprobación y la
+ * escritura por la que cabe entero el cierre de la obra. Con el cerrojo de la
+ * sala cogido antes de mirar, el cierre concurrente —que coge los mismos
+ * cerrojos y en el mismo orden— o va delante y esto lo ve, o va detrás y espera.
+ *
+ * Devuelve `null` si la sala no existe o su obra está cerrada, sin escribir
+ * nada. La sala legado (sin localización) nunca casa con el join y sigue
+ * editable, mismo criterio que el resto de la aplicación.
+ */
+async function enLaSalaBloqueada<T>(
+  salaId: string,
+  cuerpo: (tx: Transaccion) => Promise<T>,
+): Promise<T | null> {
+  const resultado = await sql.begin(async (tx) => {
+    const [sala] = await tx<Array<{ id: string; localizacion_id: string | null }>>`
+      select id, localizacion_id from salas where id = ${salaId} for update`;
+    if (!sala) return null;
+
+    const [cierre] = await tx<Array<{ cerrado: boolean }>>`
+      select exists (
+        select 1 from hitos_proyecto h
+        join localizaciones l on l.proyecto_id = h.proyecto_id
+        where l.id = ${sala.localizacion_id} and h.tipo = 'cierre'
+      ) as cerrado`;
+    if (cierre?.cerrado) return null;
+
+    return await cuerpo(tx);
+  });
+  return resultado as T | null;
+}
+
+/**
+ * La posición que trae un formulario de Equipamiento, y si coloca el equipo.
+ *
+ * Escribir una coordenada es colocar: el técnico que la teclea está midiendo,
+ * y el croquis se la saltaba entera —`posicion_confirmada` se quedaba en
+ * falso— para seguir dibujando el equipo donde suele ir.
+ *
+ * La regla es la corta, y tiene que serlo:
+ *
+ * - Llegan X e Y: el equipo queda colocado, **valgan lo que valgan**. Cero es
+ *   una medida. La esquina de la sala es exactamente donde va el rack, y ese
+ *   es el caso que dio origen a `posicion_confirmada`: cualquier atajo que
+ *   trate el (0,0) como «no medido» reabre el bug por la otra puerta.
+ * - No llegan: el equipo sigue —o vuelve a estar— sin colocar, con las
+ *   coordenadas a cero. La ausencia se propaga como ausencia.
+ * - Media posición no coloca nada, igual que en la roseta: una x sin y no
+ *   sitúa ningún símbolo. La z es la altura y por sí sola tampoco.
+ *
+ * Que «vacío» signifique de verdad «no lo sé» es cosa del formulario, no de
+ * aquí: un equipo sin colocar enseña las casillas VACÍAS
+ * (`components/sala/equipamiento.tsx`). Mientras proponía ceros de fábrica,
+ * ninguna regla de este lado podía distinguir el cero medido del cero que puso
+ * el propio formulario.
+ */
+function posicionDelFormulario(datos: FormData): {
+  x_m: number;
+  y_m: number;
+  z_m: number;
+  posicion_confirmada: boolean;
+} {
+  const x = numero(datos.get('x_m'));
+  const y = numero(datos.get('y_m'));
+  if (x == null || y == null) {
+    return { x_m: 0, y_m: 0, z_m: 0, posicion_confirmada: false };
+  }
+  return { x_m: x, y_m: y, z_m: numero(datos.get('z_m')) ?? 0, posicion_confirmada: true };
+}
 
 // ---------------------------------------------------------------- plantillas
 export async function guardarMedidasPlantilla(datos: FormData) {
@@ -292,6 +422,93 @@ export async function crearSala(
           limit 1`;
         if (mesaCopiada) throw new AltaRechazada(MENSAJE_MESA_EN_PLANTILLA);
 
+        // ------------------------- postcondición: nada fuera de las paredes
+        //
+        // Las medidas del alta son las del FORMULARIO, no las de la plantilla:
+        // es una regla deliberada, porque lo que se guarda es lo que el
+        // técnico ha comprobado en la sala. Pero las coordenadas sí se copian
+        // de la plantilla tal cual, así que una plantilla de 6 m aplicada a
+        // una sala corregida a 4 dejaba el equipo al otro lado de la pared: un
+        // estado que el editor de plano no deja crear y que el cálculo de
+        // cable da por bueno.
+        //
+        // Se juzga lo REALMENTE copiado y con la misma `coordenadasFueraDeSala`
+        // del guardado manual, no con un criterio propio. Y se lanza en vez de
+        // devolver, porque aquí ya hay filas escritas y `sql.begin` hace commit
+        // de todo lo que resuelva: con veinte copias, o no sobrevive ninguna o
+        // sobreviven las de antes del fallo.
+        //
+        // Dos ausencias no son un fallo, y por eso no se validan:
+        //
+        // - Una sala sin largo o sin ancho se crea igual —la falta se avisa, no
+        //   se bloquea— así que no hay rectángulo contra el que juzgar nada.
+        // - Sin alto medido no hay techo del que salirse. Las paredes sí
+        //   existen, y se comprueban.
+        if (comun.largo_m > 0 && comun.ancho_m > 0) {
+          const equiposCopiados = await tx<
+            Array<{ id: string; nombre: string; x_m: string; y_m: string; z_m: string; posicion_confirmada: boolean }>
+          >`select id, nombre, x_m, y_m, z_m, posicion_confirmada
+            from sala_equipos where sala_id = ${sala.id}`;
+          const mueblesCopiados = await tx<
+            Array<{
+              id: string;
+              nombre: string;
+              x_m: string | null;
+              y_m: string | null;
+              z_m: string | null;
+              posicion_confirmada: boolean;
+            }>
+          >`select id, nombre, x_m, y_m, z_m, posicion_confirmada
+            from sala_mobiliario where sala_id = ${sala.id}`;
+
+          const num = (v: string | null) => (v == null ? null : Number(v));
+          const problemas = coordenadasFueraDeSala(
+            {
+              sala: { mesa_x_m: comun.mesa_x_m, mesa_y_m: comun.mesa_y_m },
+              // Un equipo sin colocar no está «en (0,0,0)»: no tiene posición,
+              // así que no puede quedarse fuera de ninguna pared. Lo distingue
+              // la propia `coordenadasFueraDeSala`, que se salta lo no
+              // confirmado.
+              equipos: equiposCopiados.map((e) => ({
+                id: e.id,
+                x_m: Number(e.x_m ?? 0),
+                y_m: Number(e.y_m ?? 0),
+                z_m: Number(e.z_m ?? 0),
+                posicion_confirmada: e.posicion_confirmada,
+              })),
+              mobiliario_cambio: mueblesCopiados.map((m) => ({
+                id: m.id,
+                x_m: num(m.x_m),
+                y_m: num(m.y_m),
+                z_m: num(m.z_m),
+                posicion_confirmada: m.posicion_confirmada,
+              })),
+              tomas: [],
+            },
+            {
+              largo_m: comun.largo_m,
+              ancho_m: comun.ancho_m,
+              alto_m: comun.alto_m > 0 ? comun.alto_m : Number.POSITIVE_INFINITY,
+            },
+          );
+
+          if (problemas.length > 0) {
+            // El identificador de una fila recién creada no le dice nada a
+            // nadie: se nombra el elemento, que es lo que el técnico ve en la
+            // plantilla y puede mover.
+            const nombres = new Map<string, string>([
+              ...equiposCopiados.map((e) => [e.id, e.nombre] as const),
+              ...mueblesCopiados.map((m) => [m.id, m.nombre] as const),
+            ]);
+            const primero =
+              [...nombres.entries()].find(([id]) => problemas[0].includes(id))?.[1] ??
+              'Un elemento';
+            throw new AltaRechazada(
+              `La plantilla coloca ${problemas.length === 1 ? 'un elemento' : `${problemas.length} elementos`} fuera de una sala de ${comun.largo_m} × ${comun.ancho_m} m (${primero}). Corrige las medidas del alta o coloca ese elemento en la plantilla.`,
+            );
+          }
+        }
+
         // Nacer de una plantilla ya contesta a «de dónde sale el plano»: la
         // pestaña Diagrama abre el editor en vez de volver a preguntarlo.
         //
@@ -518,10 +735,19 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
 
 export async function guardarSala(datos: FormData) {
   const id = String(datos.get('id'));
-  if (await proyectoCerradoDeSala(id)) return;
-  const sede = await sedeId(texto(datos.get('sede')));
-  await sql`
+  // Las medidas, la mesa y el aforo son la mitad del plano: el editor los
+  // escribe y el croquis los dibuja. La versión sube en la MISMA sentencia que
+  // la escritura, que es la forma más barata de que no puedan separarse.
+  await enLaSalaBloqueada(id, async (tx) => {
+    // La sede se resuelve DENTRO de la transacción y después del cerrojo,
+    // porque `sedeId` escribe: da de alta la sede que no existía. Resolverla
+    // antes creaba la sede aunque la escritura de la sala se rechazara —una
+    // obra cerrada aceptaba así sedes nuevas a cambio de nada— y además metía
+    // una escritura en `sedes` por delante del cerrojo de `salas`.
+    const sede = await sedeId(texto(datos.get('sede')), tx);
+    await tx`
     update salas set
+      diagrama_version     = diagrama_version + 1,
       nombre               = ${texto(datos.get('nombre')) ?? 'Sala sin nombre'},
       sede_id              = ${sede},
       tipologia            = ${texto(datos.get('tipologia'))},
@@ -541,6 +767,7 @@ export async function guardarSala(datos: FormData) {
       ruta_por_defecto     = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable,
       notas                = ${texto(datos.get('notas'))}
     where id = ${id}`;
+  });
   revalidatePath('/salas/[id]', 'layout');
   revalidatePath('/salas');
 }
@@ -575,7 +802,6 @@ export async function borrarSala(datos: FormData) {
 // ------------------------------------------------------------------ equipos
 export async function anadirEquipo(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
-  if (await proyectoCerradoDeSala(salaId)) return;
   const articuloId = texto(datos.get('articulo_id'));
 
   let nombre = texto(datos.get('nombre'));
@@ -585,15 +811,23 @@ export async function anadirEquipo(datos: FormData) {
     if (a) nombre = `${a.marca ?? ''} ${a.modelo}`.trim();
   }
 
-  await sql`
-    insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m, toma_red_id)
-    values (${salaId}, ${articuloId}, ${nombre ?? 'Equipo'},
-            ${numero(datos.get('cantidad')) ?? 1},
-            ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
-            ${numero(datos.get('x_m')) ?? 0},
-            ${numero(datos.get('y_m')) ?? 0},
-            ${numero(datos.get('z_m')) ?? 0},
-            ${texto(datos.get('toma_red_id'))})`;
+  // Un equipo que aparece de la nada es un símbolo más en el plano, y su
+  // posición se escribe aquí: la sube. El alta no propone coordenadas, así que
+  // lo normal es que nazca sin colocar y el croquis lo deduzca del extremo.
+  const posicion = posicionDelFormulario(datos);
+
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    await tx`
+      insert into sala_equipos (sala_id, articulo_id, nombre, cantidad, extremo,
+                                x_m, y_m, z_m, posicion_confirmada, toma_red_id)
+      values (${salaId}, ${articuloId}, ${nombre ?? 'Equipo'},
+              ${numero(datos.get('cantidad')) ?? 1},
+              ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
+              ${posicion.x_m}, ${posicion.y_m}, ${posicion.z_m},
+              ${posicion.posicion_confirmada},
+              ${texto(datos.get('toma_red_id'))})`;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -613,21 +847,42 @@ async function salaIdDeEquipo(equipoId: string): Promise<string | null> {
 export async function guardarEquipo(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
-  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
-  await sql`
-    update sala_equipos set
-      nombre   = ${texto(datos.get('nombre')) ?? 'Equipo'},
-      cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
-      extremo  = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
-      x_m      = ${numero(datos.get('x_m')) ?? 0},
-      y_m      = ${numero(datos.get('y_m')) ?? 0},
-      z_m      = ${numero(datos.get('z_m')) ?? 0},
-      toma_red_id = ${texto(datos.get('toma_red_id'))}
-    where id = ${id} and sala_id = ${salaId}`;
+  if (!salaId) return;
+  // Coordenadas y marca de colocado: es lo que el editor de plano escribe y lo
+  // que el croquis dibuja, así que esta escritura sube la versión.
+  const posicion = posicionDelFormulario(datos);
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    const escrito = await tx`
+      update sala_equipos set
+        nombre   = ${texto(datos.get('nombre')) ?? 'Equipo'},
+        cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
+        extremo  = ${texto(datos.get('extremo')) ?? 'pared'}::extremo_cable,
+        x_m      = ${posicion.x_m},
+        y_m      = ${posicion.y_m},
+        z_m      = ${posicion.z_m},
+        posicion_confirmada = ${posicion.posicion_confirmada},
+        toma_red_id = ${texto(datos.get('toma_red_id'))}
+      where id = ${id} and sala_id = ${salaId}`;
+    // La fila se leyó antes de coger el cerrojo, así que entre la lectura y el
+    // `update` alguien ha podido borrarla desde otra pestaña. Sin escritura no
+    // hay plano que haya cambiado: subir la versión ahí sería un incremento
+    // fantasma, y tumbaría el borrador de una pestaña abierta por nada.
+    if (escrito.count === 0) return;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
-/** Suma o resta unidades de un equipo sin abrir el formulario completo. */
+/**
+ * Suma o resta unidades de un equipo sin abrir el formulario completo.
+ *
+ * No sube la versión del plano: la cantidad no se dibuja. El croquis pinta un
+ * símbolo por fila, no por unidad, y el editor no manda cantidades, así que un
+ * guardado del plano no puede pisar esto ni al revés. Hacer que subiera
+ * convertiría cada pulsación del «+» en un conflicto para una pestaña de
+ * Diagrama abierta, y perder un borrador medido por eso sería peor que el
+ * problema.
+ */
 export async function ajustarCantidadEquipo(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
@@ -643,8 +898,14 @@ export async function ajustarCantidadEquipo(datos: FormData) {
 export async function borrarEquipo(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
-  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
-  await sql`delete from sala_equipos where id = ${id} and sala_id = ${salaId}`;
+  if (!salaId) return;
+  // Desaparece un símbolo del plano, y con él sus tiradas. Una pestaña de
+  // Diagrama abierta lo sigue enseñando y lo sigue moviendo: que se entere.
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    const borrado = await tx`delete from sala_equipos where id = ${id} and sala_id = ${salaId}`;
+    if (borrado.count === 0) return;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -666,33 +927,47 @@ export async function anadirToma(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   const codigo = texto(datos.get('codigo'));
   if (!salaId || !codigo) return;
-  if (await proyectoCerradoDeSala(salaId)) return;
 
-  await sql`
-    insert into tomas_red (sala_id, codigo, ubicacion, x_m, y_m, z_m, notas)
-    values (${salaId}, ${codigo},
-            ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
-            ${numero(datos.get('x_m'))},
-            ${numero(datos.get('y_m'))},
-            ${numero(datos.get('z_m'))},
-            ${texto(datos.get('notas'))})
-    on conflict (sala_id, codigo) do nothing`;
+  // La roseta se dibuja en el plano y el editor guarda su sitio: aparece una
+  // más y las pestañas abiertas tienen que enterarse.
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    const alta = await tx<Array<{ id: string }>>`
+      insert into tomas_red (sala_id, codigo, ubicacion, x_m, y_m, z_m, notas)
+      values (${salaId}, ${codigo},
+              ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
+              ${numero(datos.get('x_m'))},
+              ${numero(datos.get('y_m'))},
+              ${numero(datos.get('z_m'))},
+              ${texto(datos.get('notas'))})
+      on conflict (sala_id, codigo) do nothing
+      returning id`;
+    // El `do nothing` puede no insertar nada: esa roseta ya estaba. Un plano
+    // que no ha cambiado no puede subir de versión.
+    if (alta.length === 0) return;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
 export async function guardarToma(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeToma(id);
-  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
-  await sql`
-    update tomas_red set
-      codigo    = ${texto(datos.get('codigo')) ?? 'sin código'},
-      ubicacion = ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
-      x_m       = ${numero(datos.get('x_m'))},
-      y_m       = ${numero(datos.get('y_m'))},
-      z_m       = ${numero(datos.get('z_m'))},
-      notas     = ${texto(datos.get('notas'))}
-    where id = ${id} and sala_id = ${salaId}`;
+  if (!salaId) return;
+  // Las coordenadas de la roseta son las mismas que mueve el editor arrastrando
+  // su símbolo: esta escritura las puede pisar y la pueden pisar a ella.
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    const escrito = await tx`
+      update tomas_red set
+        codigo    = ${texto(datos.get('codigo')) ?? 'sin código'},
+        ubicacion = ${texto(datos.get('ubicacion'))?.toLowerCase() ?? null},
+        x_m       = ${numero(datos.get('x_m'))},
+        y_m       = ${numero(datos.get('y_m'))},
+        z_m       = ${numero(datos.get('z_m'))},
+        notas     = ${texto(datos.get('notas'))}
+      where id = ${id} and sala_id = ${salaId}`;
+    if (escrito.count === 0) return;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -700,12 +975,26 @@ export async function guardarToma(datos: FormData) {
 export async function borrarToma(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeToma(id);
-  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
-  await sql`delete from tomas_red where id = ${id} and sala_id = ${salaId}`;
+  if (!salaId) return;
+  // Desaparece una roseta del plano. Una pestaña de Diagrama que siga
+  // mandándola recibiría «algún elemento no es de esta sala» sin entender por
+  // qué; con la versión movida, el aviso dice lo que ha pasado de verdad.
+  await enLaSalaBloqueada(salaId, async (tx) => {
+    const borrado = await tx`delete from tomas_red where id = ${id} and sala_id = ${salaId}`;
+    if (borrado.count === 0) return;
+    await subirVersionDelPlano(tx, salaId);
+  });
   revalidatePath('/salas/[id]', 'layout');
 }
 
 // ---------------------------------------------------------------- conexiones
+//
+// Ninguna de las tres sube `diagrama_version`, y es deliberado. La tirada se
+// dibuja en el croquis, pero el editor de plano no la escribe nunca: no viaja
+// en el patch, así que ni la pisa ni la pisan. Lo único que cambiaría es que
+// detallar un cable en Cableado tumbaría el borrador a medio medir de una
+// pestaña de Diagrama abierta, y eso cuesta trabajo real a cambio de nada.
+
 export async function anadirConexion(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   const origen = String(datos.get('origen_id'));

@@ -120,13 +120,15 @@ export function BarraHerramientas({
             </Boton>
           </div>
 
-          <div className="flex items-center gap-2 sm:ml-auto">
-            <EstadoDeGuardado estado={estado} />
-            <Boton className="min-h-11" tipo="button" onClick={alDescartar} disabled={!hayCambios || guardando}>
+          <div className="flex w-full max-w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+            <span className="shrink-0 whitespace-nowrap">
+              <EstadoDeGuardado estado={estado} />
+            </span>
+            <Boton className="min-h-11 whitespace-nowrap" tipo="button" onClick={alDescartar} disabled={!hayCambios || guardando}>
               Descartar
             </Boton>
             <Boton
-              className="min-h-11"
+              className="min-h-11 whitespace-nowrap"
               tipo="button"
               variante="principal"
               onClick={alGuardar}

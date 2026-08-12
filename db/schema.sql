@@ -1222,13 +1222,31 @@ comment on column salas.diagrama_origen is
 -- el aforo y no hay filas de silla; 'manuales' = mandan las filas y el
 -- aforo vuelve a ser solo la capacidad de la sala.
 --
--- El paso de un modo a otro NO se hace aquí. La colocación de las sillas
--- derivadas la calcula `sillasAlrededor()` en `src/lib/croquis.ts`, que es
--- lógica pura con pruebas; repetirla en SQL sería una segunda geometría
--- que se separaría de la primera al primer retoque. La materialización la
--- hace el editor con esa misma función, sala a sala y cuando alguien toca
--- las sillas de esa sala. Hasta entonces el croquis dibuja exactamente lo
--- que dibujaba antes de esta migración.
+-- El paso de un modo a otro NO se hace aquí, y no por olvido. La
+-- colocación de las sillas derivadas la calcula `repartirSillasEnLaSala()`
+-- en `src/lib/croquis.ts`: elige por qué lados de la mesa se sienta la
+-- gente y recorta cada lado contra las paredes con la mesa girada
+-- cualquier ángulo. Es lógica pura con pruebas, y repetirla en plpgsql
+-- sería una segunda geometría que se separaría de la primera al primer
+-- retoque.
+--
+-- Así que el backfill existe, pero fuera de SQL y IMPORTANDO esa misma
+-- geometría: `scripts/migrar-sillas.mts`, que se lanza a mano después de
+-- aplicar este esquema.
+--
+--   npm run migrar:sillas              → informa de qué haría
+--   npm run migrar:sillas -- --aplicar → lo escribe
+--
+-- Es un paso manual del despliegue, igual que `npm run catalogo:normalizar`:
+-- no se engancha al arranque de la aplicación ni a `npm run db:reset`. Va
+-- sala a sala y en una transacción por sala; la que no tiene mesa, aforo o
+-- sitio para todas sus sillas se queda en `derivadas` y se sigue dibujando
+-- como hoy, que es el fallback previsto para los datos históricos. Que el
+-- croquis de antes y el de después sean el mismo lo demuestra
+-- `npm run test:backfill-sillas`.
+--
+-- El editor hace lo mismo, sala a sala, cuando alguien añade una silla a
+-- mano a una sala que todavía está en `derivadas`.
 -- ---------------------------------------------------------------------
 alter table salas add column if not exists sillas_modo text not null default 'derivadas';
 
@@ -1364,3 +1382,41 @@ begin
       faltan;
   end if;
 end $$;
+
+
+-- ---------------------------------------------------------------------
+-- Quién escribió cada mueble
+--
+-- Misma convención que `precios` y `puertos`: una columna `fuente` que
+-- distingue lo que escribe una persona desde la aplicación de lo que
+-- escribe un proceso, para poder deshacer lo segundo sin llevarse por
+-- delante lo primero.
+--
+-- Aquí el proceso es el backfill de sillas (`scripts/migrar-sillas.mts`),
+-- que en una base real materializa varios miles de filas de golpe. Sin
+-- esta columna, deshacerlo era mirar `creado_en` y confiar en que nadie
+-- hubiera colocado una silla a mano en esa misma ventana: un rollback que
+-- puede borrar trabajo medido no es un rollback.
+--
+-- El defecto es `app` a propósito: ni una sola inserción de la aplicación
+-- cambia por esto —ni el editor, ni la copia desde plantilla— y las filas
+-- que ya existen se quedan donde tienen que estar. El backfill es el único
+-- que escribe el otro valor.
+-- ---------------------------------------------------------------------
+alter table sala_mobiliario add column if not exists fuente text not null default 'app';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'sala_mobiliario_fuente_check'
+  ) then
+    alter table sala_mobiliario add constraint sala_mobiliario_fuente_check
+      check (fuente in ('app', 'backfill'));
+  end if;
+end $$;
+
+comment on column sala_mobiliario.fuente is
+  'app = lo colocó una persona desde la aplicación, no se toca nunca; backfill = lo materializó scripts/migrar-sillas.mts desde el aforo, y es lo único que el rollback documentado borra.';
+
+create index if not exists sala_mobiliario_fuente_idx
+  on sala_mobiliario (sala_id, fuente);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { construirEscena, proyectar } from '@/lib/croquis';
 import {
@@ -48,6 +48,7 @@ import { BarraHerramientas, type Herramienta } from './barra-herramientas';
 import { ANCHO_BASE_PX, LienzoPlano, type PuntoMetros } from './lienzo-plano';
 import { ListaObjetos } from './lista-objetos';
 import { BibliotecaElementos } from './biblioteca';
+import { GuardiaSalida } from './guardia-salida';
 import { InspectorSala } from './inspector-sala';
 import { InspectorMesa } from './inspector-mesa';
 import { InspectorEquipo } from './inspector-equipo';
@@ -131,6 +132,14 @@ export function EditorPlanoSala({
    * aviso que explicaba justo eso.
    */
   const [conflicto, setConflicto] = useState(false);
+  /**
+   * `router.refresh()` no devuelve una promesa y conserva el estado de este
+   * Client Component mientras mezcla las props nuevas del servidor. Entre la
+   * pulsación y esa mezcla no se puede volver a editar con `version` vieja: si
+   * el borrador se ensucia ahí, la adopción queda bloqueada y el siguiente
+   * guardado choca otra vez. Esta marca solo se apaga al ver otra versión.
+   */
+  const [recargandoConflicto, setRecargandoConflicto] = useState(false);
 
   // Un arrastre son decenas de movimientos: entran como un solo paso en el
   // historial, no como cuarenta. Se apila el borrador de antes de agarrar.
@@ -148,13 +157,22 @@ export function EditorPlanoSala({
   // manera explícita. El estado de guardado no se toca aquí, para que el
   // «Guardado» siga viéndose después de refrescar.
   const [versionVista, setVersionVista] = useState(sala.diagrama_version);
-  if (versionVista !== sala.diagrama_version && estado !== 'sucio' && estado !== 'conflicto') {
+  if (
+    versionVista !== sala.diagrama_version &&
+    (recargandoConflicto || (estado !== 'sucio' && estado !== 'conflicto'))
+  ) {
     setVersionVista(sala.diagrama_version);
     setOriginal(desdeServidor);
     setBorradorBruto(desdeServidor);
     setVersion(sala.diagrama_version);
     setPasado([]);
     setFuturo([]);
+    if (recargandoConflicto) {
+      setRecargandoConflicto(false);
+      setConflicto(false);
+      setEstado('limpio');
+      setProblema(null);
+    }
   }
 
   // La selección se deriva del borrador, no se guarda aparte.
@@ -174,13 +192,14 @@ export function EditorPlanoSala({
 
   const aplicar = useCallback(
     (siguiente: BorradorPlano, { agrupar = false }: { agrupar?: boolean } = {}) => {
+      if (recargandoConflicto) return;
       if (siguiente === borrador) return;
       if (!agrupar) setPasado((p) => [...p.slice(-49), borrador]);
       setFuturo([]);
       setBorradorBruto(siguiente);
       setEstado((e) => (e === 'conflicto' ? e : 'sucio'));
     },
-    [borrador],
+    [borrador, recargandoConflicto],
   );
 
   const escena = useMemo(
@@ -391,14 +410,8 @@ export function EditorPlanoSala({
 
   // ---------------------------------------------------------------- guardado
 
-  useEffect(() => {
-    if (!hayCambios) return;
-    const avisar = (ev: BeforeUnloadEvent) => ev.preventDefault();
-    window.addEventListener('beforeunload', avisar);
-    return () => window.removeEventListener('beforeunload', avisar);
-  }, [hayCambios]);
-
   const guardar = () => {
+    if (recargandoConflicto) return;
     setProblema(null);
     setEstado('guardando');
     empezarGuardado(async () => {
@@ -441,7 +454,22 @@ export function EditorPlanoSala({
   // versión que ya nadie estaba mirando. Descartar ahí es recargar: se pide al
   // servidor lo que hay ahora y el editor lo adopta —el estado queda en
   // `limpio`, que es lo que deja pasar la adopción de más arriba.
+  const recargarVersionActual = () => {
+    setPasado([]);
+    setFuturo([]);
+    setBorradorBruto(original);
+    setProblema('Recargando la versión actual de la sala…');
+    setAvisoAlta(null);
+    setSeleccion(null);
+    setRecargandoConflicto(true);
+    router.refresh();
+  };
+
   const descartar = () => {
+    if (conflicto) {
+      recargarVersionActual();
+      return;
+    }
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
@@ -449,10 +477,6 @@ export function EditorPlanoSala({
     setProblema(null);
     setAvisoAlta(null);
     setSeleccion(null);
-    if (conflicto) {
-      setConflicto(false);
-      router.refresh();
-    }
   };
 
   const deshacer = () => {
@@ -478,6 +502,7 @@ export function EditorPlanoSala({
 
   // ---------------------------------------------------------------- pintado
 
+  const edicionBloqueada = soloLectura || recargandoConflicto;
   const avisos = avisosDelBorrador(borrador);
   const sinMedidas = !borrador.largo_m || !borrador.ancho_m;
   const estimados = borrador.equipos.filter((e) => !e.posicion_confirmada);
@@ -489,9 +514,9 @@ export function EditorPlanoSala({
   const inspector = (
     <>
       {seleccionValida === null || seleccionValida.tipo === 'sala' ? (
-        <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={soloLectura} />
+        <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
       ) : seleccionValida.tipo === 'mesa' ? (
-        <InspectorMesa borrador={borrador} alCambiar={aplicar} soloLectura={soloLectura} />
+        <InspectorMesa borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
       ) : seleccionValida.tipo === 'equipo' ? (
         (() => {
           const e = borrador.equipos.find((x) => x.id === seleccionValida.id);
@@ -502,7 +527,7 @@ export function EditorPlanoSala({
               posicionDibujada={posicionesDibujadas.get(e.id) ?? null}
               alCambiar={aplicar}
               alQuitar={() => setSeleccion(null)}
-              soloLectura={soloLectura}
+              soloLectura={edicionBloqueada}
             />
           ) : null;
         })()
@@ -512,7 +537,7 @@ export function EditorPlanoSala({
           id={seleccionValida.id}
           alCambiar={aplicar}
           alQuitar={() => setSeleccion(null)}
-          soloLectura={soloLectura}
+          soloLectura={edicionBloqueada}
         />
       ) : (
         (() => {
@@ -522,7 +547,7 @@ export function EditorPlanoSala({
               toma={t}
               borrador={borrador}
               alCambiar={aplicar}
-              soloLectura={soloLectura}
+              soloLectura={edicionBloqueada}
             />
           ) : null;
         })()
@@ -549,6 +574,13 @@ export function EditorPlanoSala({
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
     // objetos y en el inspector, que son controles de verdad.
     <div className="space-y-4" onKeyDown={alPulsarTecla}>
+      {/* Salir de Diagrama con el borrador a medias no puede tragarse el
+          trabajo: `beforeunload` vive ahí dentro y cubre recargar y cerrar; lo
+          demás —las pestañas de la ficha, la barra lateral, el botón atrás— es
+          navegación de cliente y no dispara nada por su cuenta. Con la obra
+          cerrada no hay cambios posibles, así que no molesta. */}
+      <GuardiaSalida activo={hayCambios && !soloLectura} />
+
       {soloLectura && (
         <Aviso tono="neutro">
           La obra está cerrada: el plano se ve pero no se toca. Para corregir algo se
@@ -563,22 +595,12 @@ export function EditorPlanoSala({
       {conflicto && (
         <Aviso tono="alerta">
           <p>{problema}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Boton
-              tipo="button"
-              variante="principal"
-              onClick={() => {
-                setConflicto(false);
-                setEstado('limpio');
-                setProblema(null);
-                setAvisoAlta(null);
-                setSeleccion(null);
-                router.refresh();
-              }}
-            >
-              Recargar y perder mis cambios
-            </Boton>
-            {estado === 'conflicto' && (
+          {!recargandoConflicto && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Boton tipo="button" variante="principal" onClick={recargarVersionActual}>
+                Recargar y perder mis cambios
+              </Boton>
+              {estado === 'conflicto' && (
               <Boton
                 tipo="button"
                 onClick={() => {
@@ -590,8 +612,9 @@ export function EditorPlanoSala({
               >
                 Conservar mi borrador para comparar
               </Boton>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </Aviso>
       )}
 
@@ -616,9 +639,9 @@ export function EditorPlanoSala({
             inventadas engaña más que una casilla vacía.
           </p>
           <div className="max-w-sm">
-            <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={soloLectura} />
+            <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
           </div>
-          {!soloLectura && (
+          {!edicionBloqueada && (
             <div className="mt-4">
               <Boton tipo="button" variante="principal" onClick={guardar} disabled={!hayCambios || guardando}>
                 Guardar cambios
@@ -652,7 +675,7 @@ export function EditorPlanoSala({
             alDescartar={descartar}
             alGuardar={guardar}
             estado={estado}
-            soloLectura={soloLectura}
+            soloLectura={edicionBloqueada}
           />
 
           <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem] items-start">
@@ -663,7 +686,7 @@ export function EditorPlanoSala({
                 seleccion={seleccionValida}
                 herramienta={herramienta}
                 rejilla={rejilla}
-                soloLectura={soloLectura}
+                soloLectura={edicionBloqueada}
                 alSeleccionar={setSeleccion}
                 alArrastrar={arrastrar}
                 alSoltar={soltar}
@@ -686,7 +709,7 @@ export function EditorPlanoSala({
                       {a}
                     </Aviso>
                   ))}
-                  {!soloLectura && estimados.length > 0 && (
+                  {!edicionBloqueada && estimados.length > 0 && (
                     <Boton
                       tipo="button"
                       onClick={() => aplicar(confirmarEstimadas(borrador, posicionesDibujadas))}
@@ -709,7 +732,7 @@ export function EditorPlanoSala({
 
             {/* Escritorio: lista e inspector en columna. Móvil: panel inferior. */}
             <div className="hidden lg:flex lg:flex-col min-w-0 max-h-[calc(100vh-8rem)] overflow-y-auto">
-              {!soloLectura && (
+              {!edicionBloqueada && (
                 <BibliotecaElementos
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
@@ -721,7 +744,7 @@ export function EditorPlanoSala({
                 borrador={borrador}
                 seleccion={seleccionValida}
                 alSeleccionar={setSeleccion}
-                arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
+                arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
               <div className="p-4 border-t border-linea">{inspector}</div>
             </div>
@@ -729,7 +752,7 @@ export function EditorPlanoSala({
 
           <PanelMovil resumen={resumenSeleccion}>
             <div className="pt-2">
-              {!soloLectura && (
+              {!edicionBloqueada && (
                 <BibliotecaElementos
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
@@ -741,7 +764,7 @@ export function EditorPlanoSala({
                 borrador={borrador}
                 seleccion={seleccionValida}
                 alSeleccionar={setSeleccion}
-                arrastreDeBandeja={soloLectura ? undefined : arrastreDeBandeja}
+                arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
               <div className="pt-4">{inspector}</div>
             </div>
@@ -751,7 +774,7 @@ export function EditorPlanoSala({
 
       {/* El incremento exacto se dice, no se deja adivinar: es lo que
           convierte las flechas en una alternativa real al arrastre. */}
-      {!soloLectura && !sinMedidas && (
+      {!edicionBloqueada && !sinMedidas && (
         <p className="text-tinta-tenue text-[0.75rem]">
           Con un objeto seleccionado, las flechas lo mueven 0,10 m; con Mayúsculas,
           0,01 m. Escape quita la selección.

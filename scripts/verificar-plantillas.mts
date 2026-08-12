@@ -57,10 +57,15 @@ const NOMBRE_RECREADA = 'TEST plantillas recreada';
 const NOMBRE_SIN_ASIENTOS = 'TEST plantillas sin asientos';
 const NOMBRE_MESA_PRINCIPAL = 'TEST plantillas mesa principal';
 const NOMBRE_CARRERA = 'TEST plantillas carrera';
+/** Alta con las medidas corregidas por debajo de las de la plantilla. */
+const NOMBRE_ENCOGIDA = 'TEST plantillas encogida';
+/** Lo mismo pero con el equipo sin colocar: eso sí puede nacer. */
+const NOMBRE_SIN_COLOCAR = 'TEST plantillas sin colocar';
 
 async function limpiar() {
-  await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL})`;
+  await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL}, ${NOMBRE_SIN_COLOCAR})`;
   await sql`delete from salas where nombre like ${NOMBRE_CARRERA + '%'}`;
+  await sql`delete from salas where nombre like ${NOMBRE_ENCOGIDA + '%'}`;
   await sql.unsafe(
     'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
   );
@@ -100,7 +105,9 @@ async function escenaDe(salaId: string) {
 try {
   await limpiar();
 
-  const { crearPlantillaDesdeSala, crearSala } = await import('../src/app/acciones');
+  const { crearPlantillaDesdeSala, crearSala, guardarEquipo } = await import(
+    '../src/app/acciones'
+  );
 
   /** Tolera la señal de `revalidatePath()` y la de `redirect()`; nada más. */
   const invocar = async (
@@ -165,6 +172,28 @@ try {
   // Deliberadamente sin colocar: la ausencia tiene que sobrevivir al viaje.
   await equipo('TEST panel sin colocar', 'mesa', null);
 
+  // Y uno colocado desde EQUIPAMIENTO, no desde el plano: es la otra pestaña
+  // que escribe coordenadas, y lo que se teclea ahí tiene que llegar a la
+  // plantilla y volver. Mientras Equipamiento no marcaba `posicion_confirmada`,
+  // esta medida se perdía en el viaje: la plantilla la guardaba como ausente.
+  const tecleado = await equipo('TEST altavoz tecleado', 'pared', null);
+  const desdeEquipamiento = new FormData();
+  desdeEquipamiento.set('id', tecleado);
+  desdeEquipamiento.set('sala_id', salaId);
+  desdeEquipamiento.set('nombre', 'TEST altavoz tecleado');
+  desdeEquipamiento.set('cantidad', '1');
+  desdeEquipamiento.set('extremo', 'pared');
+  desdeEquipamiento.set('x_m', '4.2');
+  desdeEquipamiento.set('y_m', '3.6');
+  desdeEquipamiento.set('z_m', '2.1');
+  await invocar(guardarEquipo, desdeEquipamiento);
+  const [trasEquipamiento] = await sql<Array<{ posicion_confirmada: boolean }>>`
+    select posicion_confirmada from sala_equipos where id = ${tecleado}`;
+  afirmar(
+    trasEquipamiento.posicion_confirmada === true,
+    'la coordenada tecleada en Equipamiento coloca el equipo',
+  );
+
   await sql`
     insert into conexiones (sala_id, origen_id, destino_id, senal, ruta, notas)
     values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada')`;
@@ -205,7 +234,16 @@ try {
     select modelo_texto, extremo, x_m, y_m, z_m, posicion_confirmada
     from plantilla_articulos where plantilla_id = ${String(plantilla.id)}
     order by modelo_texto`;
-  afirmar(lineas.length === 3, 'la plantilla se queda con los tres equipos');
+  afirmar(lineas.length === 4, 'la plantilla se queda con los cuatro equipos');
+  const tecleadaEnPlantilla = lineas.find((l) =>
+    String(l.modelo_texto).includes('altavoz tecleado'),
+  )!;
+  afirmar(
+    Number(tecleadaEnPlantilla.x_m) === 4.2 &&
+      Number(tecleadaEnPlantilla.y_m) === 3.6 &&
+      tecleadaEnPlantilla.posicion_confirmada === true,
+    'la coordenada tecleada en Equipamiento llega a la plantilla en vez de perderse',
+  );
   afirmar(
     lineas.every((l) => l.extremo != null),
     'cada línea conserva su extremo, no se vuelve a deducir de la categoría',
@@ -457,6 +495,108 @@ try {
   afirmar(
     Number(mesaSobrante.cuantas) === 0,
     'y el rollback se lleva por delante también la fila que el disparador metió',
+  );
+
+  // =====================================================================
+  // El alta corrige las medidas, y lo copiado tiene que caber en ellas
+  //
+  // Las medidas vienen SIEMPRE del formulario, no de la plantilla: es una
+  // regla deliberada, porque lo que se guarda es lo que el técnico ha
+  // comprobado. Pero las coordenadas se copian tal cual, así que una plantilla
+  // de 6 m aplicada a una sala corregida a 4 dejaba el equipo al otro lado de
+  // la pared, en un estado que el editor de plano no deja crear y que el
+  // cálculo de cable da por bueno. Mismo criterio y misma función que la ruta
+  // de Diagrama: `coordenadasFueraDeSala()`.
+  // =====================================================================
+  const plantillaGrande = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaGrande}, ${NOMBRE_PLANTILLA + ' grande'}, 'TEST', 8, 6, 4, 3)`;
+  const [lineaGrande] = await sql<Array<{ id: string }>>`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, x_m, y_m, z_m, posicion_confirmada)
+    values (${plantillaGrande}, ${articulo.id}, 'PANTALLAS', 'TEST pantalla lejos', 1, false,
+            'pantalla', 5, 2, 1.4, true)
+    returning id`;
+  await sql`
+    insert into plantilla_mobiliario
+      (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,
+       x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden)
+    values (${plantillaGrande}, ${mesaAuxCat.id}, 'Mesa rectangular', 'rectangulo', 1, 0.6,
+            1, 1, 0, 0, true, 0)`;
+
+  const alSalaEncogida = new FormData();
+  alSalaEncogida.set('plantilla_id', plantillaGrande);
+  alSalaEncogida.set('nombre', NOMBRE_ENCOGIDA);
+  alSalaEncogida.set('copias', '3');
+  alSalaEncogida.set('tipologia', 'TEST');
+  alSalaEncogida.set('aforo', '8');
+  // Lo que el técnico ha medido de verdad: la sala es más pequeña que la
+  // tipología, y la pantalla de la plantilla cae fuera de la pared.
+  alSalaEncogida.set('largo_m', '4');
+  alSalaEncogida.set('ancho_m', '3');
+  alSalaEncogida.set('alto_m', '3');
+  const rechazoEncogida = await altaDeSala(alSalaEncogida);
+
+  const [salasEncogidas] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from salas where nombre like ${NOMBRE_ENCOGIDA + '%'}`;
+  afirmar(
+    Number(salasEncogidas.cuantas) === 0,
+    'una plantilla que coloca un equipo fuera de las medidas corregidas no crea ninguna sala de las tres copias',
+  );
+  afirmar(
+    Boolean(rechazoEncogida?.error) && rechazoEncogida!.error!.includes('fuera de una sala'),
+    'y el alta lo explica con las medidas que se han puesto',
+  );
+  const [huellaEncogida] = await sql<Array<{ cuantos: string }>>`
+    select (
+      (select count(*) from sala_equipos    where origen_plantilla_linea_id = ${lineaGrande.id}) +
+      (select count(*) from sala_mobiliario m
+        join plantilla_mobiliario pm on pm.id = m.origen_plantilla_mobiliario_id
+        where pm.plantilla_id = ${plantillaGrande})
+    )::text as cuantos`;
+  afirmar(
+    Number(huellaEncogida.cuantos) === 0,
+    'y no deja ni un equipo ni un mueble sueltos: o cabe todo o no nace nada',
+  );
+
+  // El control positivo, sin el cual la guarda podría estar rechazando siempre:
+  // un equipo SIN colocar no tiene posición, así que no puede quedarse fuera de
+  // ninguna pared por pequeña que sea la sala. La ausencia se propaga como
+  // ausencia, no como un (0,0,0) medido.
+  const plantillaSinColocar = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaSinColocar}, ${NOMBRE_PLANTILLA + ' sin colocar'}, 'TEST', 8, 6, 4, 3)`;
+  await sql`
+    insert into plantilla_articulos
+      (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
+       extremo, x_m, y_m, z_m, posicion_confirmada)
+    values (${plantillaSinColocar}, ${articulo.id}, 'PANTALLAS', 'TEST pantalla sin sitio', 1, false,
+            'pantalla', null, null, null, false)`;
+
+  const alSalaSinColocar = new FormData();
+  alSalaSinColocar.set('plantilla_id', plantillaSinColocar);
+  alSalaSinColocar.set('nombre', NOMBRE_SIN_COLOCAR);
+  alSalaSinColocar.set('tipologia', 'TEST');
+  alSalaSinColocar.set('aforo', '8');
+  alSalaSinColocar.set('largo_m', '4');
+  alSalaSinColocar.set('ancho_m', '3');
+  alSalaSinColocar.set('alto_m', '3');
+  await altaDeSala(alSalaSinColocar);
+
+  const [sinColocarCreada] = await sql<Array<{ id: string }>>`
+    select id from salas where nombre = ${NOMBRE_SIN_COLOCAR}`;
+  afirmar(
+    Boolean(sinColocarCreada),
+    'un equipo sin colocar no bloquea el alta aunque la plantilla mida más que la sala',
+  );
+  const [equipoSinColocar] = await sql<Array<{ posicion_confirmada: boolean }>>`
+    select posicion_confirmada from sala_equipos where sala_id = ${sinColocarCreada?.id}`;
+  afirmar(
+    equipoSinColocar?.posicion_confirmada === false,
+    'y sigue sin colocar en la sala nueva: el croquis lo deduce del extremo',
   );
 } finally {
   await limpiar();

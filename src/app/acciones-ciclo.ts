@@ -100,29 +100,51 @@ export async function registrarHitoProyecto(datos: FormData) {
   const tecnicoId = texto(datos.get('tecnico_id'));
   if (!tecnicoId || !(await tecnicoValido(tecnicoId, 'inicio'))) return;
 
-  if (tipo === 'cierre') {
-    // No se cierra lo que no se inició, y cerrar con salas sin entregar es
-    // una decisión consciente: nota obligatoria.
-    const [estado] = await sql<Array<{ iniciado: boolean; sin_entregar: number }>>`
-      select exists (select 1 from hitos_proyecto h
-                     where h.proyecto_id = ${proyectoId} and h.tipo = 'inicio') as iniciado,
-             (select count(*)
-              from salas s
-              join localizaciones l on l.id = s.localizacion_id
-              where l.proyecto_id = ${proyectoId}
-                and not exists (select 1 from hitos_sala hs
-                                where hs.sala_id = s.id and hs.tipo = 'entrega')) as sin_entregar
-      `;
-    if (!estado?.iniciado) return;
-    if (Number(estado.sin_entregar) > 0 && !notas) return;
-  }
+  await sql.begin(async (tx) => {
+    // Mismo orden de cerrojos que las acciones que escriben en el plano
+    // (`enLaSalaBloqueada`, en `acciones.ts`): PRIMERO las filas de `salas`,
+    // después lo demás. Cerrar una obra convierte todas sus salas en solo
+    // lectura, así que es una escritura sobre ellas aunque no las modifique.
+    //
+    // Sin este cerrojo, cerrar la obra y guardar un equipo a la vez se cruzan:
+    // la acción de la sala comprueba el cierre, el cierre entra, y la acción
+    // escribe después sobre una obra ya cerrada. Cogiendo la misma fila y en el
+    // mismo orden, o el cierre va delante y la otra lo ve, o va detrás y espera.
+    // Y como las dos empiezan por `salas`, no hay ciclo que provoque un abrazo
+    // mortal.
+    await tx`
+      select s.id from salas s
+      join localizaciones l on l.id = s.localizacion_id
+      where l.proyecto_id = ${proyectoId}
+      order by s.id
+      for update of s`;
 
-  await sql`
-    insert into hitos_proyecto (proyecto_id, tipo, tecnico_id, fecha, notas)
-    values (${proyectoId}, ${tipo}, ${tecnicoId},
-            ${texto(datos.get('fecha')) ?? sql`current_date`},
-            ${notas})
-    on conflict (proyecto_id, tipo) do nothing`;
+    if (tipo === 'cierre') {
+      // No se cierra lo que no se inició, y cerrar con salas sin entregar es
+      // una decisión consciente: nota obligatoria. Se comprueba DENTRO de la
+      // transacción, con las salas ya bloqueadas: leerlo fuera dejaba una
+      // ventana para que entrara una entrega entre la cuenta y el cierre.
+      const [estado] = await tx<Array<{ iniciado: boolean; sin_entregar: number }>>`
+        select exists (select 1 from hitos_proyecto h
+                       where h.proyecto_id = ${proyectoId} and h.tipo = 'inicio') as iniciado,
+               (select count(*)
+                from salas s
+                join localizaciones l on l.id = s.localizacion_id
+                where l.proyecto_id = ${proyectoId}
+                  and not exists (select 1 from hitos_sala hs
+                                  where hs.sala_id = s.id and hs.tipo = 'entrega')) as sin_entregar
+        `;
+      if (!estado?.iniciado) return;
+      if (Number(estado.sin_entregar) > 0 && !notas) return;
+    }
+
+    await tx`
+      insert into hitos_proyecto (proyecto_id, tipo, tecnico_id, fecha, notas)
+      values (${proyectoId}, ${tipo}, ${tecnicoId},
+              ${texto(datos.get('fecha')) ?? tx`current_date`},
+              ${notas})
+      on conflict (proyecto_id, tipo) do nothing`;
+  });
   revalidatePath('/proyectos');
   revalidatePath('/proyectos/[id]', 'page');
   revalidatePath('/salas/[id]', 'layout');

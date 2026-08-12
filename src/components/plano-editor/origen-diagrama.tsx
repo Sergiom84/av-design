@@ -8,6 +8,7 @@ import {
   aplicarPlantillaAlDiagrama,
   iniciarDiagramaDesdeCero,
 } from '@/app/acciones-diagrama';
+import { leerRespuesta } from '@/lib/combobox';
 import type { PlantillaElegible } from '@/lib/datos';
 
 type OpcionPlantilla = OpcionCombobox & { plantilla: PlantillaElegible };
@@ -48,20 +49,38 @@ export function OrigenDiagrama({
   const [enCurso, empezar] = useTransition();
   const [elegida, setElegida] = useState<PlantillaElegible | null>(null);
   const [problema, setProblema] = useState<string | null>(null);
+  /**
+   * El listado de plantillas no contestó.
+   *
+   * Vive aquí y no solo dentro del combobox porque la decisión que hay encima
+   * no es de un desplegable: `Desde cero` se escribe en
+   * `salas.diagrama_iniciado_en` y no se vuelve a preguntar. Un 500 convertido
+   * en «sin plantillas» acababa siendo una decisión permanente que nadie tomó.
+   */
+  const [sinListado, setSinListado] = useState(false);
 
   const buscar = useCallback(
     async (consulta: string, signal: AbortSignal): Promise<OpcionPlantilla[]> => {
-      const respuesta = await fetch(
-        `/api/plantillas?${new URLSearchParams({ q: consulta })}`,
-        { signal },
-      );
-      const lista: PlantillaElegible[] = respuesta.ok ? await respuesta.json() : [];
-      return lista.map((p) => ({
-        id: p.id,
-        etiqueta: p.nombre,
-        detalle: `${p.tipologia} · ${medidasDe(p)}`,
-        plantilla: p,
-      }));
+      try {
+        const respuesta = await fetch(
+          `/api/plantillas?${new URLSearchParams({ q: consulta })}`,
+          { signal },
+        );
+        // `leerRespuesta` y no `respuesta.ok ? … : []`: ese `: []` era el fallo.
+        // Un 404 o un 500 salían por la misma puerta que «no hay ninguna».
+        const lista = await leerRespuesta<PlantillaElegible>(respuesta);
+        setSinListado(false);
+        return lista.map((p) => ({
+          id: p.id,
+          etiqueta: p.nombre,
+          detalle: `${p.tipologia} · ${medidasDe(p)}`,
+          plantilla: p,
+        }));
+      } catch (fallo) {
+        // La cancelación no es una caída: es la tecla siguiente.
+        if (!signal.aborted) setSinListado(true);
+        throw fallo;
+      }
     },
     [],
   );
@@ -108,6 +127,19 @@ export function OrigenDiagrama({
         </div>
       )}
 
+      {/* Que no se hayan podido listar las plantillas no es que no las haya, y
+          esta pregunta se contesta una sola vez. Mientras dure la caída,
+          `Desde cero` deja de pintarse como la opción principal: sigue estando,
+          pero ya no es la única que parece posible. */}
+      {sinListado && (
+        <div className="mb-4">
+          <Aviso tono="alerta">
+            No se han podido consultar las plantillas. No es que no haya ninguna:
+            reinténtalo en el buscador antes de decidir.
+          </Aviso>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 items-start">
         <section className="border border-linea rounded-md p-4">
           <h3 className="t-subtitulo mb-2">Desde cero</h3>
@@ -117,7 +149,7 @@ export function OrigenDiagrama({
           </p>
           <Boton
             tipo="button"
-            variante="principal"
+            variante={sinListado ? 'secundario' : 'principal'}
             onClick={desdeCero}
             disabled={enCurso}
           >

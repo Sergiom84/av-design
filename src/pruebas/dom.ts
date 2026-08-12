@@ -165,16 +165,26 @@ export async function escribir(campo: HTMLInputElement, valor: string): Promise<
   });
 }
 
-/** Un clic de verdad. */
-export async function pulsar(destino: Element): Promise<void> {
-  await act(async () => {
-    destino.dispatchEvent(
-      new (destino.ownerDocument.defaultView as Window & typeof globalThis).MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+/**
+ * Un clic de verdad. Devuelve el evento para poder preguntarle si alguien lo
+ * canceló: interceptar un enlace es justo eso, y comprobarlo mirando la
+ * pantalla no distingue «no navegó» de «navegó y volvió».
+ */
+export async function pulsar(
+  destino: Element,
+  extra: MouseEventInit = {},
+): Promise<MouseEvent> {
+  const vista = destino.ownerDocument.defaultView as Window & typeof globalThis;
+  const evento = new vista.MouseEvent('click', {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    ...extra,
   });
+  await act(async () => {
+    destino.dispatchEvent(evento);
+  });
+  return evento as unknown as MouseEvent;
 }
 
 /**

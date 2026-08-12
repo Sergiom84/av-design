@@ -89,9 +89,16 @@ export function Equipamiento({
                 </span>
                 <Referencia equipo={e} catalogo={catalogo} />
                 <span className="text-tinta-tenue">{ETIQUETA_EXTREMO[e.extremo]}</span>
-                <span className="text-tinta-tenue tabular-nums">
-                  X {e.posicion.x_m} · Y {e.posicion.y_m} · Z {e.posicion.z_m}
-                </span>
+                {/* Mismo criterio que el formulario: sin colocar no hay
+                    coordenada que enseñar. «X 0 · Y 0 · Z 0» se leía como una
+                    medida tomada en la esquina. */}
+                {e.posicion_confirmada ? (
+                  <span className="text-tinta-tenue tabular-nums">
+                    X {e.posicion.x_m} · Y {e.posicion.y_m} · Z {e.posicion.z_m}
+                  </span>
+                ) : (
+                  <span className="text-tinta-tenue">Sin colocar</span>
+                )}
               </div>
             ))}
           </div>
@@ -119,14 +126,20 @@ export function Equipamiento({
             ))}
           </select>
         </Campo>
+        {/* Vacías, no con ceros y un 1,2 de fábrica: nadie ha medido nada
+            todavía. Una casilla vacía es «no lo sé» y el equipo nace estimado;
+            el croquis lo dibuja donde suele ir, con trazo discontinuo, hasta
+            que alguien lo coloque. Proponer números convertía el formulario en
+            una medida falsa —y con X e Y a cero, en la esquina de la sala, que
+            es justo donde va el rack de verdad. */}
         <Campo etiqueta="X (m)">
-          <input name="x_m" type="number" step="0.01" defaultValue="0" className="w-20" />
+          <input name="x_m" type="number" step="0.01" className="w-20" />
         </Campo>
         <Campo etiqueta="Y (m)">
-          <input name="y_m" type="number" step="0.01" defaultValue="0" className="w-20" />
+          <input name="y_m" type="number" step="0.01" className="w-20" />
         </Campo>
         <Campo etiqueta="Z (m)">
-          <input name="z_m" type="number" step="0.01" defaultValue="1.2" className="w-20" />
+          <input name="z_m" type="number" step="0.01" className="w-20" />
         </Campo>
         {tomas.length > 0 && (
           <Campo etiqueta="Toma de red">
@@ -187,13 +200,18 @@ export function Equipamiento({
                     </option>
                   ))}
                 </select>
+                {/* Un equipo colocado enseña sus números; uno estimado, nada.
+                    Su `posicion` guardada es un resto —el croquis no la usa,
+                    deduce la posición del extremo—, así que pintarla invitaba
+                    a guardarla sin haberla medido. Vaciar las casillas de uno
+                    colocado lo devuelve a estimado, que es lo que significa. */}
                 {(['x_m', 'y_m', 'z_m'] as const).map((eje) => (
                   <input
                     key={eje}
                     name={eje}
                     type="number"
                     step="0.01"
-                    defaultValue={e.posicion[eje]}
+                    defaultValue={e.posicion_confirmada ? e.posicion[eje] : ''}
                     className="w-20"
                     aria-label={eje.replace('_m', '').toUpperCase()}
                   />

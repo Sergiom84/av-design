@@ -28,7 +28,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-e2e-diagrama/types/**/*.ts",
+    ".next-e2e-diagrama/dev/types/**/*.ts"
   ],
   "//exclude": "`output/` son artefactos locales ignorados por git —copias del árbol que dejan las auditorías, informes, capturas—. Comprobarles los tipos hace fallar el build por código viejo que ya no es el del repositorio.",
   "exclude": ["node_modules", "output"]

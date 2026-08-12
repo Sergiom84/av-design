@@ -12,11 +12,12 @@
  * Cada mutación restaura el fichero al terminar, pase lo que pase.
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -38,30 +39,90 @@ import { tmpdir } from 'node:os';
 // la preparación mucho más lenta que las propias pruebas. `.git`, `.next`,
 // `output`, `Inicio` y `.tmp` no forman parte de lo que ejecutan estas suites.
 const RAIZ_REAL = process.cwd();
-const RAIZ_SOMBRA = join(tmpdir(), `av-design-mutaciones-lote1-${process.pid}`);
+const RAIZ_TEMPORAL = mkdtempSync(join(tmpdir(), 'av-design-mutaciones-lote1-'));
+const RAIZ_SOMBRA = join(RAIZ_TEMPORAL, 'checkout');
 const EXCLUIDOS = new Set(['.git', '.next', '.tmp', 'Inicio', 'node_modules', 'output']);
-
-cpSync(RAIZ_REAL, RAIZ_SOMBRA, {
-  recursive: true,
-  filter(origen) {
-    const ruta = relative(RAIZ_REAL, origen);
-    if (!ruta) return true;
-    return !EXCLUIDOS.has(ruta.split(sep)[0]);
-  },
-});
-symlinkSync(join(RAIZ_REAL, 'node_modules'), join(RAIZ_SOMBRA, 'node_modules'), 'junction');
-process.chdir(RAIZ_SOMBRA);
 
 let sombraLimpia = false;
 function limpiarSombra() {
   if (sombraLimpia) return;
   sombraLimpia = true;
-  process.chdir(RAIZ_REAL);
-  rmSync(RAIZ_SOMBRA, { recursive: true, force: true });
+  try {
+    process.chdir(RAIZ_REAL);
+  } finally {
+    rmSync(RAIZ_TEMPORAL, { recursive: true, force: true });
+  }
 }
 process.on('exit', limpiarSombra);
+for (const senal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(senal, () => {
+    limpiarSombra();
+    process.exit(130);
+  });
+}
 
-console.log(`matriz aislada en ${basename(RAIZ_SOMBRA)}; el checkout compartido queda en solo lectura\n`);
+// En Windows, `child.kill('SIGTERM')` puede terminar el proceso sin darle la
+// oportunidad de ejecutar sus listeners. Un proceso no puede garantizar su
+// propia limpieza si el sistema no le devuelve el control, así que un vigilante
+// mínimo y desacoplado observa este PID. Cuando desaparece, borra la sombra.
+// En la salida normal encuentra que `limpiarSombra()` ya hizo el trabajo y se
+// apaga. No hereda consola ni mantiene vivo al runner.
+const codigoVigilante = String.raw`
+  const { existsSync, rmSync } = require('node:fs');
+  const pid = Number(process.argv[1]);
+  const carpeta = process.argv[2];
+  const vivo = () => {
+    try { process.kill(pid, 0); return true; }
+    catch { return false; }
+  };
+  const reloj = setInterval(() => {
+    if (vivo()) return;
+    clearInterval(reloj);
+    if (existsSync(carpeta)) rmSync(carpeta, { recursive: true, force: true });
+  }, 100);
+`;
+try {
+  const vigilante = spawn(
+    process.execPath,
+    ['-e', codigoVigilante, String(process.pid), RAIZ_TEMPORAL],
+    { detached: true, stdio: 'ignore', windowsHide: true },
+  );
+  vigilante.unref();
+} catch (error) {
+  limpiarSombra();
+  throw error;
+}
+
+// La red de limpieza existe ANTES de copiar. Si la copia, la unión de
+// `node_modules` o el cambio de directorio falla —o recibe una señal— no queda
+// un checkout parcial abandonado en `%TEMP%`. `mkdtempSync` evita además que un
+// PID reutilizado choque con la sombra de una ejecución antigua.
+try {
+  cpSync(RAIZ_REAL, RAIZ_SOMBRA, {
+    recursive: true,
+    filter(origen) {
+      const ruta = relative(RAIZ_REAL, origen);
+      if (!ruta) return true;
+      return !EXCLUIDOS.has(ruta.split(sep)[0]);
+    },
+  });
+  symlinkSync(join(RAIZ_REAL, 'node_modules'), join(RAIZ_SOMBRA, 'node_modules'), 'junction');
+  process.chdir(RAIZ_SOMBRA);
+} catch (error) {
+  limpiarSombra();
+  throw error;
+}
+
+console.log(`matriz aislada en ${basename(RAIZ_TEMPORAL)}; el checkout compartido queda en solo lectura\n`);
+
+// Solo lo usa `verificar-aislamiento-mutaciones.mjs`: deja la sombra viva el
+// tiempo suficiente para enviar SIGTERM y comprobar que el handler la retira.
+// Sin esta pausa explícita `--solo-preflight` termina antes de que una prueba
+// externa pueda interrumpirla de forma determinista.
+const pausaAislamiento = Number(process.env.AV_DESIGN_PRUEBA_PAUSA_AISLAMIENTO_MS ?? 0);
+if (Number.isFinite(pausaAislamiento) && pausaAislamiento > 0) {
+  await new Promise((resolve) => setTimeout(resolve, pausaAislamiento));
+}
 
 const MUTACIONES = [
   {
@@ -70,7 +131,7 @@ const MUTACIONES = [
     de: "update catalogo_mobiliario set rol = 'asiento'\n where clave = 'silla' and rol is distinct from 'asiento';",
     a: '-- mutado: sin backfill',
     suite: 'npm run test:migracion',
-    primaria: 'la migración se aplica sobre la versión anterior sin abortar',
+    primaria: 'tras migrar hay exactamente un asiento, SIN volver a sembrar',
   },
   {
     nombre: 'Quitar la postcondición de fuente única',
@@ -544,13 +605,6 @@ function recuperarDeUnaMuerteAnterior() {
 
 recuperarDeUnaMuerteAnterior();
 
-for (const senal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-  process.on(senal, () => {
-    recuperarDeUnaMuerteAnterior();
-    process.exit(130);
-  });
-}
-
 /**
  * La huella del fichero: el hash de sus BYTES en disco.
  *
@@ -603,7 +657,17 @@ function huella(fichero) {
 
 const filas = [];
 
-for (const m of MUTACIONES) {
+const argumentoSolo = process.argv.find((arg) => arg.startsWith('--solo-mutacion='));
+const nombreSolo = argumentoSolo?.slice('--solo-mutacion='.length) ?? null;
+const mutacionesAEjecutar = nombreSolo
+  ? MUTACIONES.filter((m) => m.nombre === nombreSolo)
+  : MUTACIONES;
+if (nombreSolo && mutacionesAEjecutar.length !== 1) {
+  console.error(`No existe una única mutación llamada «${nombreSolo}».`);
+  process.exit(1);
+}
+
+for (const m of mutacionesAEjecutar) {
   // Los patrones se escriben con `\n` y el checkout de Windows tiene CRLF: sin
   // normalizar, toda mutación de más de una línea decía «patrón no encontrado»
   // y la guarda se daba por probada sin haberla roto nunca. Se busca y se
@@ -622,10 +686,19 @@ for (const m of MUTACIONES) {
   anotarMutacionEnCurso(m.fichero, original);
   escribirConReintento(m.fichero, mutado);
   const huellaMutado = huella(m.fichero);
+  console.log(`mutación preparada en sombra: ${m.nombre}`);
+  const pausaTrasMutar = Number(process.env.AV_DESIGN_PRUEBA_PAUSA_TRAS_MUTAR_MS ?? 0);
+  if (Number.isFinite(pausaTrasMutar) && pausaTrasMutar > 0) {
+    await new Promise((resolve) => setTimeout(resolve, pausaTrasMutar));
+  }
   let salida = '';
   let pisado = null;
   try {
-    salida = execSync(m.suite, { encoding: 'utf8', stdio: 'pipe' });
+    salida = execSync(m.suite, {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      env: { ...process.env, AV_DESIGN_RAIZ_GIT: RAIZ_REAL },
+    });
   } catch (e) {
     salida = `${e.stdout ?? ''}${e.stderr ?? ''}`;
   } finally {
@@ -661,6 +734,9 @@ for (const m of MUTACIONES) {
   }
   console.log(`  suite: ${m.suite}  ·  caen ${lista.length}`);
   console.log(`  primaria: ${primariaCae ? 'CAE' : 'NO CAE ← revisar'} · «${m.primaria}»`);
+  if (!primariaCae && lista.length === 0) {
+    console.error(`  salida de diagnóstico:\n${salida.slice(-3000)}`);
+  }
   const cascada = lista.filter((n) => n !== m.primaria);
   console.log(
     cascada.length ? `  cascada (${cascada.length}): ${cascada.join(' | ')}` : '  cascada: ninguna',

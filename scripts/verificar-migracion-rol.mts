@@ -50,7 +50,11 @@ const afirmar = (cond: boolean, mensaje: string) => {
 
 /** El contenido de un fichero tal y como estaba en el commit anterior. */
 const comoEstaba = (ruta: string): string =>
-  execFileSync('git', ['show', `${COMMIT_ANTERIOR}:${ruta}`], { encoding: 'utf8' });
+  execFileSync(
+    'git',
+    ['-C', process.env.AV_DESIGN_RAIZ_GIT ?? process.cwd(), 'show', `${COMMIT_ANTERIOR}:${ruta}`],
+    { encoding: 'utf8' },
+  );
 
 const administracion = postgres(URL_BASE, { max: 1, ssl: false });
 

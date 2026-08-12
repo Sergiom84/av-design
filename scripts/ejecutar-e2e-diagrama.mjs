@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
+import { resultadoE2eAprobado } from './resultado-e2e-diagrama.mjs';
 
 const adminUrl = process.env.E2E_DATABASE_ADMIN_URL ??
   'postgres://av_design:av_design_local@127.0.0.1:5433/postgres';
@@ -47,7 +48,17 @@ async function ejecutar() {
   const resultado = JSON.parse(
     await readFile(new URL('../output/e2e/diagrama/resultado.json', import.meta.url), 'utf8'),
   );
-  if (codigo !== 0 || resultado.stats?.unexpected > 0) process.exitCode = codigo || 1;
+  const estadisticas = resultado.stats ?? {};
+  if (!resultadoE2eAprobado(codigo, estadisticas)) {
+    console.error(
+      `Gate E2E no aprobado: codigo=${codigo}, ` +
+        `aprobadas=${estadisticas.expected ?? 'desconocido'}, ` +
+        `omitidas=${estadisticas.skipped ?? 'desconocido'}, ` +
+        `inesperadas=${estadisticas.unexpected ?? 'desconocido'}, ` +
+        `inestables=${estadisticas.flaky ?? 'desconocido'}.`,
+    );
+    process.exitCode = codigo || 1;
+  }
 }
 
 try {

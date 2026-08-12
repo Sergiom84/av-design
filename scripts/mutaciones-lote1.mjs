@@ -126,6 +126,14 @@ if (Number.isFinite(pausaAislamiento) && pausaAislamiento > 0) {
 
 const MUTACIONES = [
   {
+    nombre: 'El gate E2E acepta pruebas omitidas',
+    fichero: 'scripts/resultado-e2e-diagrama.mjs',
+    de: '    estadisticas.skipped === 0 &&\n',
+    a: '',
+    suite: 'node --import tsx --test scripts/resultado-e2e-diagrama.test.mjs',
+    primaria: 'el gate E2E rechaza una ejecución con pruebas omitidas',
+  },
+  {
     nombre: 'Quitar el backfill de roles de la migración',
     fichero: 'db/migraciones/2026-08-rol-mobiliario.sql',
     de: "update catalogo_mobiliario set rol = 'asiento'\n where clave = 'silla' and rol is distinct from 'asiento';",
@@ -146,7 +154,7 @@ const MUTACIONES = [
     fichero: 'src/lib/croquis.ts',
     de: '? repartirSillasEnLaSala(mesa, sala.aforo, rectSala)',
     a: '? { sillas: sillasAlrededor(mesa, sala.aforo), sinSitio: 0 }',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/lib/croquis.test.ts',
     primaria: 'mesa pegada a la pared izquierda',
   },
   {
@@ -159,7 +167,7 @@ const MUTACIONES = [
     fichero: 'src/lib/croquis.ts',
     de: 'const t = (j + 1) / (cuantas + 1);',
     a: 'const t = 0.5;',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/lib/croquis.test.ts',
     primaria: 'contra la pared izquierda no se apila ninguna silla',
   },
   {
@@ -167,7 +175,7 @@ const MUTACIONES = [
     fichero: 'src/lib/plano-editor.ts',
     de: 'if (derivadas.length > MAXIMO_AFORO_MATERIALIZABLE) {',
     a: 'if (false) {',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/lib/plano-editor.test.ts',
     primaria: 'un aforo por encima del límite no materializa ni inventa identificadores',
   },
   {
@@ -268,7 +276,7 @@ const MUTACIONES = [
     fichero: 'src/components/sala/equipamiento.tsx',
     de: "defaultValue={e.posicion_confirmada ? e.posicion[eje] : ''}",
     a: 'defaultValue={e.posicion[eje]}',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/sala/equipamiento.test.tsx',
     primaria: 'un equipo sin colocar enseña las casillas vacías',
   },
   // ------------------------------------------------------------------
@@ -291,7 +299,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/guardia-salida.tsx',
     de: "document.addEventListener('click', alPulsar, true);",
     a: "document.addEventListener('click', alPulsar, false);",
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/editor-plano-sala.test.tsx',
     primaria: 'otra pestaña de la ficha no navega: pregunta antes',
   },
   {
@@ -299,7 +307,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/guardia-salida.tsx',
     de: 'if (!activo || centinela.current) return;',
     a: 'if (true) return;',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/editor-plano-sala.test.tsx',
     primaria: 'el botón atrás del navegador tampoco se lleva el borrador en silencio',
   },
   {
@@ -307,7 +315,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/guardia-salida.tsx',
     de: "if (ev.key === 'Escape') {",
     a: 'if (false) {',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/editor-plano-sala.test.tsx',
     primaria: 'el aviso es un diálogo modal con nombre, se lleva el foco y Escape cancela',
   },
   {
@@ -315,7 +323,7 @@ const MUTACIONES = [
     fichero: 'src/lib/guardia-salida.ts',
     de: 'if (destino.pathname === actual.pathname && destino.search === actual.search) return null;',
     a: 'if (false) return null;',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/lib/guardia-salida.test.ts',
     primaria: 'el mismo sitio no es salir: la pestaña activa se puede pulsar',
   },
   // ------------------------------------------------------------------
@@ -335,7 +343,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/origen-diagrama.tsx',
     de: '        const lista = await leerRespuesta<PlantillaElegible>(respuesta);',
     a: '        const lista = respuesta.ok ? ((await respuesta.json()) as PlantillaElegible[]) : [];',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/origen-diagrama.test.tsx',
     primaria: 'dice que no se pudo mirar, y no que no haya plantillas',
   },
   {
@@ -343,7 +351,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/origen-diagrama.tsx',
     de: 'if (!signal.aborted) setSinListado(true);',
     a: 'if (false) setSinListado(true);',
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/origen-diagrama.test.tsx',
     primaria: 'dice que no se pudo mirar, y no que no haya plantillas',
   },
   {
@@ -351,7 +359,7 @@ const MUTACIONES = [
     fichero: 'src/components/plano-editor/origen-diagrama.tsx',
     de: "variante={sinListado ? 'secundario' : 'principal'}",
     a: "variante={'principal'}",
-    suite: 'npm test',
+    suite: 'node --import tsx --test src/components/plano-editor/origen-diagrama.test.tsx',
     primaria: '«Desde cero» deja de ser la opción principal mientras no se pueda mirar',
   },
   // ------------------------------------------------------------------
@@ -541,10 +549,32 @@ const MUTACIONES = [
 
 /** Los nombres de las pruebas que fallan, en el orden en que las imprime la suite. */
 function caidas(salida, suite) {
-  if (suite === 'npm test') {
-    return [...salida.matchAll(/^ {2}✖ (.+?) \(\d/gm)].map((m) => m[1]);
+  if (suite === 'npm test' || suite.startsWith('node --import tsx --test ')) {
+    return [
+      ...new Set([...salida.matchAll(/^\s*✖ (.+?) \(\d/gm)].map((m) => m[1])),
+    ];
   }
   return [...salida.matchAll(/^FALLO (.+)$/gm)].map((m) => m[1]);
+}
+
+const TIMEOUT_SUITE_MS = Number(process.env.AV_DESIGN_TIMEOUT_SUITE_MS ?? 120_000);
+
+/**
+ * Un nombre de prueba puede imprimirse antes de que Git, PostgreSQL o la propia
+ * limpieza aborten. Solo cuenta como mutación detectada si la suite alcanza su
+ * resumen final y termina con el código de fallo normal de sus aserciones.
+ */
+function suiteTerminada(salida, suite) {
+  if (suite === 'npm test' || suite.startsWith('node --import tsx --test ')) {
+    return (
+      /ℹ tests \d+/.test(salida) &&
+      /ℹ fail [1-9]\d*/.test(salida) &&
+      /ℹ cancelled 0/.test(salida) &&
+      /ℹ skipped 0/.test(salida)
+    );
+  }
+  const resumen = salida.match(/(?:^|\n)(\d+)\/(\d+) comprobaciones(?: correctas)?/);
+  return resumen !== null && Number(resumen[1]) < Number(resumen[2]);
 }
 
 /**
@@ -693,13 +723,17 @@ for (const m of mutacionesAEjecutar) {
   }
   let salida = '';
   let pisado = null;
+  let errorSuite = null;
   try {
     salida = execSync(m.suite, {
       encoding: 'utf8',
       stdio: 'pipe',
       env: { ...process.env, AV_DESIGN_RAIZ_GIT: RAIZ_REAL },
+      timeout: TIMEOUT_SUITE_MS,
+      maxBuffer: 50 * 1024 * 1024,
     });
   } catch (e) {
+    errorSuite = e;
     salida = `${e.stdout ?? ''}${e.stderr ?? ''}`;
   } finally {
     // Si el fichero en disco ya no es el que se mutó, alguien lo ha tocado
@@ -715,12 +749,26 @@ for (const m of mutacionesAEjecutar) {
 
   const restaurado = huella(m.fichero) === huellaAntes;
   const lista = caidas(salida, m.suite);
+  const infraestructuraOk =
+    errorSuite?.status === 1 &&
+    errorSuite?.signal == null &&
+    errorSuite?.code !== 'ETIMEDOUT' &&
+    suiteTerminada(salida, m.suite);
   // No basta con que caiga una prueba con ese nombre: si la mutación declara
   // una evidencia, tiene que aparecer en la salida. Es lo que distingue «cae
   // por el contrato que dice» de «cae por lo que sea».
   const evidenciaOk = m.evidencia == null || new RegExp(m.evidencia).test(salida);
-  const primariaCae = lista.includes(m.primaria) && restaurado && evidenciaOk && !pisado;
-  filas.push({ ...m, lista, primariaCae, restaurado, evidenciaOk, pisado });
+  const primariaCae =
+    lista.includes(m.primaria) && restaurado && evidenciaOk && !pisado && infraestructuraOk;
+  filas.push({
+    ...m,
+    lista,
+    primariaCae,
+    restaurado,
+    evidenciaOk,
+    pisado,
+    infraestructuraOk,
+  });
 
   console.log(`\n### ${m.nombre}`);
   if (pisado) {
@@ -731,6 +779,14 @@ for (const m of mutacionesAEjecutar) {
   }
   if (!evidenciaOk) {
     console.error(`  SIN EVIDENCIA: no aparece /${m.evidencia}/ en la salida de la suite`);
+  }
+  if (!infraestructuraOk) {
+    console.error(
+      `  INFRAESTRUCTURA/ABORTO: codigo=${errorSuite?.status ?? 'sin codigo'}, ` +
+        `senal=${errorSuite?.signal ?? 'ninguna'}, error=${errorSuite?.code ?? 'ninguno'}, ` +
+        `resumen_completo=${suiteTerminada(salida, m.suite) ? 'si' : 'no'}`,
+    );
+    console.error(`  salida de infraestructura:\n${salida.slice(-3000)}`);
   }
   console.log(`  suite: ${m.suite}  ·  caen ${lista.length}`);
   console.log(`  primaria: ${primariaCae ? 'CAE' : 'NO CAE ← revisar'} · «${m.primaria}»`);

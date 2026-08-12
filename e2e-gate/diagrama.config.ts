@@ -11,6 +11,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  forbidOnly: true,
+  globalTimeout: 6 * 60_000,
   reporter: [
     ['list'],
     ['html', { outputFolder: '../output/e2e/diagrama/reporte-html', open: 'never' }],

@@ -804,7 +804,7 @@ try {
       for (const r of [ra, rb]) {
         if (r.status === 'rejected' && esAbrazoMortal(r.reason)) {
           afirmar(false, `${donde}: abrazo mortal entre las dos transacciones`);
-          throw r.reason;
+          return null;
         }
         if (r.status === 'rejected') throw r.reason;
       }
@@ -955,10 +955,11 @@ try {
 
         soltar();
         await fin;
-        const [, plano] = await resolver(pEquipo, pPlano, 'Equipamiento delante del plano');
+        const resultado = await resolver(pEquipo, pPlano, 'Equipamiento delante del plano');
+        const plano = resultado?.[1];
 
         afirmar(
-          plano.ok === false && plano.motivo === 'conflicto',
+          plano?.ok === false && plano.motivo === 'conflicto',
           'si Equipamiento entra primero, el plano con la versión de antes recibe conflicto',
         );
         const e = await equipoDe(equipoId);
@@ -1003,10 +1004,11 @@ try {
 
         soltar();
         await fin;
-        const [plano] = await resolver(pPlano, pEquipo, 'el plano delante de Equipamiento');
+        const resultado = await resolver(pPlano, pEquipo, 'el plano delante de Equipamiento');
+        const plano = resultado?.[0];
 
         afirmar(
-          plano.ok === true,
+          plano?.ok === true,
           'si el plano coge el cerrojo primero, termina íntegro con su versión al día',
         );
         const e = await equipoDe(equipoId);

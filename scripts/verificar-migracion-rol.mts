@@ -146,15 +146,21 @@ try {
         'y el resto del mobiliario se queda con rol nulo, sin inventarle papel',
       );
 
-      const [silla] = await sql<Array<{ rol: string | null }>>`
-        select rol from catalogo_mobiliario where clave = 'silla'`;
-      afirmar(silla?.rol === 'asiento', 'la silla es asiento por su clave, no por su nombre');
+      const [silla] = primeraOk
+        ? await sql<Array<{ rol: string | null }>>`
+            select rol from catalogo_mobiliario where clave = 'silla'`
+        : [];
+      afirmar(
+        primeraOk && silla?.rol === 'asiento',
+        'la silla es asiento por su clave, no por su nombre',
+      );
 
       // ------------------------------------------------- 3 · segunda aplicación
-      afirmar(await aplicarMigracion(sql, 'migración (segunda vez)'), 'y se puede aplicar otra vez');
+      const segundaOk = primeraOk && (await aplicarMigracion(sql, 'migración (segunda vez)'));
+      afirmar(segundaOk, 'y se puede aplicar otra vez');
       const segunda = await rolesDe(sql);
       afirmar(
-        JSON.stringify(segunda) === JSON.stringify(primera),
+        segundaOk && JSON.stringify(segunda) === JSON.stringify(primera),
         'aplicarla dos veces deja exactamente lo mismo',
       );
 
@@ -163,10 +169,16 @@ try {
       await sql`
         insert into catalogo_mobiliario (clave, nombre, categoria, forma, fuente)
         values ('test-armario', 'Armario', 'Almacenaje', 'rectangulo', 'app')`;
-      await aplicarMigracion(sql, 'migración (tercera vez, con mueble ajeno)');
-      const [armario] = await sql<Array<{ rol: string | null }>>`
-        select rol from catalogo_mobiliario where clave = 'test-armario'`;
-      afirmar(armario.rol === null, 'un mueble desconocido no recibe rol ni se transforma');
+      const terceraOk =
+        segundaOk && (await aplicarMigracion(sql, 'migración (tercera vez, con mueble ajeno)'));
+      const [armario] = terceraOk
+        ? await sql<Array<{ rol: string | null }>>`
+            select rol from catalogo_mobiliario where clave = 'test-armario'`
+        : [];
+      afirmar(
+        terceraOk && armario?.rol === null,
+        'un mueble desconocido no recibe rol ni se transforma',
+      );
     } finally {
       await sql.end();
     }

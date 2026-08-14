@@ -50,6 +50,60 @@ export function ladoDePuerto(sentido: SentidoPuerto): 'izquierda' | 'derecha' {
   return sentido === 'entrada' || sentido === 'control' ? 'izquierda' : 'derecha';
 }
 
+// ---------------------------------------------------------------------
+// Filtro de señal
+// ---------------------------------------------------------------------
+
+/**
+ * Las tres familias funcionales que el técnico mira por separado en obra:
+ * el vídeo, el audio y la red. No son todas las señales del catálogo.
+ *
+ * `usb`, `control` y `alimentacion` quedan fuera por ahora. `otro` también,
+ * y por un motivo distinto: en `data/puertos.csv` marca a la vez DVI,
+ * DisplayPort y DTP, así que no es una familia, es un cajón de sastre. Las
+ * cuatro siguen estando en la vista completa, que es la de siempre.
+ */
+export const FILTROS_SENAL = ['video', 'audio', 'red'] as const;
+
+export type FiltroSenalDiagrama = (typeof FILTROS_SENAL)[number];
+
+export const SENALES_POR_FILTRO: Record<FiltroSenalDiagrama, readonly Senal[]> = {
+  video: ['hdmi'],
+  audio: ['audio_linea', 'audio_altavoz', 'microfono'],
+  red: ['red'],
+};
+
+export const ETIQUETA_FILTRO_SENAL: Record<FiltroSenalDiagrama, string> = {
+  video: 'Vídeo',
+  audio: 'Audio',
+  red: 'Red',
+};
+
+/**
+ * El valor que llega por la dirección, pasado por lista blanca.
+ *
+ * Cualquier cosa que no sea exactamente una de las tres cadenas —vacío,
+ * desconocido, o repetido, que en Next llega como array— devuelve `null`, y
+ * `null` es la vista completa de siempre. No se normaliza ni se adivina, y
+ * este valor nunca llega a SQL.
+ *
+ * La comparación es contra la lista, no con `in`: `'toString' in objeto` es
+ * cierto por herencia de `Object.prototype`, y eso convertiría la lista blanca
+ * en un colador.
+ */
+export function normalizarFiltroSenal(
+  valor: string | string[] | undefined | null,
+): FiltroSenalDiagrama | null {
+  return typeof valor === 'string' && (FILTROS_SENAL as readonly string[]).includes(valor)
+    ? (valor as FiltroSenalDiagrama)
+    : null;
+}
+
+/** Si una conexión de esta señal se ve con el filtro puesto. Sin filtro, todas. */
+export function senalEnFiltro(senal: Senal, filtro: FiltroSenalDiagrama | null): boolean {
+  return filtro === null || SENALES_POR_FILTRO[filtro].includes(senal);
+}
+
 export interface FilaPuertoDiagrama {
   puerto_id: string;
   /** El literal del fabricante: `HDMI IN 1`. */
@@ -97,7 +151,11 @@ export interface EscenaDiagrama {
   lineas: LineaDiagrama[];
   ancho: number;
   alto: number;
-  /** Conexiones que no se pudieron dibujar (extremo sin equipo en la sala). */
+  /**
+   * Conexiones que no se pudieron dibujar (extremo sin equipo en la sala).
+   * Las que esconde el filtro de señal no cuentan: no son un problema del
+   * dato, son la vista elegida.
+   */
   omitidas: number;
 }
 
@@ -116,6 +174,12 @@ export interface EntradaDiagrama {
    * esto, así que es el modo por defecto de la interfaz.
    */
   soloConectados?: boolean;
+  /**
+   * Vista exclusiva de una familia de señal. `null` o ausente: vista completa.
+   * Filtra las líneas, no el inventario: los bloques de todos los equipos de
+   * la sala se conservan.
+   */
+  filtroSenal?: FiltroSenalDiagrama | null;
 }
 
 /**
@@ -184,12 +248,21 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
     descripcionArticulo,
     categoriaArticulo,
     soloConectados = false,
+    filtroSenal = null,
   } = entrada;
 
+  // El identificador se calcula sobre TODAS las conexiones y solo después se
+  // filtra la escena. Al revés, el cable `HD-1002` pasaría a llamarse
+  // `HD-1000` en la vista de vídeo, y esa etiqueta puede estar ya escrita en
+  // una brida de la sala.
   const identificadores = identificadoresDeCable(conexiones);
+  const visibles = filtroSenal
+    ? conexiones.filter((c) => senalEnFiltro(c.senal, filtroSenal))
+    : conexiones;
+
   const etiquetas = etiquetasDeEquipos(equipos);
   const puertosUsados = new Set<string>();
-  for (const c of conexiones) {
+  for (const c of visibles) {
     if (c.puerto_origen_id) puertosUsados.add(c.puerto_origen_id);
     if (c.puerto_destino_id) puertosUsados.add(c.puerto_destino_id);
   }
@@ -197,7 +270,7 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
   // --- bloques por columna, en orden estable -------------------------------
   const columnas: EquipoEnSala[][] = [[], [], [], []];
   for (const e of [...equipos].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-    columnas[columnaDeEquipo(e.id, conexiones)].push(e);
+    columnas[columnaDeEquipo(e.id, visibles)].push(e);
   }
   // Sin equipos desconectados no se reserva su columna.
   const columnasOcupadas = columnas
@@ -263,7 +336,7 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
   // columnas: dos cables que comparten canal no se superponen.
   let carril = 0;
 
-  for (const c of ordenarConexiones(conexiones)) {
+  for (const c of ordenarConexiones(visibles)) {
     const bOrigen = bloquePorEquipo.get(c.origen_id);
     const bDestino = bloquePorEquipo.get(c.destino_id);
     if (!bOrigen || !bDestino) {

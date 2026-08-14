@@ -42,7 +42,7 @@ export function TablaCables({
         </Vacio>
       ) : (
         <ContenedorTabla etiqueta="Tabla de cables">
-        <table className="datos">
+        <table className="datos tabla-cables">
           <thead>
             <tr>
               <th>Cable</th>

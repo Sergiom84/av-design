@@ -237,7 +237,7 @@ export function agruparMaterialCable(
         unidad: 'm',
         cantidad: r.longitud_m,
         tiradas: 1,
-        a_pedir: 'Asignar cable en el catálogo',
+        a_pedir: 'Asignar cable en la conexión',
         coste_estimado: null,
       });
       continue;

@@ -89,7 +89,7 @@ export function Conexiones({
           ))}
 
           <ContenedorTabla etiqueta="Conexiones">
-          <table className="datos">
+          <table className="datos tabla-conexiones">
             <thead>
               <tr>
                 <th>Origen</th>

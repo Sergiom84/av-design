@@ -5,9 +5,11 @@ import type { DimensionCanalizacion, LineaMaterialCable } from '@/lib/calculo-ca
 export function MaterialAComprar({
   material,
   canalizacion,
+  salaId,
 }: {
   material: LineaMaterialCable[];
   canalizacion: DimensionCanalizacion | null;
+  salaId: string;
 }) {
   if (material.length === 0) return null;
 
@@ -39,7 +41,15 @@ export function MaterialAComprar({
                 {l.cantidad} {l.unidad}
               </td>
               <td className="num">{l.tiradas}</td>
-              <td>{l.a_pedir}</td>
+              <td>
+                {l.a_pedir === 'Asignar cable en la conexión' ? (
+                  <a className="enlace" href={`/salas/${salaId}/cableado`}>
+                    Ir a Cableado para asignarlo
+                  </a>
+                ) : (
+                  l.a_pedir
+                )}
+              </td>
               <td className="num">
                 {l.coste_estimado != null ? `${l.coste_estimado.toFixed(2)} €` : '—'}
               </td>

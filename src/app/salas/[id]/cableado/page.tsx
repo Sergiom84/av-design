@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { EsquemaSala } from '@/components/diagrama/esquema-sala';
+import { normalizarFiltroSenal } from '@/lib/diagrama';
 import { TablaCables } from '@/components/cable-schedule/tabla-cables';
 import { ResultadoDelCable } from '@/components/sala/resultado-cable';
 import { Conexiones } from '@/components/sala/conexiones';
@@ -21,7 +22,7 @@ export default async function CableadoSala({
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const { puertos: vistaPuertos } = await searchParams;
+  const { puertos: vistaPuertos, senal } = await searchParams;
   const ficha = await fichaDeSala(id);
   if (!ficha) notFound();
 
@@ -42,6 +43,9 @@ export default async function CableadoSala({
       <EsquemaSala
         salaId={sala.id}
         todosLosPuertos={vistaPuertos === 'todos'}
+        // El filtro es solo del dibujo: la tabla de cables, los metros y el
+        // alta de conexiones siguen recibiendo las conexiones completas.
+        filtroSenal={normalizarFiltroSenal(senal)}
         entrada={{
           equipos,
           conexiones,

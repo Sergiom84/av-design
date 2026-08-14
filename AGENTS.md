@@ -44,6 +44,12 @@ desde el móvil y cierre de obra con bajas.
 El detalle de las fases está en `docs/02-propuesta-app.md`. El análisis del flujo
 real de XTEN-AV, con qué copiar y qué no, en `docs/06-xtenav-flujo-creacion.md`.
 
+## Orden de validación visual
+
+Toda revisión funcional visual empieza en navegador de escritorio y recorre el
+flujo completo. La vista móvil se prueba al final, como validación de cierre;
+nunca como primer recorrido.
+
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind 4 · Postgres · despliegue en
@@ -141,7 +147,16 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   una plantilla con sillas sí pasa la sala a `manuales`. Y añadir una silla a
   mano **materializa antes las del aforo en su sitio** con la misma
   `sillasAlrededor()`: sin eso una sala de aforo ocho pasaba a dibujar nueve, y
-  apagarlas sin materializarlas las habría hecho desaparecer.
+  apagarlas sin materializarlas las habría hecho desaparecer. Las salas que ya
+  existen se pasan a `manuales` con `npm run migrar:sillas`, un paso manual del
+  despliegue que **importa** esa geometría en vez de repetirla en SQL: la sala
+  sin mesa, sin aforo o donde no caben todas se queda en `derivadas` y se sigue
+  dibujando como hoy. Contra una base que no sea la de Docker se ejecuta **a
+  mano y nombrando la base de destino** (`--confirmo=<base>`), nunca desde un
+  despliegue automático; en seco se puede mirar producción sin ceremonia. Y lo
+  que escribe queda marcado con `sala_mobiliario.fuente = 'backfill'`, misma
+  convención que `precios` y `puertos`: el defecto de la columna es `app`, así
+  que la silla que colocó una persona no la borra el rollback documentado.
 - **La mesa principal es una y no se instancia.** Vive en `salas.mesa_*` y es el
   elemento canónico. El buscador ofrece `Mesa principal` para poder encontrarla:
   elegirla selecciona la que hay y abre su inspector, no crea una fila. El
@@ -281,6 +296,9 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 | `npm run test:diagrama` | Guardas del guardado del plano contra Postgres real |
 | `npm run test:plantillas` | Ida y vuelta sala ↔ plantilla contra Postgres real |
 | `npm run test:guardas-sala` | Guardas de «proyecto cerrado» contra Postgres real |
+| `npm run test:migracion` | La migración del rol de mobiliario sobre la versión anterior |
+| `npm run test:backfill-sillas` | Paridad del croquis antes y después de materializar las sillas |
+| `npm run migrar:sillas` | Materializa las sillas del aforo como filas. En seco; escribe con `-- --aplicar`. Paso manual, posterior a `db:migrate`; contra producción se ejecuta a mano y exige `--confirmo=<nombre_de_la_base>` |
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |

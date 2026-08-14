@@ -211,6 +211,14 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
 export async function cambiarEstadoPedido(datos: FormData) {
   const id = String(datos.get('id'));
   const estado = (texto(datos.get('estado')) ?? 'borrador') as EstadoPedido;
+  if (estado === 'pedido') {
+    const [orientativo] = await sql<Array<{ existe: boolean }>>`
+      select exists(
+        select 1 from pedido_lineas
+        where pedido_id = ${id} and precio_orientativo
+      ) as existe`;
+    if (orientativo?.existe) return;
+  }
   await sql`
     update pedidos set
       estado = ${estado}::estado_pedido,
@@ -258,6 +266,13 @@ export async function recibirLineaPedido(datos: FormData) {
     const [pedido] = await tx<Array<{ estado: EstadoPedido; sala_id: string | null; referencia: string | null }>>`
       select estado, sala_id, referencia from pedidos where id = ${pedidoId}`;
 
+    const [orientativo] = await tx<Array<{ existe: boolean }>>`
+      select exists(
+        select 1 from pedido_lineas
+        where pedido_id = ${pedidoId} and precio_orientativo
+      ) as existe`;
+    if (orientativo?.existe) return;
+
     await tx`
       insert into movimientos (articulo_id, ubicacion_id, tipo, cantidad, sala_id, motivo, quien)
       values (${linea.articulo_id}, ${ubicacionId}, 'entrada', ${cantidad},
@@ -291,6 +306,12 @@ export async function recibirPedidoCompleto(datos: FormData) {
   const quien = texto(datos.get('quien'));
 
   await sql.begin(async (tx) => {
+    const [orientativo] = await tx<Array<{ existe: boolean }>>`
+      select exists(
+        select 1 from pedido_lineas
+        where pedido_id = ${pedidoId} and precio_orientativo
+      ) as existe`;
+    if (orientativo?.existe) return;
     const [pedido] = await tx<Array<{ sala_id: string | null; referencia: string | null }>>`
       select sala_id, referencia from pedidos where id = ${pedidoId}`;
 

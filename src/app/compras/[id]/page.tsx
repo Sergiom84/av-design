@@ -37,7 +37,10 @@ export default async function DetallePedido({ params }: PageProps<'/compras/[id]
       />
 
       <div className="grid xl:grid-cols-[24rem_1fr] gap-6 items-start [&>*]:min-w-0">
-        <CabeceraPedido pedido={pedido} />
+        <CabeceraPedido
+          pedido={pedido}
+          tienePreciosOrientativos={lineas.some((linea) => linea.precio_orientativo)}
+        />
         <LineasPedido pedido={pedido} lineas={lineas} ubicaciones={ubicaciones} />
       </div>
     </>

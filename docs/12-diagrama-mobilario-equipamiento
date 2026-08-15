@@ -1,0 +1,898 @@
+Trabaja como arquitecto y ejecutor principal en:
+
+C:\Users\sergi\Desktop\Aplicaciones\AV_design
+
+Rama obligatoria:
+
+codex/diagrama-salas
+
+OBJETIVO
+
+Ampliar la pestaña Diagrama para que una sala pueda prepararse:
+
+1. Desde cero.
+2. Desde una plantilla que ya incluya medidas, mobiliario, equipamiento, posiciones, giros y conexiones.
+
+Después, dentro del editor, el usuario debe poder:
+
+- Añadir mobiliario buscando “Silla”, “Mesa”, etc.
+- Añadir equipamiento buscando “spark”, “QB”, “AMX”, marca, modelo, referencia o categoría.
+- Ver los elementos añadidos permanentemente en el lateral.
+- Arrastrarlos al plano.
+- Seleccionarlos.
+- Editar posición y medidas.
+- Rotar mesas, sillas, mobiliario y equipamiento desde el inspector lateral.
+- Guardar todo en una única transacción.
+- Ver el mismo resultado en el croquis de Resumen.
+- Mantener actualizado el cálculo de cable cuando cambie la posición de un equipo.
+
+No debe existir una imagen, SVG final o JSON de lienzo como fuente paralela.
+
+CONTEXTO ACTUAL
+
+La rama ya contiene seis commits del editor:
+
+- ae3fb01: modelo del diagrama.
+- 7f9b45a: lógica pura del editor.
+- 02c7a69: guardado transaccional.
+- bcf2c7b: ruta y editor.
+- 0ed4add: paridad de plantillas.
+- 5162b19: móvil, accesibilidad y documentación.
+
+Ya existe:
+
+- `/salas/[id]/diagrama`.
+- Borrador local inmutable.
+- Arrastre mediante Pointer Events.
+- Movimiento por teclado.
+- Rejilla, zoom y panorámica.
+- Deshacer y rehacer.
+- Guardado explícito.
+- Conflicto optimista mediante `diagrama_version`.
+- Lista lateral de sala, mesa, equipos y tomas.
+- Inspector lateral.
+- Panel inferior móvil.
+- Giro de la mesa.
+- Croquis y editor compartiendo la misma geometría.
+
+Antes de actuar:
+
+1. Lee `AGENTS.md` completo.
+2. Lee `design-system/MASTER.md`.
+3. Lee `docs/07-roadmap.md`.
+4. Lee `docs/11-plan-editor-diagrama-sala.md`.
+5. Lee las guías relevantes de Next.js 16 en `node_modules/next/dist/docs/`.
+6. Ejecuta `git status --short --branch` y `git log --oneline -12`.
+7. Identifica todos los cambios locales previos y no los mezcles.
+
+El árbol contiene modificaciones ajenas sin comitear. Deben conservarse. Los subagentes no hacen `git add`, commit, stash, checkout ni cambian de rama. El arquitecto comitea únicamente cuando el lote está detenido y verificado.
+
+BLOQUEO QUE DEBE CORREGIRSE PRIMERO
+
+Antes de ampliar el editor, corrige el hueco actual de validación del servidor.
+
+`guardarDiagramaSala` valida que los números sean finitos, pero no comprueba que las coordenadas estén dentro de las dimensiones efectivas de la sala.
+
+Dentro de la misma transacción:
+
+- Obtén largo, ancho y alto bloqueando la sala.
+- Si el patch modifica las medidas, valida contra las medidas nuevas.
+- Equipo confirmado:
+  - `0 ≤ x ≤ largo`
+  - `0 ≤ y ≤ ancho`
+  - `0 ≤ z ≤ alto`
+- Roseta colocada:
+  - las coordenadas están todas ausentes o son coherentes;
+  - si está colocada, queda dentro de la sala.
+- Mesa:
+  - centro implícito `null/null`, o ambos valores presentes;
+  - el centro queda dentro del rectángulo.
+- Mobiliario:
+  - el ancla queda dentro de la sala.
+- El símbolo puede sobresalir: una pantalla puede estar pegada a la pared.
+- El servidor rechaza coordenadas inválidas; no las recorta silenciosamente.
+- Añade pruebas PostgreSQL para límites exactos y para `±0,01 m` fuera.
+- Añade mutaciones que eliminen cada validación y comprueba que caigan.
+
+Revisa también `AGENTS.md`: el commit actual dejó vacía la fila de `npm test`, aunque su corrección parece vivir en el árbol sin comitear. Recupera únicamente la línea documental correspondiente sin incluir cambios ajenos.
+
+CONTRATO DE PRODUCTO
+
+1. ORIGEN DEL DIAGRAMA
+
+Al entrar en Diagrama debe verse el origen del plano:
+
+- `Desde cero`
+- `Plantilla`
+
+No debe preguntarse de forma bloqueante en cada visita.
+
+Añade a `salas`:
+
+- `diagrama_iniciado_en timestamptz null`
+- `diagrama_origen text null check (diagrama_origen in ('desde_cero', 'plantilla'))`
+- `diagrama_plantilla_id uuid null references plantillas_sala on delete set null`
+
+Comportamiento:
+
+- Sala sin inicializar: muestra una tarjeta obligatoria de elección.
+- Sala inicializada: abre directamente el editor.
+- Encima del editor aparece de forma compacta:
+  - `Base: Desde cero`, o
+  - `Base: Plantilla · Nombre`.
+- Puede existir una acción secundaria `Cambiar base`, pero nunca debe sustituir datos silenciosamente.
+
+Backfill:
+
+- Las salas históricas con medidas, equipos, conexiones, tomas, mesa o plantilla se consideran ya iniciadas.
+- No interrumpas salas reales existentes.
+- Conserva como origen su plantilla actual cuando pueda demostrarse.
+- No inventes una procedencia si no puede conocerse.
+
+Opción `Desde cero`:
+
+- Conserva medidas, equipos, conexiones y tomas que ya tenga la sala.
+- No borra nada.
+- Significa que el usuario completará manualmente el mobiliario y equipamiento faltante.
+- Marca el diagrama como iniciado.
+
+Opción `Plantilla`:
+
+- Buscador por nombre y tipología.
+- Máximo 20 coincidencias.
+- Previsualización:
+  - nombre;
+  - tipología;
+  - largo × ancho × alto;
+  - número de muebles;
+  - líneas de equipamiento;
+  - conexiones.
+- Si la sala ya nació con esa plantilla y sus elementos ya fueron copiados:
+  - reconocerlo;
+  - marcar el diagrama como iniciado;
+  - no copiar ni duplicar nada.
+- Si la sala está vacía:
+  - copiar medidas;
+  - mesa;
+  - mobiliario;
+  - equipos;
+  - posiciones;
+  - giros;
+  - conexiones.
+- Si se intenta aplicar una plantilla diferente sobre una sala con equipos o conexiones:
+  - bloquear la operación;
+  - explicar el motivo;
+  - no implementar un merge ambiguo;
+  - no borrar datos.
+- Proyecto cerrado: todo el selector queda en lectura.
+
+Persistir la procedencia de los elementos heredados para distinguirlos de los añadidos manualmente:
+
+- `sala_equipos.origen_plantilla_linea_id`
+- procedencia equivalente para mobiliario.
+
+2. MOBILIARIO
+
+No metas mobiliario en `articulos`.
+
+`articulos` alimenta stock, pedidos, material, precios y conexiones AV. Una silla o una mesa no debe contaminar esos procesos ni aparecer entre cables o consumibles.
+
+Crea una fuente editable:
+
+`data/mobiliario.csv`
+
+No edites `db/seed.sql` manualmente. Amplía el generador.
+
+Catálogo nuevo:
+
+`catalogo_mobiliario`
+
+Campos mínimos:
+
+- `id uuid`
+- `clave text unique`
+- `nombre text`
+- `categoria text`
+- `palabras_clave text`
+- `forma text`
+- `largo_m_defecto numeric null`
+- `ancho_m_defecto numeric null`
+- `alto_m_defecto numeric null`
+- `activo boolean`
+- `orden integer`
+- `fuente text check (fuente in ('csv','app'))`
+- `creado_en`
+
+Entradas iniciales confirmadas:
+
+- Silla
+- Mesa principal
+- Mesa rectangular
+- Mesa redonda
+
+No inventes dimensiones físicas del departamento. Si una referencia no tiene medidas por defecto, se añade como `Sin medir` y el inspector obliga a introducir largo y ancho antes de considerarla colocada.
+
+Deja el catálogo preparado para añadir después atriles, armarios y otros muebles, pero no inventes datos no solicitados.
+
+Instancias de sala:
+
+`sala_mobiliario`
+
+Campos mínimos:
+
+- `id uuid`
+- `sala_id uuid`
+- `mobiliario_id uuid`
+- `nombre text`
+- `largo_m numeric null`
+- `ancho_m numeric null`
+- `alto_m numeric null`
+- `x_m numeric null`
+- `y_m numeric null`
+- `z_m numeric null`
+- `rotacion_grados numeric not null default 0`
+- `posicion_confirmada boolean not null default false`
+- `origen_plantilla_mobiliario_id uuid null`
+- `creado_en`
+- `actualizado_en`
+
+Reglas:
+
+- Una silla física es una fila.
+- Ocho sillas son ocho instancias arrastrables y rotables.
+- No uses `cantidad ×N` para mobiliario.
+- Al añadir varias sillas, permite indicar cantidad, con máximo razonable de 50.
+- Cada instancia conserva sus medidas exactas como snapshot.
+- Cambiar el catálogo en el futuro no debe deformar salas existentes.
+
+Plantillas:
+
+`plantilla_mobiliario`
+
+Debe conservar:
+
+- tipo de mueble;
+- nombre;
+- dimensiones;
+- posición;
+- altura;
+- rotación;
+- ausencia de posición;
+- orden.
+
+COMPATIBILIDAD CON MESA Y SILLAS ACTUALES
+
+Actualmente:
+
+- La mesa principal vive en `salas.mesa_*`.
+- Las sillas se derivan de `aforo`.
+- La mesa ya tiene rotación.
+- `aforo` significa capacidad de sala.
+
+No crees dos mesas principales editables.
+
+Contrato de transición:
+
+- La mesa principal actual sigue siendo el elemento especial canónico durante esta ampliación.
+- Buscar `Mesa` debe ofrecer primero `Mesa principal`.
+- Si la sala ya tiene mesa principal:
+  - seleccionarla;
+  - abrir su inspector;
+  - no crear otra mesa principal.
+- Las mesas adicionales sí pueden ser filas de `sala_mobiliario`.
+- Materializa las sillas derivadas actuales como instancias editables durante el backfill.
+- Añade un estado explícito para no volver a generarlas desde `aforo`, por ejemplo:
+  - `sillas_modo = 'derivadas' | 'manuales'`.
+- Tras materializarlas, el modo pasa a `manuales`.
+- `aforo` continúa siendo la capacidad; cambiarlo no añade, borra ni recoloca sillas reales.
+- Conserva un fallback temporal para datos históricos no migrados, pero añade una guarda que impida mantener dos fuentes activas.
+- Editor y croquis deben pintar las sillas explícitas cuando existen.
+
+La migración debe demostrar que el croquis anterior y el posterior tienen el mismo número y las mismas posiciones de sillas antes de cualquier edición manual.
+
+3. EQUIPAMIENTO
+
+Reutiliza el catálogo AV existente.
+
+La búsqueda actual:
+
+- consulta `/api/catalogo`;
+- filtra con `tipo=equipo`;
+- busca por marca, modelo, referencia y categoría;
+- cruza todos los términos;
+- devuelve como máximo 20 resultados.
+
+Debe funcionar con:
+
+- `spark`
+- `QB`
+- `AMX`
+- combinaciones como `samsung 65`
+
+No crees un segundo catálogo de equipamiento.
+
+Refactoriza `BuscadorArticulo` para reutilizar su combobox accesible y permitir un callback `alElegir`. No copies su lógica de fetch, teclado, posición del desplegable o ARIA.
+
+Al seleccionar un equipo:
+
+- crear una alta temporal en el borrador;
+- no escribir todavía en PostgreSQL;
+- mostrarlo inmediatamente en el lateral;
+- usar nombre canónico de marca + modelo;
+- `cantidad = 1`;
+- deducir el extremo mediante la función existente;
+- posición sin confirmar;
+- seleccionarlo;
+- abrir su inspector;
+- permitir colocarlo y rotarlo.
+
+En el servidor:
+
+- no confíes en nombre, categoría, extremo o marca enviados por el navegador;
+- recibe el ID;
+- relee `articulos`;
+- exige artículo activo;
+- exige `tipo='equipo'`;
+- rechaza cables y consumibles.
+
+Conserva la decisión actual para líneas con `cantidad > 1`:
+
+- un único ancla;
+- marca `×N`;
+- no inventar posiciones individuales;
+- si se necesitan unidades separadas, se añaden como líneas independientes.
+
+Añade:
+
+- `sala_equipos.rotacion_grados not null default 0`
+- `plantilla_articulos.rotacion_grados`
+
+El giro debe viajar en ambos sentidos entre sala y plantilla.
+
+4. LATERAL DEL EDITOR
+
+Conserva la composición actual:
+
+- lienzo;
+- rail derecho de 20 rem en escritorio;
+- panel inferior en móvil.
+
+No añadas una tercera columna.
+
+El lateral tendrá tres bloques:
+
+A. `Añadir elementos`
+
+Secciones plegables:
+
+- `Mobiliario`
+- `Equipamiento`
+
+Mobiliario:
+
+- selector de categoría;
+- combobox `Buscar mobiliario`;
+- placeholder `Silla, mesa…`;
+- máximo 20 resultados;
+- búsqueda por nombre, categoría y palabras clave;
+- escapar `%`, `_` y caracteres especiales;
+- semántica AND para búsquedas de varias palabras;
+- cada resultado muestra nombre, categoría y medidas si existen;
+- control de cantidad para sillas;
+- botón `Añadir`.
+
+Equipamiento:
+
+- combobox remoto existente;
+- placeholder `Marca, modelo o referencia`;
+- cada resultado muestra marca/modelo y categoría;
+- botón o selección inequívoca para añadir.
+
+B. `Elementos de la sala`
+
+Agrupar:
+
+- Sala
+- Mesa principal
+- Mobiliario
+- Equipamiento
+- Tomas
+
+Dentro de mobiliario y equipamiento:
+
+- `Por colocar`
+- `Colocados`
+
+Cada fila muestra:
+
+- nombre;
+- estado:
+  - `Sin medir`
+  - `Sin colocar`
+  - `Posición estimada`
+  - coordenadas
+- giro cuando sea distinto de 0°;
+- marca `×N` en equipamiento agregado;
+- selección visible;
+- `aria-current` o `aria-selected`;
+- objetivo táctil mínimo de 44 × 44 px.
+
+Los elementos temporales deben permanecer en esta lista antes de guardar.
+
+C. `Propiedades`
+
+Al seleccionar un elemento, mantener abierta su fila y mostrar debajo el inspector correspondiente.
+
+No ocultes toda la lista cuando se abre el inspector.
+
+5. ALTA Y COLOCACIÓN
+
+Al añadir mobiliario o equipo:
+
+- crear un ID temporal estable con `crypto.randomUUID()`;
+- incorporarlo al borrador inmutable;
+- añadir un único paso a deshacer;
+- dejarlo en `Por colocar`;
+- seleccionarlo automáticamente;
+- abrir Propiedades;
+- no escribir en la base hasta `Guardar cambios`.
+
+Escritorio:
+
+- permitir arrastrar el elemento desde la bandeja hasta el lienzo;
+- usar Pointer Events, no HTML5 Drag and Drop;
+- mostrar previsualización de colocación;
+- convertir el punto de suelta a metros;
+- respetar rejilla y límites.
+
+También debe poder colocarse desde el lienzo después de usar `Colocar en el centro`.
+
+Alternativa accesible y móvil:
+
+- seleccionar desde el lateral;
+- botón `Colocar en el centro`;
+- editar X/Y/Z;
+- mover con flechas;
+- arrastrar después desde el lienzo.
+
+Mantener:
+
+- Flechas: 0,10 m.
+- Mayúsculas + flechas: 0,01 m.
+- Un arrastre completo es un solo paso de deshacer.
+- Escape cancela el arrastre o quita selección.
+- La primera colocación confirma la posición.
+
+Un elemento sin dimensiones físicas puede añadirse al lateral, pero no darse por colocado hasta completar sus medidas.
+
+6. ROTACIÓN
+
+La nueva petición sustituye la decisión anterior de no rotar equipos.
+
+Debe poder rotarse:
+
+- Mesa principal.
+- Mesas adicionales.
+- Sillas.
+- Mobiliario orientable.
+- Equipamiento.
+
+No debe rotarse:
+
+- La sala completa.
+- Una roseta mientras su símbolo no tenga orientación visual.
+- Elementos para los que el giro no produzca ningún cambio visible.
+
+No muestres controles falsos.
+
+Control reutilizable:
+
+`ControlRotacion`
+
+Debe incluir:
+
+- Campo `Giro (°)`.
+- Valores normalizados a `[0,360)`.
+- Paso de 1°.
+- Botones:
+  - `0°`
+  - `90°`
+  - `180°`
+  - `270°`
+  - `−15°`
+  - `+15°`
+- Todos los controles con al menos 44 px.
+- Etiquetas accesibles.
+- El cambio entra en deshacer/rehacer.
+- No animar el giro si `prefers-reduced-motion`.
+- El SVG rota alrededor del ancla.
+- Rotar no cambia X/Y/Z.
+- El ancla debe permanecer dentro de la sala aunque el símbolo sobresalga.
+
+El giro debe verse igual:
+
+- en el editor;
+- en el croquis de Resumen;
+- después de recargar;
+- al crear una sala desde plantilla;
+- en el viaje sala → plantilla → sala.
+
+7. BORRADOR Y PATCH
+
+Amplía `BorradorPlano` y `PatchPlano`.
+
+Distingue explícitamente:
+
+- altas;
+- cambios;
+- bajas de mobiliario;
+- equipos nuevos;
+- equipos existentes;
+- IDs temporales;
+- inicio del diagrama;
+- origen;
+- plantilla seleccionada.
+
+No determines si algo es nuevo mirando un prefijo controlado por el navegador. Usa estructuras discriminadas.
+
+Propuesta:
+
+- `equipos_alta`
+- `equipos_cambio`
+- `mobiliario_alta`
+- `mobiliario_cambio`
+- `mobiliario_baja`
+- `inicio_diagrama`
+
+No permitas borrar desde Diagrama un equipo persistido que tenga conexiones. Para bajas de equipamiento real se mantiene la pestaña Equipamiento y sus avisos.
+
+Un equipo temporal todavía no guardado sí puede quitarse del borrador mediante deshacer o `Quitar`.
+
+Todo debe guardarse en una única transacción:
+
+1. Bloquear la sala.
+2. Comprobar versión.
+3. Comprobar proyecto cerrado.
+4. Calcular las dimensiones efectivas.
+5. Validar plantilla.
+6. Validar artículos.
+7. Validar catálogo de mobiliario.
+8. Validar pertenencia de filas existentes.
+9. Validar IDs temporales duplicados.
+10. Validar coordenadas.
+11. Aplicar inicio, medidas, altas, cambios y bajas.
+12. Incrementar `diagrama_version` una vez.
+13. Devolver la nueva versión y, si hace falta, mapa de IDs temporales a reales.
+14. Revalidar todas las superficies dependientes.
+
+Si falla cualquier inserción:
+
+- no cambia la sala;
+- no se crea mobiliario;
+- no se crea equipamiento;
+- no se marca el diagrama como iniciado;
+- no sube la versión.
+
+Demuestra el rollback con un trigger temporal que falle después de una escritura previa.
+
+PIEZAS DE IMPLEMENTACIÓN
+
+Trabaja por piezas cerradas. Máximo dos subagentes en paralelo y reparto por radio funcional.
+
+Pieza 1 · Cerrar el P1 actual
+
+- Validación servidor contra dimensiones efectivas.
+- Tests PostgreSQL.
+- Mutaciones.
+- Reparación documental mínima de `AGENTS.md`.
+
+Gate:
+
+- Ninguna coordenada fuera entra por petición manipulada.
+- Los cambios ajenos siguen intactos.
+
+Commit sugerido:
+
+`fix(diagrama): valida el plano contra las medidas de sala`
+
+Pieza 2 · Modelo de mobiliario y rotación
+
+- Tablas de catálogo, sala y plantilla.
+- Rotación de equipos.
+- Estado de inicio/origen.
+- Procedencia de plantilla.
+- `data/mobiliario.csv`.
+- Generador de seed.
+- Migración incremental nueva.
+- Backfill de sillas.
+- No editar la migración anterior ya cerrada.
+
+Gate:
+
+- Migración repetible.
+- Conteos antes/después.
+- Paridad visual de sillas.
+- No hay doble mesa principal.
+- No se inventan medidas.
+
+Commit sugerido:
+
+`feat(diagrama): incorpora el dominio de mobiliario`
+
+Pieza 3 · Lógica pura
+
+- Borrador con mobiliario.
+- Altas temporales.
+- Quitar altas temporales.
+- Colocación.
+- Movimiento.
+- Rotación.
+- Deshacer/rehacer.
+- Patch discriminado.
+- Croquis compartido.
+
+Gate:
+
+- Pruebas puras.
+- Editor y Resumen producen la misma geometría.
+- Varias sillas son instancias distintas.
+
+Commit sugerido:
+
+`feat(diagrama): amplia el borrador con mobiliario y altas`
+
+Pieza 4 · Persistencia e inicialización
+
+- Desde cero.
+- Plantilla.
+- Aplicación idempotente.
+- Altas atómicas.
+- Validación de catálogos.
+- Versión optimista.
+- Rollback total.
+- Paridad de plantillas.
+
+Gate PostgreSQL real:
+
+- Desde cero conserva datos.
+- Plantilla heredada no duplica.
+- Plantilla en sala vacía copia todo.
+- Plantilla distinta en sala no vacía se rechaza.
+- Obra cerrada rechaza.
+- Conflicto no inserta.
+- Trigger demuestra rollback.
+- Sala → plantilla → sala conserva mobiliario y giros.
+
+Commit sugerido:
+
+`feat(diagrama): inicializa y guarda todos los elementos`
+
+Pieza 5 · Selector y buscadores
+
+- Selector Desde cero/Plantilla.
+- Buscador de plantillas.
+- API de mobiliario.
+- Refactor del combobox de artículos.
+- Biblioteca lateral.
+- Estados vacíos, carga y error.
+
+Gate:
+
+- `spark`, `QB` y `AMX` devuelven equipamiento real.
+- Nunca aparecen cables/consumibles.
+- `Silla` y `Mesa` aparecen en mobiliario.
+- Teclado y lector de pantalla pueden usar ambos combobox.
+
+Commit sugerido:
+
+`feat(diagrama): añade origen y biblioteca de elementos`
+
+Pieza 6 · Arrastre, lateral y rotación
+
+- Bandeja Por colocar/Colocados.
+- Arrastre al lienzo.
+- Colocar en centro.
+- Inspector de mobiliario.
+- Control de rotación.
+- SVG girado.
+- Elementos temporales.
+- Móvil.
+
+Gate:
+
+- Ratón, táctil, teclado y edición numérica.
+- Rotación visible y persistente.
+- Deshacer elimina un alta temporal.
+- Guardar y recargar conserva todo.
+
+Commit sugerido:
+
+`feat(diagrama): completa colocacion y rotacion visual`
+
+Pieza 7 · Cierre
+
+- Full suite.
+- Build.
+- ESLint.
+- Mutaciones.
+- Navegador.
+- Concurrencia.
+- Documentación.
+- Auditoría de diff.
+
+Commit sugerido:
+
+`test(diagrama): cierra mobiliario y seleccion de plantilla`
+
+PRUEBAS OBLIGATORIAS
+
+Pruebas puras:
+
+- `-15° → 345°`
+- `360° → 0°`
+- `725° → 5°`
+- Rotar no cambia ancla.
+- Rotación independiente.
+- Alta temporal y deshacer.
+- Ocho sillas crean ocho instancias.
+- Equipamiento `×N` conserva un ancla.
+- Patch diferencia alta/cambio/baja.
+- Sillas explícitas no se duplican con derivadas.
+- Guardar y reconstruir conserva el borrador.
+- Croquis y editor comparten geometría.
+
+PostgreSQL real:
+
+- Límites X/Y/Z exactos.
+- Rechazo a ±0,01 fuera.
+- Validación contra las medidas nuevas del patch.
+- Sala sin medir no admite colocación confirmada.
+- Artículo inexistente, inactivo, cable o consumible rechazado.
+- Nombre manipulado ignorado.
+- Mobiliario inexistente o inactivo rechazado.
+- Obra cerrada.
+- Sala legado.
+- Conflicto.
+- IDs repetidos.
+- IDs de otra sala.
+- Rollback tras fallo intermedio.
+- Plantilla ya heredada no duplica.
+- Plantilla distinta sobre sala ocupada no muta.
+- Ida y vuelta de plantillas.
+- Migración repetida no duplica mobiliario.
+
+E2E en navegador real:
+
+Primero 1440 × 900 y 1280 × 800:
+
+1. Entrar por Resumen → Diagrama.
+2. Elegir Desde cero.
+3. Introducir medidas.
+4. Buscar `Silla`.
+5. Añadir cuatro sillas.
+6. Verlas en Por colocar.
+7. Colocarlas.
+8. Rotarlas.
+9. Buscar `spark`.
+10. Buscar `QB`.
+11. Buscar `AMX`.
+12. Confirmar que las coincidencias son correctas.
+13. Añadir un equipo.
+14. Arrastrarlo.
+15. Rotarlo.
+16. Guardar.
+17. Recargar.
+18. Verificar persistencia.
+19. Ir a Resumen.
+20. Comprobar el mismo croquis.
+21. Mover un equipo y comprobar que cambian los metros.
+22. Abrir dos pestañas y verificar conflicto.
+23. Crear sala desde plantilla y comprobar que cada elemento aparece una sola vez.
+24. Recorrer todo solo con teclado.
+
+Después cerrar en:
+
+- 768 × 1024
+- 390 × 844
+- 320 × 568
+- zoom/reflow 200 %
+- reduced motion
+
+Comprobar:
+
+- cero overflow horizontal del documento;
+- el lienzo conserva zoom/pan interno;
+- los desplegables no salen del viewport;
+- panel móvil mantiene selección;
+- arrastre táctil;
+- controles ≥44 px;
+- foco visible;
+- teclado virtual no tapa Guardar;
+- consola y red limpias.
+
+MUTACIONES MÍNIMAS
+
+Deben caer pruebas al:
+
+- Quitar el filtro `tipo='equipo'`.
+- Permitir coordenadas fuera.
+- Validar con medidas antiguas.
+- Copiar otra vez una plantilla heredada.
+- Permitir plantilla distinta sobre una sala ocupada.
+- Sacar una inserción de la transacción.
+- Quitar proyecto cerrado.
+- Quitar versión optimista.
+- No normalizar giro.
+- Perder giro sala → plantilla.
+- Perder giro plantilla → sala.
+- Volver a generar sillas derivadas junto a las explícitas.
+- Colapsar varias sillas en una fila `×N`.
+- Confiar en el nombre enviado por el cliente.
+
+No estimes las mutaciones: ejecútalas y registra cuántas pruebas caen.
+
+CRITERIOS DE ACEPTACIÓN
+
+La ampliación solo está terminada si:
+
+1. La primera entrada permite Desde cero o Plantilla.
+2. Una plantilla heredada no se duplica.
+3. No se borra trabajo existente.
+4. Mobiliario y equipamiento tienen buscadores separados.
+5. Spark, QB y AMX encuentran artículos reales.
+6. Las sillas son objetos independientes.
+7. Los elementos añadidos permanecen en el lateral.
+8. Puede colocarse con arrastre, teclado o números.
+9. Mobiliario y equipos pueden rotarse.
+10. El giro se conserva en plantillas.
+11. Guardar es atómico.
+12. Las coordenadas se validan también en servidor.
+13. Proyecto cerrado está protegido.
+14. Dos pestañas no se sobrescriben.
+15. Resumen y Diagrama muestran la misma geometría.
+16. Mover equipos actualiza cable y material.
+17. No hay segunda fuente gráfica.
+18. No hay overflow ni controles inaccesibles.
+19. Build, suites, Postgres, E2E y mutaciones pasan.
+20. El diff no mezcla cambios ajenos.
+
+PROHIBICIONES
+
+- No guardar PNG, SVG final o JSON del lienzo.
+- No meter sillas o mesas en `articulos`.
+- No crear otro catálogo AV.
+- No cargar las 948 referencias en el navegador.
+- No usar HTML5 Drag and Drop.
+- No validar límites solo en el cliente.
+- No confiar en IDs, nombres o tipos enviados por el navegador.
+- No duplicar una plantilla ya aplicada.
+- No borrar conexiones para cambiar de plantilla.
+- No editar `db/seed.sql` a mano.
+- No editar la migración anterior ya cerrada.
+- No desplegar migraciones en Neon.
+- No hacer push, merge ni deploy.
+- No tocar `main`.
+- No incluir cambios locales ajenos.
+- No declarar cierre solamente con build verde.
+
+INFORME FINAL OBLIGATORIO
+
+Claude debe entregar:
+
+- Rama y commits creados.
+- Archivos por pieza.
+- Decisiones aplicadas.
+- Migración preparada y confirmación de que solo se aplicó en Docker local.
+- Conteo real de pruebas por suite.
+- Resultado de build y ESLint.
+- Tabla de mutaciones y pruebas que caen.
+- Evidencia del rollback.
+- Evidencia de límites del servidor.
+- Evidencia de plantilla sin duplicados.
+- Evidencia de búsqueda Spark/QB/AMX.
+- Evidencia del recorrido escritorio → móvil.
+- Consola, red, overflow, foco, touch y reduced motion.
+- Auditoría del diff.
+- Cambios ajenos preservados.
+- Pendientes clasificados como Ahora, Después o Experimental.
+- Confirmación expresa de que no hizo push, merge, deploy ni tocó Neon.

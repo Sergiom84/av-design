@@ -574,7 +574,7 @@ export function EditorPlanoSala({
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
     // objetos y en el inspector, que son controles de verdad.
     <div className="space-y-4" onKeyDown={alPulsarTecla}>
-      {/* Salir de Diagrama con el borrador a medias no puede tragarse el
+      {/* Salir de Plano con el borrador a medias no puede tragarse el
           trabajo: `beforeunload` vive ahí dentro y cubre recargar y cerrar; lo
           demás —las pestañas de la ficha, la barra lateral, el botón atrás— es
           navegación de cliente y no dispara nada por su cuenta. Con la obra

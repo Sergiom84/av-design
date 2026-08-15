@@ -86,19 +86,29 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   nota, no bloquea. La recepción es por pedido (`movimientos.quien`), no un
   hito. Los técnicos y sus roles se siembran de `data/tecnicos.csv` con la
   convención `fuente` csv/app.
-- **La ficha de sala son seis pestañas por ruta** (`salas/[id]`, `/diagrama`,
-  `/equipamiento`, `/cableado`, `/logistica`, `/documentos`) con layout
-  compartido. Las acciones que tocan la sala revalidan con alcance `layout`;
-  `typedRoutes` está activado y `next build` caza los enlaces rotos.
+- **La ficha de sala son ocho pestañas por ruta** (`salas/[id]`, `/plano`,
+  `/diagrama`, `/acotaciones`, `/equipamiento`, `/cableado`, `/logistica`,
+  `/documentos`) con layout compartido. Las acciones que tocan la sala
+  revalidan con alcance `layout`; `typedRoutes` está activado y `next build`
+  caza los enlaces rotos. Serán siete: `/cableado` se retira cuando
+  `/diagrama` cubra su flujo, y no antes, porque hoy es la única superficie
+  del esquema de conexiones.
+- **`Plano` es dónde está cada cosa; `Diagrama` es qué conecta con qué.** Eran
+  la misma pestaña y el nombre describía la que no era. La posición física
+  vive en `/plano`; el editor de conexiones puerto a puerto, en `/diagrama`.
+  En la base y en los símbolos quedan nombres de cuando la pestaña se llamaba
+  así (`salas.diagrama_version`, `guardarDiagramaSala`, `OrigenDiagrama`):
+  renombrarlos es una migración aparte, con su propio riesgo, y no se hace de
+  paso.
 - **El plano se edita donde vive, y no se guarda como imagen.** La pestaña
-  `Diagrama` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
+  `Plano` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
   medidas, mesa, mobiliario, posiciones de equipo y rosetas: los mismos datos
   que alimentan
   el croquis de Resumen y el cálculo de cable. No hay PNG, ni SVG final, ni
   JSON de lienzo en la base. El lienzo pinta la misma `GeometriaPlano` que el
   croquis, para que una posición confirmada dé el mismo dibujo en los dos
   sitios. En código el plano en planta se llama `plano-editor`: `diagrama` a
-  secas ya es el esquema de conexiones de Cableado.
+  secas es el esquema de conexiones.
 - **Colocado y estimado son cosas distintas.** `sala_equipos.posicion_confirmada`
   las separa, porque `(0,0,0)` significaba a la vez «sin colocar» y la esquina
   de la sala, que es justo donde va el rack. Un equipo sin confirmar se dibuja

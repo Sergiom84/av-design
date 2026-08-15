@@ -9,9 +9,9 @@ import { destinoDeSalida, type IntentoSalida } from '@/lib/guardia-salida';
  * La puerta de salida del editor del plano.
  *
  * El borrador solo se escribe al pulsar `Guardar cambios`, así que salir de la
- * pestaña Diagrama con cambios encima tiene que preguntar. `beforeunload` cubre
+ * pestaña Plano con cambios encima tiene que preguntar. `beforeunload` cubre
  * recargar y cerrar el navegador, y sigue aquí; lo que no cubría es la
- * navegación de cliente, que es la de las seis pestañas de la ficha y la de la
+ * navegación de cliente, que es la de las pestañas de la ficha y la de la
  * barra lateral: mover un equipo, pulsar `Resumen` y volver perdía el trabajo
  * sin un solo aviso.
  *

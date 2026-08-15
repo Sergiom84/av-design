@@ -29,8 +29,8 @@ const texto = (v: FormDataEntryValue | null): string | null => {
 
 // --------------------------------------------------- la versión del plano
 //
-// La ficha de sala son seis pestañas por ruta, pero el plano es uno solo. La
-// pestaña Diagrama guarda con `salas.diagrama_version` optimista: lee la
+// La ficha de sala son varias pestañas por ruta, pero el plano es uno solo. La
+// pestaña Plano guarda con `salas.diagrama_version` optimista: lee la
 // versión, la compara al guardar y avisa si otra pestaña se le adelantó
 // (`guardarDiagramaSala`, en `acciones-diagrama.ts`).
 //

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { obtenerSalaCabecera } from '@/lib/datos';
@@ -9,10 +8,14 @@ import { PestanasDeSala } from '@/components/sala/pestanas';
 export const dynamic = 'force-dynamic';
 
 /**
- * La ficha de sala son seis pestañas por ruta: Resumen, Diagrama, Equipamiento,
- * Cableado, Logística y ciclo de vida, y Documentos. El layout paga solo la
- * cabecera; cada pestaña carga y calcula lo suyo. Las acciones que tocan la
- * sala revalidan con alcance `layout` para refrescar todas a la vez.
+ * La ficha de sala son ocho pestañas por ruta: Resumen, Plano, Diagrama,
+ * Acotaciones, Equipamiento, Cableado, Logística y ciclo de vida, y
+ * Documentos. El layout paga solo la cabecera; cada pestaña carga y calcula lo
+ * suyo. Las acciones que tocan la sala revalidan con alcance `layout` para
+ * refrescar todas a la vez.
+ *
+ * Serán siete cuando Diagrama absorba el flujo de Cableado y esa pestaña se
+ * retire.
  */
 export default async function LayoutSala({
   params,

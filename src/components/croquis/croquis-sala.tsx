@@ -16,10 +16,10 @@ export function CroquisSala(entrada: EntradaCroquis) {
   return (
     <Tarjeta
       titulo="Croquis"
-      // El croquis se lee aquí y se edita en Diagrama. La tarjeta sigue
+      // El croquis se lee aquí y se edita en Plano. La tarjeta sigue
       // llamándose Croquis porque es el nombre del entregable de obra.
       acciones={
-        <Enlace href={`/salas/${entrada.sala.id}/diagrama`}>Editar diagrama</Enlace>
+        <Enlace href={`/salas/${entrada.sala.id}/plano`}>Editar plano</Enlace>
       }
       pie={escena.anotaciones.length > 0 ? escena.anotaciones.join(' · ') : undefined}
     >

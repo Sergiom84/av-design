@@ -2,9 +2,15 @@
  * La geometría del editor de plano: qué pasa cuando se arrastra un equipo.
  *
  * Se llama `plano-editor` y no `diagrama` a secas porque en esta aplicación ya
- * hay un diagrama: el esquema de conexiones de la pestaña Cableado
- * (`src/lib/diagrama.ts`). La pestaña que ve el técnico se llama Diagrama; el
- * código de aquí es el plano en planta y solo eso.
+ * hay un diagrama: el esquema de conexiones (`src/lib/diagrama.ts`), que hoy
+ * vive en la pestaña Cableado y acabará siendo la pestaña Diagrama. La pestaña
+ * que ve el técnico se llama Plano; el código de aquí es el plano en planta y
+ * solo eso.
+ *
+ * En la base y en los símbolos quedan nombres con `diagrama`
+ * (`salas.diagrama_version`, `guardarDiagramaSala`, `OrigenDiagrama`): son de
+ * cuando esta pestaña se llamaba así. Renombrarlos es una migración con su
+ * propio riesgo y no entra en el cambio de nombre de la pestaña.
  *
  * Aquí no hay React ni consultas, por lo mismo que en `calculo-cable.ts` y en
  * `croquis.ts`: arrastrar, ajustar a rejilla y recortar contra la pared se

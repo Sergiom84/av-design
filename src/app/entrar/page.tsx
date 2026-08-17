@@ -1,3 +1,5 @@
+import { hayConfiguracion } from '@/lib/db';
+import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Campo } from '@/components/ui';
 import { entrar } from '../acciones-sesion';
 
@@ -12,6 +14,10 @@ export const dynamic = 'force-dynamic';
  */
 export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
   const { destino, error } = await searchParams;
+
+  // Sin base de datos no hay usuarios contra los que comprobar nada. Se dice
+  // lo que pasa en vez de enseñar un formulario que siempre va a fallar.
+  if (!hayConfiguracion()) return <SinConfigurar />;
 
   const mensaje =
     error === 'espera'

@@ -1,6 +1,7 @@
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Campo } from '@/components/ui';
+import { CampoContrasena } from '@/components/usuarios/campo-contrasena';
 import { entrar } from '../acciones-sesion';
 
 export const dynamic = 'force-dynamic';
@@ -57,15 +58,7 @@ export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
               className="w-full"
             />
           </Campo>
-          <Campo etiqueta="Contraseña">
-            <input
-              name="clave"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="w-full"
-            />
-          </Campo>
+          <CampoContrasena name="clave" etiqueta="Contraseña" autoComplete="current-password" required />
           <Boton>Entrar</Boton>
         </form>
 

@@ -1,4 +1,5 @@
-import { Aviso, Boton, Campo, Cabecera, ListaClaveValor, Tarjeta } from '@/components/ui';
+import { Aviso, Boton, Cabecera, ListaClaveValor, Tarjeta } from '@/components/ui';
+import { CampoContrasena } from '@/components/usuarios/campo-contrasena';
 import { LARGO_MINIMO } from '@/lib/contrasena';
 import { exigirUsuario } from '@/lib/sesion-servidor';
 import { ETIQUETA_ROL } from '@/lib/usuarios';
@@ -66,38 +67,28 @@ export default async function Cuenta({ searchParams }: PageProps<'/cuenta'>) {
 
         <Tarjeta titulo="Cambiar la contraseña">
           <form action={cambiarMiClave} className="space-y-4">
-            <Campo
+            <CampoContrasena
+              name="actual"
               etiqueta="Contraseña actual"
               ayuda="Se pide aunque ya hayas entrado: un ordenador desbloqueado un minuto basta para que otro se quede con la cuenta."
-            >
-              <input
-                name="actual"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="w-full"
-              />
-            </Campo>
-            <Campo etiqueta="Contraseña nueva" ayuda={`Mínimo ${LARGO_MINIMO} caracteres.`}>
-              <input
-                name="nueva"
-                type="password"
-                autoComplete="new-password"
-                minLength={LARGO_MINIMO}
-                required
-                className="w-full"
-              />
-            </Campo>
-            <Campo etiqueta="Repite la contraseña nueva">
-              <input
-                name="repetida"
-                type="password"
-                autoComplete="new-password"
-                minLength={LARGO_MINIMO}
-                required
-                className="w-full"
-              />
-            </Campo>
+              autoComplete="current-password"
+              required
+            />
+            <CampoContrasena
+              name="nueva"
+              etiqueta="Contraseña nueva"
+              ayuda={`Mínimo ${LARGO_MINIMO} caracteres.`}
+              autoComplete="new-password"
+              minLength={LARGO_MINIMO}
+              required
+            />
+            <CampoContrasena
+              name="repetida"
+              etiqueta="Repite la contraseña nueva"
+              autoComplete="new-password"
+              minLength={LARGO_MINIMO}
+              required
+            />
             <Boton>Cambiar</Boton>
           </form>
         </Tarjeta>

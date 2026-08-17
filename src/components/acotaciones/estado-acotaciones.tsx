@@ -1,4 +1,6 @@
-import { Tarjeta, Vacio } from '@/components/ui';
+import { Aviso, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
+import type { EscenaAcotaciones } from '@/lib/acotaciones';
+import { ElevacionSalaSvg } from './elevacion-sala';
 
 /**
  * Lo que enseña `Acotaciones` mientras no hay vistas que enseñar.
@@ -13,14 +15,33 @@ import { Tarjeta, Vacio } from '@/components/ui';
  * de Resumen: mover un altavoz en una elevación moverá el altavoz de la sala,
  * no una copia suya.
  */
-export function EstadoAcotaciones({ salaId }: { salaId: string }) {
+export function EstadoAcotaciones({ salaId, escena }: { salaId: string; escena: EscenaAcotaciones }) {
+  if (escena.sinMedidas) {
+    return (
+      <Tarjeta titulo="Acotaciones">
+        <Vacio accion={{ texto: 'Medir en Plano', href: `/salas/${salaId}/plano` }}>
+          Mide largo, ancho y alto para generar las elevaciones.
+        </Vacio>
+      </Tarjeta>
+    );
+  }
+
   return (
-    <Tarjeta titulo="Acotaciones">
-      <Vacio accion={{ texto: 'Ir a Plano', href: `/salas/${salaId}/plano` }}>
-        Las vistas frontal, trasera y laterales con sus cotas de instalación
-        todavía no están disponibles. Se proyectarán desde las posiciones que se
-        editan en Plano, no desde un segundo dibujo.
-      </Vacio>
-    </Tarjeta>
+    <div className="space-y-6">
+      {(escena.equiposSinPosicion > 0 || escena.tomasSinPosicion > 0) && (
+        <Aviso tono="aviso">
+          No se acotan datos estimados: {escena.equiposSinPosicion} equipos y {escena.tomasSinPosicion} tomas siguen sin posición medida.
+        </Aviso>
+      )}
+      <div className="grid gap-6 xl:grid-cols-2">
+        {escena.elevaciones.map((vista) => (
+          <Tarjeta key={vista.pared} titulo={vista.titulo} pie="Las cotas salen de las coordenadas guardadas en Plano.">
+            <ContenedorTabla etiqueta={`Elevación ${vista.titulo}`}>
+              <ElevacionSalaSvg vista={vista} />
+            </ContenedorTabla>
+          </Tarjeta>
+        ))}
+      </div>
+    </div>
   );
 }

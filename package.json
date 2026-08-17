@@ -19,6 +19,7 @@
     "migrar:sillas": "tsx scripts/migrar-sillas.mts",
     "test:guardas-sala": "tsx scripts/verificar-guarda-equipos.mts",
     "test:diagrama": "tsx scripts/verificar-diagrama.mts",
+    "test:rutas-cable": "tsx scripts/verificar-rutas-cable.mts",
     "test:concurrencia": "tsx scripts/verificar-concurrencia.mts",
     "test:bocas": "tsx scripts/verificar-bocas-puerto.mts",
     "test:mutaciones:bocas": "node scripts/verificar-mutaciones-bocas.mjs",

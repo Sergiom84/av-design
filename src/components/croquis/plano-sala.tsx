@@ -211,9 +211,10 @@ function Tiradas({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
     <g>
       {escena.tiradas.map((t) => {
         const color = COLOR_SENAL[t.senal];
-        const camino = `M ${p.x(t.desde.x_m)} ${p.y(t.desde.y_m)} H ${p.x(t.hasta.x_m)} V ${p.y(t.hasta.y_m)}`;
-        const medioX = p.x(t.hasta.x_m);
-        const medioY = (p.y(t.desde.y_m) + p.y(t.hasta.y_m)) / 2;
+        const camino = caminoDeTirada(p, t);
+        const puntoEtiqueta = t.puntos_paso.at(-1) ?? t.hasta;
+        const medioX = p.x(puntoEtiqueta.x_m);
+        const medioY = (p.y(puntoEtiqueta.y_m) + p.y(t.hasta.y_m)) / 2;
 
         return (
           <g key={t.id}>
@@ -234,6 +235,21 @@ function Tiradas({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
       })}
     </g>
   );
+}
+
+/**
+ * Una ruta medida se pinta exactamente como su polilínea. La ruta antigua,
+ * sin puntos persistidos, conserva el codo ortogonal que ya veía el técnico.
+ */
+export function caminoDeTirada(p: Proyeccion, t: EscenaCroquis['tiradas'][number]): string {
+  const inicio = `M ${p.x(t.desde.x_m)} ${p.y(t.desde.y_m)}`;
+  if (t.puntos_paso.length === 0) {
+    return `${inicio} H ${p.x(t.hasta.x_m)} V ${p.y(t.hasta.y_m)}`;
+  }
+  const intermedios = t.puntos_paso
+    .map((punto) => `L ${p.x(punto.x_m)} ${p.y(punto.y_m)}`)
+    .join(' ');
+  return `${inicio} ${intermedios} L ${p.x(t.hasta.x_m)} ${p.y(t.hasta.y_m)}`;
 }
 
 function Equipos({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {

@@ -739,7 +739,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasTomas, filasMuebles] = await Promise.all([
+  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles] = await Promise.all([
     sql<Fila[]>`select * from sala_equipos where sala_id = ${id} order by nombre`,
     sql<Fila[]>`
       select c.*,
@@ -750,6 +750,11 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
       where c.sala_id = ${id}
       order by c.creado_en, c.id`,
+    sql<Fila[]>`select p.id, p.conexion_id, p.orden, p.x_m, p.y_m, p.z_m
+      from conexion_puntos_paso p
+      join conexiones c on c.id = p.conexion_id
+      where c.sala_id = ${id}
+      order by p.conexion_id, p.orden`,
     sql<Fila[]>`select * from tomas_red where sala_id = ${id} order by codigo`,
     // El mobiliario viene aquí y no solo en `datos-plano.ts` porque el croquis
     // de Resumen tiene que dibujar exactamente lo mismo que el editor. Sin
@@ -825,6 +830,15 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       puerto_destino_ordinal: n(f.puerto_destino_ordinal),
       creado_en:
         f.creado_en instanceof Date ? f.creado_en.toISOString() : s(f.creado_en),
+      puntos_paso: filasPuntos
+        .filter((p) => String(p.conexion_id) === String(f.id))
+        .map((p) => ({
+          id: String(p.id),
+          orden: Number(p.orden),
+          x_m: Number(p.x_m),
+          y_m: Number(p.y_m),
+          z_m: Number(p.z_m),
+        })),
     })),
     tomas: filasTomas.map((f) => ({
       id: String(f.id),

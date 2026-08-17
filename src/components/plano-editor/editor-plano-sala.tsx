@@ -59,6 +59,8 @@ import {
 } from './capas-plano';
 import { aplicarOperacion, type OperacionPlano } from './operaciones-plano';
 import type { EstadoGuardado } from './estado-guardado';
+import { PanelRutasCable } from './panel-rutas-cable';
+import { limitarPuntoRuta, moverPunto, rutaDe, rutasCambiadas, rutasDesdeConexiones, type RutaCableBorrador } from './rutas-cable';
 
 /**
  * El editor del plano de una sala.
@@ -109,6 +111,11 @@ export function EditorPlanoSala({
   );
 
   const [original, setOriginal] = useState(desdeServidor);
+  const rutasDesdeServidor = useMemo(() => rutasDesdeConexiones(conexiones), [conexiones]);
+  const [rutasOriginales, setRutasOriginales] = useState(rutasDesdeServidor);
+  const [rutas, setRutas] = useState<RutaCableBorrador[]>(rutasDesdeServidor);
+  const [conexionRuta, setConexionRuta] = useState<string | null>(null);
+  const [puntoRuta, setPuntoRuta] = useState<number | null>(null);
   const [version, setVersion] = useState(sala.diagrama_version);
   const [borrador, setBorradorBruto] = useState(desdeServidor);
   const [pasado, setPasado] = useState<BorradorPlano[]>([]);
@@ -185,6 +192,8 @@ export function EditorPlanoSala({
     setVersionVista(sala.diagrama_version);
     setOriginal(desdeServidor);
     setBorradorBruto(desdeServidor);
+    setRutasOriginales(rutasDesdeServidor);
+    setRutas(rutasDesdeServidor);
     setVersion(sala.diagrama_version);
     setPasado([]);
     setFuturo([]);
@@ -205,11 +214,11 @@ export function EditorPlanoSala({
   // donde se sabe lo que hay.
   const seleccionValida = seleccionVigente(seleccion, borrador);
 
-  const patch = useMemo(
-    () => construirPatch(sala.id, version, original, borrador),
-    [sala.id, version, original, borrador],
-  );
-  const hayCambios = tieneCambios(patch);
+  const patch = useMemo(() => ({
+    ...construirPatch(sala.id, version, original, borrador),
+    rutas_cambio: rutasCambiadas(rutasOriginales, rutas),
+  }), [sala.id, version, original, borrador, rutasOriginales, rutas]);
+  const hayCambios = tieneCambios(patch) || patch.rutas_cambio.length > 0;
 
   const aplicar = useCallback(
     (siguiente: BorradorPlano, { agrupar = false }: { agrupar?: boolean } = {}) => {
@@ -278,9 +287,13 @@ export function EditorPlanoSala({
     [aplicar, borrador, seleccionar, seleccionValida],
   );
 
+  const conexionesConRutas = useMemo(() => conexiones.map((conexion) => ({
+    ...conexion,
+    puntos_paso: rutas.find((ruta) => ruta.conexion_id === conexion.id)?.puntos ?? [],
+  })), [conexiones, rutas]);
   const escena = useMemo(
-    () => construirEscena(entradaCroquisDe(borrador, sala, conexiones)),
-    [borrador, sala, conexiones],
+    () => construirEscena(entradaCroquisDe(borrador, sala, conexionesConRutas)),
+    [borrador, sala, conexionesConRutas],
   );
 
   const proyeccion = useMemo(
@@ -490,6 +503,7 @@ export function EditorPlanoSala({
         const guardado = aplicarIdsReales(borrador, r.ids);
         setBorradorBruto(guardado);
         setOriginal(guardado);
+        setRutasOriginales(rutas);
         setVersion(r.version);
         setPasado([]);
         setFuturo([]);
@@ -525,6 +539,7 @@ export function EditorPlanoSala({
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
+    setRutas(rutasOriginales);
     setProblema('Recargando la versión actual de la sala…');
     setAvisoAlta(null);
     setSeleccion(null);
@@ -540,6 +555,7 @@ export function EditorPlanoSala({
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
+    setRutas(rutasOriginales);
     setEstado('limpio');
     setProblema(null);
     setAvisoAlta(null);
@@ -586,6 +602,26 @@ export function EditorPlanoSala({
       soloLectura={edicionBloqueada}
       alCambiar={aplicar}
       alQuitar={() => setSeleccion(null)}
+    />
+  );
+
+  const editorRutas = (
+    <PanelRutasCable
+      conexiones={conexiones}
+      equipos={equipos}
+      rutas={rutas}
+      conexionSeleccionada={conexionRuta}
+      puntoSeleccionado={puntoRuta}
+      largoSala={borrador.largo_m}
+      anchoSala={borrador.ancho_m}
+      altoSala={borrador.alto_m}
+      soloLectura={edicionBloqueada}
+      alSeleccionarConexion={setConexionRuta}
+      alSeleccionarPunto={setPuntoRuta}
+      alCambiar={(siguientes) => {
+        setRutas(siguientes);
+        setEstado((actual) => actual === 'conflicto' ? actual : 'sucio');
+      }}
     />
   );
 
@@ -731,6 +767,20 @@ export function EditorPlanoSala({
                   cancelarBandeja();
                   return true;
                 }}
+                puntosRuta={conexionRuta ? rutaDe(rutas, conexionRuta)?.puntos : []}
+                puntoRutaSeleccionado={puntoRuta}
+                alSeleccionarPuntoRuta={setPuntoRuta}
+                alMoverPuntoRuta={(orden, punto) => {
+                  if (!conexionRuta) return;
+                  const actual = rutaDe(rutas, conexionRuta)?.puntos[orden];
+                  if (!actual) return;
+                  const limitado = limitarPuntoRuta(
+                    { ...actual, ...punto },
+                    { largo_m: borrador.largo_m, ancho_m: borrador.ancho_m, alto_m: borrador.alto_m },
+                  );
+                  setRutas(moverPunto(rutas, conexionRuta, orden, limitado));
+                  setEstado((estadoActual) => estadoActual === 'conflicto' ? estadoActual : 'sucio');
+                }}
               />
 
               {avisos.length > 0 && (
@@ -778,6 +828,7 @@ export function EditorPlanoSala({
                 alSeleccionar={seleccionar}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
+              <div className="p-4 border-t border-linea">{editorRutas}</div>
               {/* `tabIndex={-1}`: no entra en el recorrido del tabulador —sería
                   una parada vacía— pero se le puede llevar el foco a mano
                   cuando alguien pide «Propiedades» desde el menú contextual. */}
@@ -794,6 +845,7 @@ export function EditorPlanoSala({
 
           <PanelMovil resumen={resumenSeleccion}>
             <div className="pt-2">
+              <div className="p-4 border-b border-linea">{editorRutas}</div>
               {!edicionBloqueada && (
                 <BibliotecaElementos
                   categorias={categoriasMobiliario}

@@ -627,6 +627,25 @@ describe('la escena completa', () => {
     assert.equal(escena.tiradas[0].metros, 7.4);
   });
 
+  it('la misma escena lleva al Plano y al Resumen los puntos manuales en orden', () => {
+    const c = conexion('c1', 'tv', 'caja');
+    c.puntos_paso = [
+      { id: 'p1', orden: 0, x_m: 0.5, y_m: 0.25, z_m: 2.4 },
+      { id: 'p2', orden: 1, x_m: 3.5, y_m: 0.25, z_m: 2.4 },
+    ];
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos,
+      conexiones: [c],
+      tomas: [],
+    });
+
+    assert.deepEqual(escena.tiradas[0].puntos_paso, [
+      { x_m: 0.5, y_m: 0.25 },
+      { x_m: 3.5, y_m: 0.25 },
+    ]);
+  });
+
   it('una conexión a un equipo que ya no está no rompe el dibujo', () => {
     const escena = construirEscena({
       sala: SALA_BATERIA,

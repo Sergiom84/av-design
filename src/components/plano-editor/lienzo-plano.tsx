@@ -15,6 +15,7 @@ import {
   giroEnPantalla,
 } from '@/components/croquis/plano-sala';
 import type { Herramienta } from './barra-herramientas';
+import type { PuntoPasoCable } from '@/lib/tipos';
 
 /**
  * El lienzo del editor.
@@ -55,6 +56,10 @@ export function LienzoPlano({
   alDesplazarVista,
   alSoltarDesdeBandeja,
   previsualizacion,
+  puntosRuta = [],
+  puntoRutaSeleccionado = null,
+  alSeleccionarPuntoRuta,
+  alMoverPuntoRuta,
   svgRef,
 }: {
   escena: EscenaCroquis;
@@ -84,6 +89,10 @@ export function LienzoPlano({
   alSoltarDesdeBandeja?: (punto: PuntoMetros) => boolean;
   /** Dónde caería lo que se está arrastrando desde la bandeja lateral. */
   previsualizacion?: PuntoMetros | null;
+  puntosRuta?: readonly PuntoPasoCable[];
+  puntoRutaSeleccionado?: number | null;
+  alSeleccionarPuntoRuta?: (orden: number) => void;
+  alMoverPuntoRuta?: (orden: number, punto: PuntoMetros) => void;
   /** El editor necesita el SVG para convertir el puntero a metros. */
   svgRef?: React.RefObject<SVGSVGElement | null>;
 }) {
@@ -92,6 +101,7 @@ export function LienzoPlano({
   const arrastre = useRef<
     | { tipo: 'objeto'; objetivo: Exclude<Seleccion, null>; dx_m: number; dy_m: number }
     | { tipo: 'vista'; x: number; y: number }
+    | { tipo: 'punto-ruta'; orden: number }
     | null
   >(null);
 
@@ -153,6 +163,10 @@ export function LienzoPlano({
       alDesplazarVista(a.x - x, a.y - y);
       return;
     }
+    if (a.tipo === 'punto-ruta') {
+      alMoverPuntoRuta?.(a.orden, enMetros(ev));
+      return;
+    }
     const punto = enMetros(ev);
     alArrastrar(a.objetivo, { x_m: punto.x_m + a.dx_m, y_m: punto.y_m + a.dy_m });
   };
@@ -209,6 +223,29 @@ export function LienzoPlano({
       {rejilla && <Rejilla p={p} escena={escena} />}
 
       <GeometriaPlano p={p} escena={escena} />
+
+      {/* Los puntos de paso son controles visuales del mismo recorrido que
+          pinta GeometriaPlano. El formulario lateral mantiene el camino de
+          teclado; estos tiradores hacen viable medir y corregir con ratón o
+          dedo sobre el plano. */}
+      {!soloLectura && puntosRuta.map((punto, indice) => (
+        <circle
+          key={punto.id ?? indice}
+          cx={p.x(punto.x_m)}
+          cy={p.y(punto.y_m)}
+          r={puntoRutaSeleccionado === indice ? 9 : 7}
+          fill="var(--fondo)"
+          stroke="var(--acento)"
+          strokeWidth={puntoRutaSeleccionado === indice ? 3 : 2}
+          className="cursor-grab"
+          onPointerDown={(ev) => {
+            ev.stopPropagation();
+            alSeleccionarPuntoRuta?.(indice);
+            arrastre.current = { tipo: 'punto-ruta', orden: indice };
+            (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+          }}
+        />
+      ))}
 
       {/* Previsualización de colocación: dónde caería lo que viene de la
           bandeja. Discontinua y sin relleno, para que no se confunda con algo

@@ -55,7 +55,7 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasTomas, filasMuebles, filasPuertas] =
+  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles, filasPuertas] =
     await Promise.all([
     sql<Fila[]>`select id, sala_id, articulo_id, nombre, cantidad, extremo,
                        x_m, y_m, z_m, posicion_confirmada, rotacion_grados,
@@ -64,6 +64,10 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     sql<Fila[]>`select id, sala_id, origen_id, destino_id, senal, ruta,
                        longitud_manual_m, articulo_cable_id, notas
                 from conexiones where sala_id = ${id} order by creado_en, id`,
+    sql<Fila[]>`select p.id, p.conexion_id, p.orden, p.x_m, p.y_m, p.z_m
+                from conexion_puntos_paso p
+                join conexiones c on c.id = p.conexion_id
+                where c.sala_id = ${id} order by p.conexion_id, p.orden`,
     sql<Fila[]>`select id, sala_id, codigo, ubicacion, x_m, y_m, z_m, notas
                 from tomas_red where sala_id = ${id} order by codigo`,
     sql<Fila[]>`select id, sala_id, mobiliario_id, nombre, forma,
@@ -141,6 +145,15 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
       notas: s(f.notas),
+      puntos_paso: filasPuntos
+        .filter((p) => String(p.conexion_id) === String(f.id))
+        .map((p) => ({
+          id: String(p.id),
+          orden: Number(p.orden),
+          x_m: Number(p.x_m),
+          y_m: Number(p.y_m),
+          z_m: Number(p.z_m),
+        })),
     })),
     muebles: filasMuebles.map((f) => ({
       id: String(f.id),

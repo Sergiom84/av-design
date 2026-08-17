@@ -102,6 +102,11 @@ export interface TiradaCroquis {
   senal: Senal;
   desde: { x_m: number; y_m: number };
   hasta: { x_m: number; y_m: number };
+  /**
+   * Recorrido medido entre los extremos, en el orden en que pasa el cable.
+   * Vacío conserva el recorrido ortogonal automático de las salas antiguas.
+   */
+  puntos_paso: { x_m: number; y_m: number }[];
   /** Metros calculados por `calculo-cable.ts`. Nulo mientras no haya cálculo. */
   metros: number | null;
 }
@@ -669,6 +674,7 @@ export function construirEscena({
         senal: c.senal,
         desde: { x_m: origen.x_m, y_m: origen.y_m },
         hasta: { x_m: destino.x_m, y_m: destino.y_m },
+        puntos_paso: (c.puntos_paso ?? []).map((p) => ({ x_m: p.x_m, y_m: p.y_m })),
         metros: metrosPorConexion?.get(c.id) ?? null,
       },
     ];

@@ -18,6 +18,7 @@ import {
   ParametrosCable,
   PARAMETROS_POR_DEFECTO,
   Punto,
+  PuntoPasoCable,
   Ruta,
   Sala,
 } from './tipos';
@@ -73,6 +74,22 @@ export interface DetalleRecorrido {
   horizontal_m: number;
   bajada_m: number;
   recorrido_m: number;
+}
+
+/** Longitud euclídea 3D de la polilínea origen → puntos → destino. */
+export function longitudPolilinea(
+  origen: Punto,
+  puntos: readonly PuntoPasoCable[],
+  destino: Punto,
+): number {
+  const vertices: Punto[] = [origen, ...puntos, destino];
+  let total = 0;
+  for (let i = 1; i < vertices.length; i += 1) {
+    const a = vertices[i - 1];
+    const b = vertices[i];
+    total += Math.hypot(b.x_m - a.x_m, b.y_m - a.y_m, b.z_m - a.z_m);
+  }
+  return redondear(total);
 }
 
 /** Recorrido físico entre dos puntos, sin holguras. */
@@ -173,7 +190,22 @@ export function calcularConexion(
     };
   }
 
-  const detalle = calcularRecorrido(origen.posicion, destino.posicion, ruta, sala);
+  const detalle = conexion.puntos_paso?.length
+    ? (() => {
+        const recorrido = longitudPolilinea(
+          origen.posicion,
+          [...conexion.puntos_paso].sort((a, b) => a.orden - b.orden),
+          destino.posicion,
+        );
+        return {
+          ruta,
+          subida_m: 0,
+          horizontal_m: recorrido,
+          bajada_m: 0,
+          recorrido_m: recorrido,
+        };
+      })()
+    : calcularRecorrido(origen.posicion, destino.posicion, ruta, sala);
   const holguraOrigen = parametros.holguras[origen.extremo] ?? 0;
   const holguraDestino = parametros.holguras[destino.extremo] ?? 0;
   const base = detalle.recorrido_m + holguraOrigen + holguraDestino;

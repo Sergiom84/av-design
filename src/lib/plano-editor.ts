@@ -1586,6 +1586,11 @@ export interface PatchPlano {
   puertas_alta: PatchPuertaPlano[];
   puertas_cambio: PatchPuertaPlano[];
   puertas_baja: string[];
+  /** Sustitución completa y ordenada de la ruta de cada conexión tocada. */
+  rutas_cambio?: Array<{
+    conexion_id: string;
+    puntos: Array<{ id?: string; orden: number; x_m: number; y_m: number; z_m: number }>;
+  }>;
   /** Se decide una vez. Nulo = el diagrama ya estaba iniciado. */
   inicio_diagrama: { origen: OrigenDiagrama; plantilla_id: string | null } | null;
   /** Nulo = las sillas siguen como estaban. Solo se manda al materializarlas. */
@@ -1760,6 +1765,7 @@ export function construirPatch(
     puertas_alta,
     puertas_cambio,
     puertas_baja,
+    rutas_cambio: [],
     inicio_diagrama: borrador.inicio,
     sillas_modo: original.sillas_modo !== borrador.sillas_modo ? borrador.sillas_modo : null,
   };

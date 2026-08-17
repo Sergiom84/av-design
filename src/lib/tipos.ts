@@ -491,6 +491,14 @@ export interface Conexion {
   puerto_destino_ordinal?: number | null;
   /** Orden de alta. Es lo que fija el correlativo del identificador de cable. */
   creado_en?: string | null;
+  /** Puntos medidos de la ruta, en el orden físico desde origen a destino. */
+  puntos_paso?: PuntoPasoCable[];
+}
+
+export interface PuntoPasoCable extends Punto {
+  /** La base asigna el id; un punto nuevo puede no tenerlo todavía. */
+  id?: string;
+  orden: number;
 }
 
 /** Holguras y márgenes configurables. Se guardan en la tabla `parametros`. */

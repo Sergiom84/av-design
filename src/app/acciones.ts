@@ -804,6 +804,11 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
           (plantilla_id, origen_linea_id, destino_linea_id, articulo_cable_id, senal, ruta, notas, orden)
         values (${id}, ${origen}, ${destino}, ${c.articulo_cable_id},
                 ${c.senal}::senal, ${c.ruta}::ruta_cable, ${c.notas}, ${orden}) returning id`;
+      await tx`insert into plantilla_conexion_puntos_paso
+          (plantilla_conexion_id, orden, x_m, y_m, z_m)
+        select ${tirada.id}, orden, x_m, y_m, z_m
+        from conexion_puntos_paso where conexion_id = ${c.id}
+        order by orden`;
       if (c.puerto_origen_id && c.ordinal_origen && c.puerto_destino_id && c.ordinal_destino) {
         const puertosDetalle = [c.puerto_origen_id, c.puerto_destino_id].sort();
         await tx`select id from puertos where id in ${tx(puertosDetalle)} order by id for update`;

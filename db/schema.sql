@@ -1420,3 +1420,70 @@ comment on column sala_mobiliario.fuente is
 
 create index if not exists sala_mobiliario_fuente_idx
   on sala_mobiliario (sala_id, fuente);
+
+
+-- ---------------------------------------------------------------------
+-- Usuarios: quien entra y que ve
+--
+-- Hasta aqui la puerta era una clave de departamento: valia para que no
+-- entrara quien pasara por la direccion, pero no distinguia a nadie. Con
+-- personas reales aparecen dos preguntas que antes no existian: quien es
+-- cada uno y que secciones puede ver o tocar.
+--
+-- `tecnicos` NO sirve para esto y no se fusiona con esto. `tecnicos` es la
+-- lista de quien puede aparecer en un hito de obra, se siembra desde
+-- data/tecnicos.csv y contiene gente que no entra en la aplicacion.
+-- `usuarios` es quien tiene llave. Se enlazan por `tecnico_id` cuando son
+-- la misma persona, y ese enlace es opcional en los dos sentidos.
+-- ---------------------------------------------------------------------
+
+-- `av` (el visto bueno de Audiovisuales que venia del flujo de XTEN-AV) ya no
+-- lo usa nadie y la aplicacion lo rechaza. Se queda en el tipo porque quitar
+-- un valor de un enum obliga a recrear el tipo entero, con todas las columnas
+-- que lo referencian: riesgo real a cambio de nada.
+alter type rol_usuario add value if not exists 'tecnico_avanzado';
+
+create table if not exists usuarios (
+  id          uuid primary key default gen_random_uuid(),
+  -- El codigo de empleado (xe05206). En minusculas: quien lo teclea en el
+  -- movil recibe la primera letra en mayuscula del corrector, y sin
+  -- normalizar se crean dos personas que son la misma.
+  usuario     text not null unique check (usuario = lower(usuario)),
+  nombre      text not null,
+  rol         rol_usuario not null default 'lectura',
+  -- PBKDF2-HMAC-SHA256 con sal e iteraciones dentro del propio valor
+  -- (`pbkdf2-sha256$600000$<sal>$<huella>`). La contrasena en claro no se
+  -- guarda en ningun sitio. Ver src/lib/contrasena.ts.
+  clave_hash  text not null,
+  -- El alta la hace el administrador con una contrasena provisional que
+  -- entrega en mano. Hasta que la persona la cambia, no llega a ninguna
+  -- pantalla con datos.
+  debe_cambiar_clave boolean not null default true,
+  activo      boolean not null default true,
+  -- La misma persona en la lista de tecnicos, cuando la hay.
+  tecnico_id  uuid references tecnicos on delete set null,
+  creado_en   timestamptz not null default now(),
+  clave_cambiada_en timestamptz,
+  ultimo_acceso_en  timestamptz
+);
+
+comment on table usuarios is
+  'Quien tiene llave de la aplicacion. Distinto de `tecnicos`, que es quien puede firmar un hito de obra.';
+comment on column usuarios.debe_cambiar_clave is
+  'La contrasena la puso el administrador, no su dueno. Mientras sea cierto, la aplicacion solo deja llegar a /cuenta.';
+
+create index if not exists usuarios_activo_idx on usuarios (activo, usuario);
+
+-- Excepciones de permiso por persona. Lo que NO esta aqui lo decide el rol
+-- (src/lib/usuarios.ts, PERMISOS_POR_ROL). Se guarda solo la diferencia: asi
+-- cambiar el criterio de un rol alcanza a todo el mundo menos a quien tenga
+-- una excepcion escrita a proposito.
+create table if not exists usuario_permisos (
+  usuario_id uuid not null references usuarios on delete cascade,
+  seccion    text not null,
+  acceso     text not null check (acceso in ('oculto', 'ver', 'editar')),
+  primary key (usuario_id, seccion)
+);
+
+comment on table usuario_permisos is
+  'Solo las excepciones al permiso del rol. Sin fila, manda el rol.';

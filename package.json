@@ -17,6 +17,7 @@
     "db:reset": "npm run db:up && npm run db:migrate && npm run db:seed",
     "catalogo:normalizar": "node scripts/normalizar-catalogo.mjs",
     "migrar:sillas": "tsx scripts/migrar-sillas.mts",
+    "usuarios:admin": "tsx scripts/crear-admin.mts",
     "test:guardas-sala": "tsx scripts/verificar-guarda-equipos.mts",
     "test:diagrama": "tsx scripts/verificar-diagrama.mts",
     "test:concurrencia": "tsx scripts/verificar-concurrencia.mts",

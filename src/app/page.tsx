@@ -3,10 +3,17 @@ import { contarPanel } from '@/lib/datos';
 import { contarAlmacen } from '@/lib/datos-almacen';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera, Dato, Enlace, Tarjeta } from '@/components/ui';
+import { exigirSeccion } from '@/lib/sesion-servidor';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Panel() {
+  /*
+    El panel es la unica seccion sin carpeta propia: su layout es el de la
+    aplicacion entera, del que tambien cuelga /entrar. Por eso la guarda va
+    aqui, en la pagina, y no en un layout.
+  */
+  await exigirSeccion('panel', 'ver');
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const [c, alm] = await Promise.all([contarPanel(), contarAlmacen()]);

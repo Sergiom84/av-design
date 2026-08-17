@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { sql } from '@/lib/db';
 import { avisosDeEntrega } from '@/lib/ciclo-vida';
 import { fichaConAlmacen } from '@/app/salas/[id]/datos-ficha';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
@@ -46,6 +47,7 @@ async function tecnicoValido(tecnicoId: string, rol: string): Promise<boolean> {
  * del navegador se salta con un POST manipulado o una pantalla vieja.
  */
 export async function registrarHitoSala(datos: FormData) {
+  await exigirEdicion('salas');
   const salaId = texto(datos.get('sala_id'));
   const tipo = texto(datos.get('tipo'));
   if (!salaId || !tipo || !['instalacion', 'entrega'].includes(tipo)) return;
@@ -77,6 +79,7 @@ export async function registrarHitoSala(datos: FormData) {
 }
 
 export async function borrarHitoSala(datos: FormData) {
+  await exigirEdicion('salas');
   const salaId = texto(datos.get('sala_id'));
   const id = texto(datos.get('id'));
   if (!salaId || !id) return;
@@ -92,6 +95,7 @@ export async function borrarHitoSala(datos: FormData) {
 }
 
 export async function registrarHitoProyecto(datos: FormData) {
+  await exigirEdicion('proyectos');
   const proyectoId = texto(datos.get('proyecto_id'));
   const tipo = texto(datos.get('tipo'));
   if (!proyectoId || !tipo || !['inicio', 'cierre'].includes(tipo)) return;
@@ -151,6 +155,7 @@ export async function registrarHitoProyecto(datos: FormData) {
 }
 
 export async function borrarHitoProyecto(datos: FormData) {
+  await exigirEdicion('proyectos');
   const proyectoId = texto(datos.get('proyecto_id'));
   const id = texto(datos.get('id'));
   if (!proyectoId || !id) return;

@@ -33,7 +33,7 @@ export default async function LogisticaSala({
           falta y su pedido, y por último la carga. Reservado va antes de
           "qué falta" porque es lo primero que hay que mirar antes de
           comprar: lo que ya está apartado no se pide otra vez. */}
-      <MaterialAComprar material={material} canalizacion={canalizacion} />
+      <MaterialAComprar material={material} canalizacion={canalizacion} salaId={sala.id} />
       {falta && (
         <>
           <ReservasDeSala

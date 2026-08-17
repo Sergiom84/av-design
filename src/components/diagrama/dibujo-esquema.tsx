@@ -157,16 +157,24 @@ function Bloque({ bloque }: { bloque: BloqueDiagrama }) {
       )}
 
       {bloque.entradas.map((f) => (
-        <Puerto key={f.puerto_id} fila={f} lado="izquierda" bloque={bloque} />
+        <Puerto key={`${f.puerto_id}:${f.ordinal}`} fila={f} lado="izquierda" bloque={bloque} />
       ))}
       {bloque.salidas.map((f) => (
-        <Puerto key={f.puerto_id} fila={f} lado="derecha" bloque={bloque} />
+        <Puerto key={`${f.puerto_id}:${f.ordinal}`} fila={f} lado="derecha" bloque={bloque} />
       ))}
     </g>
   );
 }
 
-export function DibujoEsquema({ escena }: { escena: EscenaDiagrama }) {
+export function DibujoEsquema({
+  escena,
+  conexionSeleccionada,
+  onSeleccionarConexion,
+}: {
+  escena: EscenaDiagrama;
+  conexionSeleccionada?: string | null;
+  onSeleccionarConexion?: (conexionId: string) => void;
+}) {
   return (
     <ContenedorTabla etiqueta="Esquema de conexiones">
       <svg
@@ -178,12 +186,36 @@ export function DibujoEsquema({ escena }: { escena: EscenaDiagrama }) {
         xmlns="http://www.w3.org/2000/svg"
       >
         {escena.lineas.map((l) => (
-          <g key={l.conexion_id}>
+          <g
+            key={l.conexion_id}
+            role={onSeleccionarConexion ? 'button' : undefined}
+            tabIndex={onSeleccionarConexion ? 0 : undefined}
+            aria-label={onSeleccionarConexion ? `Seleccionar cable ${l.identificador}` : undefined}
+            aria-pressed={onSeleccionarConexion ? conexionSeleccionada === l.conexion_id : undefined}
+            onClick={onSeleccionarConexion ? () => onSeleccionarConexion(l.conexion_id) : undefined}
+            onKeyDown={onSeleccionarConexion ? (evento) => {
+              if (evento.key === 'Enter' || evento.key === ' ') {
+                evento.preventDefault();
+                onSeleccionarConexion(l.conexion_id);
+              }
+            } : undefined}
+            className={onSeleccionarConexion ? 'cursor-pointer focus:outline-none' : undefined}
+          >
+            {onSeleccionarConexion && (
+              <polyline
+                points={l.puntos.map((p) => `${p.x},${p.y}`).join(' ')}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={16}
+                pointerEvents="stroke"
+              />
+            )}
             <polyline
               points={l.puntos.map((p) => `${p.x},${p.y}`).join(' ')}
               fill="none"
               stroke={COLOR_SENAL[l.senal]}
-              strokeWidth={1.5}
+              strokeWidth={conexionSeleccionada === l.conexion_id ? 4 : 1.5}
+              pointerEvents="none"
             />
             {/* El identificador, el mismo de la brida y de la tabla de cables. */}
             <text
@@ -194,6 +226,7 @@ export function DibujoEsquema({ escena }: { escena: EscenaDiagrama }) {
               fontWeight={500}
               fill={COLOR_SENAL[l.senal]}
               fontFamily="var(--fuente-mono)"
+              pointerEvents="none"
             >
               {l.identificador}
             </text>

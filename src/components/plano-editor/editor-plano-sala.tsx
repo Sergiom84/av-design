@@ -9,36 +9,31 @@ import {
   avisosDelBorrador,
   anadirDelCatalogo,
   anadirEquipo,
+  anadirPuerta,
   aplicarIdsReales,
   borradorDesde,
   confirmarEstimadas,
   construirPatch,
   desplazamientoDeTecla,
-  desplazarEquipo,
-  desplazarMesa,
-  desplazarMueble,
-  desplazarToma,
   desplazarVista,
   PASO_REJILLA_M,
   entradaCroquisDe,
   hayCambios as tieneCambios,
   seleccionVigente,
-  moverEquipo,
-  moverMesa,
-  moverMueble,
-  moverToma,
   vistaCompleta,
   zoomDe,
   type BorradorPlano,
   type Seleccion,
   type Vista,
 } from '@/lib/plano-editor';
+import { desplazarSeleccion, moverSeleccion } from './interacciones-plano';
 import type {
   ArticuloElegible,
   Conexion,
   EquipoEnSala,
   MuebleCatalogo,
   MuebleEnSala,
+  PuertaEnSala,
   Sala,
   TomaRed,
 } from '@/lib/tipos';
@@ -49,13 +44,23 @@ import { ANCHO_BASE_PX, LienzoPlano, type PuntoMetros } from './lienzo-plano';
 import { ListaObjetos } from './lista-objetos';
 import { BibliotecaElementos } from './biblioteca';
 import { GuardiaSalida } from './guardia-salida';
-import { InspectorSala } from './inspector-sala';
-import { InspectorMesa } from './inspector-mesa';
-import { InspectorEquipo } from './inspector-equipo';
-import { InspectorMueble } from './inspector-mueble';
-import { InspectorToma } from './inspector-toma';
 import { PanelMovil } from './panel-movil';
+import { InspectorSala } from './inspector-sala';
+import { PanelPropiedadesPlano, resumenDeSeleccion } from './panel-propiedades-plano';
+import { ControlesCapas } from './controles-capas';
+import { MenuContextualPlano, type MenuContextualAbierto } from './menu-contextual-plano';
+import {
+  CAPAS_INICIALES,
+  alternarCapa,
+  capaDeSeleccion,
+  escenaVisible,
+  seleccionOculta,
+  type CapaPlano,
+} from './capas-plano';
+import { aplicarOperacion, type OperacionPlano } from './operaciones-plano';
 import type { EstadoGuardado } from './estado-guardado';
+import { PanelRutasCable } from './panel-rutas-cable';
+import { limitarPuntoRuta, moverPunto, rutaDe, rutasCambiadas, rutasDesdeConexiones, type RutaCableBorrador } from './rutas-cable';
 
 /**
  * El editor del plano de una sala.
@@ -75,6 +80,7 @@ export function EditorPlanoSala({
   conexiones,
   tomas,
   muebles,
+  puertas,
   categoriasMobiliario,
   plantillaBase,
   cerrado,
@@ -89,6 +95,7 @@ export function EditorPlanoSala({
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles: MuebleEnSala[];
+  puertas: PuertaEnSala[];
   categoriasMobiliario: string[];
   /** Nombre de la plantilla de la que salió el plano, para el rótulo `Base:`. */
   plantillaBase: string | null;
@@ -99,11 +106,16 @@ export function EditorPlanoSala({
   const [guardando, empezarGuardado] = useTransition();
 
   const desdeServidor = useMemo(
-    () => borradorDesde(sala, equipos, tomas, muebles),
-    [sala, equipos, tomas, muebles],
+    () => borradorDesde(sala, equipos, tomas, muebles, puertas),
+    [sala, equipos, tomas, muebles, puertas],
   );
 
   const [original, setOriginal] = useState(desdeServidor);
+  const rutasDesdeServidor = useMemo(() => rutasDesdeConexiones(conexiones), [conexiones]);
+  const [rutasOriginales, setRutasOriginales] = useState(rutasDesdeServidor);
+  const [rutas, setRutas] = useState<RutaCableBorrador[]>(rutasDesdeServidor);
+  const [conexionRuta, setConexionRuta] = useState<string | null>(null);
+  const [puntoRuta, setPuntoRuta] = useState<number | null>(null);
   const [version, setVersion] = useState(sala.diagrama_version);
   const [borrador, setBorradorBruto] = useState(desdeServidor);
   const [pasado, setPasado] = useState<BorradorPlano[]>([]);
@@ -113,6 +125,13 @@ export function EditorPlanoSala({
   const [rejilla, setRejilla] = useState(true);
   const [ajuste, setAjuste] = useState(true);
   const [vista, setVista] = useState<Vista | null>(null);
+  /**
+   * Qué capas se están mirando. Estado de interfaz y nada más: no entra en el
+   * borrador, así que apagar el mobiliario no ensucia la pestaña ni escribe
+   * una decisión de vista como si fuera una medida de la sala.
+   */
+  const [capas, setCapas] = useState(CAPAS_INICIALES);
+  const [menu, setMenu] = useState<MenuContextualAbierto | null>(null);
   const [estado, setEstado] = useState<EstadoGuardado>('limpio');
   const [problema, setProblema] = useState<string | null>(null);
   /**
@@ -148,6 +167,15 @@ export function EditorPlanoSala({
   /** El SVG del lienzo, para convertir el puntero a metros al soltar. */
   const lienzo = useRef<SVGSVGElement | null>(null);
 
+  /**
+   * El panel de propiedades, para poder llevarle el foco.
+   *
+   * «Propiedades» desde el menú contextual tiene que dejar el foco donde está
+   * la ficha: si no, quien llegó con el teclado abre el panel y sigue con el
+   * foco en el lienzo, sin nada que tabular.
+   */
+  const propiedades = useRef<HTMLDivElement | null>(null);
+
   const soloLectura = cerrado;
 
   // Si la sala cambia en el servidor —recarga, o la revalidación que dispara
@@ -164,6 +192,8 @@ export function EditorPlanoSala({
     setVersionVista(sala.diagrama_version);
     setOriginal(desdeServidor);
     setBorradorBruto(desdeServidor);
+    setRutasOriginales(rutasDesdeServidor);
+    setRutas(rutasDesdeServidor);
     setVersion(sala.diagrama_version);
     setPasado([]);
     setFuturo([]);
@@ -184,11 +214,11 @@ export function EditorPlanoSala({
   // donde se sabe lo que hay.
   const seleccionValida = seleccionVigente(seleccion, borrador);
 
-  const patch = useMemo(
-    () => construirPatch(sala.id, version, original, borrador),
-    [sala.id, version, original, borrador],
-  );
-  const hayCambios = tieneCambios(patch);
+  const patch = useMemo(() => ({
+    ...construirPatch(sala.id, version, original, borrador),
+    rutas_cambio: rutasCambiadas(rutasOriginales, rutas),
+  }), [sala.id, version, original, borrador, rutasOriginales, rutas]);
+  const hayCambios = tieneCambios(patch) || patch.rutas_cambio.length > 0;
 
   const aplicar = useCallback(
     (siguiente: BorradorPlano, { agrupar = false }: { agrupar?: boolean } = {}) => {
@@ -202,15 +232,79 @@ export function EditorPlanoSala({
     [borrador, recargandoConflicto],
   );
 
+  const cerrarMenu = useCallback(() => setMenu(null), []);
+
+  /**
+   * Seleccionar algo que está en una capa apagada la vuelve a encender.
+   *
+   * La lista de objetos no se filtra por capas a propósito: es el recorrido
+   * accesible, y esconder ahí una silla la dejaría inalcanzable con teclado.
+   * Lo que no puede quedar es una selección invisible, porque el inspector la
+   * edita y las flechas la mueven sin que se vea nada. Entre filtrar la lista
+   * y encender la capa, encender la capa no quita ningún camino.
+   */
+  const seleccionar = useCallback((s: Seleccion) => {
+    const capa = capaDeSeleccion(s);
+    setSeleccion(s);
+    if (capa) setCapas((c) => (c[capa] ? c : { ...c, [capa]: true }));
+  }, []);
+
+  /**
+   * Apagar una capa suelta lo que hubiera seleccionado en ella.
+   *
+   * Sin esto, apagar Equipamiento con un equipo seleccionado dejaba el
+   * inspector editándolo y las flechas moviéndolo: se ensuciaba el borrador,
+   * se apilaba historial y cambiaban metros de cable, todo a partir de una
+   * acción que era solo de vista.
+   */
+  const alternar = useCallback(
+    (capa: CapaPlano) => {
+      const siguiente = alternarCapa(capas, capa);
+      setCapas(siguiente);
+      if (seleccionOculta(seleccion, siguiente)) setSeleccion(null);
+    },
+    [capas, seleccion],
+  );
+
+  /**
+   * El único camino de una operación al borrador.
+   *
+   * Lo llaman el menú contextual y la lista de objetos, y hace exactamente lo
+   * mismo que hace el inspector, porque por dentro es el mismo despachador
+   * puro. Si mañana girar cambia, cambia una vez.
+   *
+   * Compara por identidad antes de aplicar: `aplicarOperacion` devuelve el
+   * borrador de entrada cuando la operación no corresponde, y apilar eso en el
+   * historial dejaría pasos de deshacer que no deshacen nada.
+   */
+  const operar = useCallback(
+    (operacion: OperacionPlano) => {
+      const r = aplicarOperacion(borrador, seleccionValida, operacion);
+      if (r.borrador !== borrador) aplicar(r.borrador);
+      seleccionar(r.seleccion);
+      if (r.enfocarPropiedades) propiedades.current?.focus();
+    },
+    [aplicar, borrador, seleccionar, seleccionValida],
+  );
+
+  const conexionesConRutas = useMemo(() => conexiones.map((conexion) => ({
+    ...conexion,
+    puntos_paso: rutas.find((ruta) => ruta.conexion_id === conexion.id)?.puntos ?? [],
+  })), [conexiones, rutas]);
   const escena = useMemo(
-    () => construirEscena(entradaCroquisDe(borrador, sala, conexiones)),
-    [borrador, sala, conexiones],
+    () => construirEscena(entradaCroquisDe(borrador, sala, conexionesConRutas)),
+    [borrador, sala, conexionesConRutas],
   );
 
   const proyeccion = useMemo(
     () => proyectar(escena, { ancho_px: ANCHO_BASE_PX }),
     [escena],
   );
+
+  // Lo que se pinta. La proyección se calcula sobre la escena entera a
+  // propósito: depende del rectángulo de la sala, así que apagar una capa no
+  // puede cambiar la escala ni dar un salto de encuadre.
+  const escenaPintada = useMemo(() => escenaVisible(escena, capas), [escena, capas]);
 
   const vistaEfectiva = vista ?? vistaCompleta(proyeccion.ancho_px, proyeccion.alto_px);
   const zoom = zoomDe(vistaEfectiva, proyeccion.ancho_px);
@@ -224,16 +318,7 @@ export function EditorPlanoSala({
       if (soloLectura) return;
       const agrupar = arrastrando.current;
       arrastrando.current = true;
-      const opciones = { ajustar: ajuste };
-      if (objetivo.tipo === 'equipo') {
-        aplicar(moverEquipo(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'toma') {
-        aplicar(moverToma(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'mueble') {
-        aplicar(moverMueble(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'mesa') {
-        aplicar(moverMesa(borrador, punto, opciones), { agrupar });
-      }
+      aplicar(moverSeleccion(borrador, objetivo, punto, { ajustar: ajuste }), { agrupar });
     },
     [aplicar, ajuste, borrador, soloLectura],
   );
@@ -288,14 +373,7 @@ export function EditorPlanoSala({
 
   const colocar = useCallback(
     (objetivo: Exclude<Seleccion, null>, punto: PuntoMetros) => {
-      const opciones = { ajustar: ajuste };
-      if (objetivo.tipo === 'mueble') {
-        aplicar(moverMueble(borrador, objetivo.id, punto, opciones));
-      } else if (objetivo.tipo === 'equipo') {
-        aplicar(moverEquipo(borrador, objetivo.id, punto, opciones));
-      } else if (objetivo.tipo === 'toma') {
-        aplicar(moverToma(borrador, objetivo.id, punto, opciones));
-      }
+      aplicar(moverSeleccion(borrador, objetivo, punto, { ajustar: ajuste }));
     },
     [ajuste, aplicar, borrador],
   );
@@ -305,7 +383,7 @@ export function EditorPlanoSala({
       onPointerDown: (ev: React.PointerEvent) => {
         if (soloLectura) return;
         ev.preventDefault();
-        setSeleccion(objetivo);
+        seleccionar(objetivo);
         bandeja.current = objetivo;
         (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
       },
@@ -323,7 +401,7 @@ export function EditorPlanoSala({
       },
       onPointerCancel: cancelarBandeja,
     }),
-    [cancelarBandeja, colocar, enMetrosDesdePantalla, soloLectura],
+    [cancelarBandeja, colocar, enMetrosDesdePantalla, seleccionar, soloLectura],
   );
 
   // ------------------------------------------------------------------ altas
@@ -347,10 +425,10 @@ export function EditorPlanoSala({
         sillasDerivadas: escena.sillas,
       });
       if (r.borrador !== borrador) aplicar(r.borrador);
-      setSeleccion(r.seleccion);
+      seleccionar(r.seleccion);
       setAvisoAlta(r.aviso);
     },
-    [aplicar, borrador, escena.sillas],
+    [aplicar, borrador, escena.sillas, seleccionar],
   );
 
   const anadirEquipamiento = useCallback(
@@ -367,10 +445,20 @@ export function EditorPlanoSala({
           extremo: 'pared',
         }),
       );
-      setSeleccion({ tipo: 'equipo', id });
+      seleccionar({ tipo: 'equipo', id });
       setAvisoAlta(`${articulo.etiqueta} en la lista. Sin guardar todavía.`);
     },
-    [aplicar, borrador],
+    [aplicar, borrador, seleccionar],
+  );
+
+  const anadirPuertaNueva = useCallback(
+    (pared: Parameters<typeof anadirPuerta>[2]) => {
+      const id = crypto.randomUUID();
+      aplicar(anadirPuerta(borrador, id, pared));
+      seleccionar({ tipo: 'puerta', id });
+      setAvisoAlta('Puerta en la lista, sin medir. La anchura y la altura se escriben en Propiedades. Sin guardar todavía.');
+    },
+    [aplicar, borrador, seleccionar],
   );
 
   // ---------------------------------------------------------------- teclado
@@ -397,15 +485,7 @@ export function EditorPlanoSala({
     // Con Mayúsculas el paso es fino y el ajuste a rejilla estorbaría: se
     // pulsa Mayúsculas justo para salirse de la rejilla.
     const opciones = { ajustar: ajuste && !ev.shiftKey, paso: PASO_REJILLA_M };
-    if (seleccionValida.tipo === 'equipo') {
-      aplicar(desplazarEquipo(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'toma') {
-      aplicar(desplazarToma(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'mueble') {
-      aplicar(desplazarMueble(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'mesa') {
-      aplicar(desplazarMesa(borrador, paso, opciones));
-    }
+    aplicar(desplazarSeleccion(borrador, seleccionValida, paso, opciones));
   };
 
   // ---------------------------------------------------------------- guardado
@@ -423,6 +503,7 @@ export function EditorPlanoSala({
         const guardado = aplicarIdsReales(borrador, r.ids);
         setBorradorBruto(guardado);
         setOriginal(guardado);
+        setRutasOriginales(rutas);
         setVersion(r.version);
         setPasado([]);
         setFuturo([]);
@@ -458,6 +539,7 @@ export function EditorPlanoSala({
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
+    setRutas(rutasOriginales);
     setProblema('Recargando la versión actual de la sala…');
     setAvisoAlta(null);
     setSeleccion(null);
@@ -473,6 +555,7 @@ export function EditorPlanoSala({
     setPasado([]);
     setFuturo([]);
     setBorradorBruto(original);
+    setRutas(rutasOriginales);
     setEstado('limpio');
     setProblema(null);
     setAvisoAlta(null);
@@ -512,69 +595,43 @@ export function EditorPlanoSala({
   );
 
   const inspector = (
-    <>
-      {seleccionValida === null || seleccionValida.tipo === 'sala' ? (
-        <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
-      ) : seleccionValida.tipo === 'mesa' ? (
-        <InspectorMesa borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
-      ) : seleccionValida.tipo === 'equipo' ? (
-        (() => {
-          const e = borrador.equipos.find((x) => x.id === seleccionValida.id);
-          return e ? (
-            <InspectorEquipo
-              equipo={e}
-              borrador={borrador}
-              posicionDibujada={posicionesDibujadas.get(e.id) ?? null}
-              alCambiar={aplicar}
-              alQuitar={() => setSeleccion(null)}
-              soloLectura={edicionBloqueada}
-            />
-          ) : null;
-        })()
-      ) : seleccionValida.tipo === 'mueble' ? (
-        <InspectorMueble
-          borrador={borrador}
-          id={seleccionValida.id}
-          alCambiar={aplicar}
-          alQuitar={() => setSeleccion(null)}
-          soloLectura={edicionBloqueada}
-        />
-      ) : (
-        (() => {
-          const t = borrador.tomas.find((x) => x.id === seleccionValida.id);
-          return t ? (
-            <InspectorToma
-              toma={t}
-              borrador={borrador}
-              alCambiar={aplicar}
-              soloLectura={edicionBloqueada}
-            />
-          ) : null;
-        })()
-      )}
-    </>
+    <PanelPropiedadesPlano
+      seleccion={seleccionValida}
+      borrador={borrador}
+      posicionesDibujadas={posicionesDibujadas}
+      soloLectura={edicionBloqueada}
+      alCambiar={aplicar}
+      alQuitar={() => setSeleccion(null)}
+    />
   );
 
-  // El rótulo del panel móvil es lo único que dice de qué se está hablando
-  // cuando el inspector está plegado. La rama final no puede ser «Toma» a
-  // secas: con un mueble seleccionado el panel decía «Toma» y el inspector de
-  // debajo enseñaba una silla. Cada tipo dice su nombre.
-  const resumenSeleccion =
-    seleccionValida === null || seleccionValida.tipo === 'sala'
-      ? 'Medidas de la sala'
-      : seleccionValida.tipo === 'mesa'
-        ? 'Mesa principal'
-        : seleccionValida.tipo === 'equipo'
-          ? (borrador.equipos.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Equipo')
-          : seleccionValida.tipo === 'mueble'
-            ? (borrador.mobiliario.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Mueble')
-            : `Toma ${borrador.tomas.find((x) => x.id === seleccionValida.id)?.codigo ?? ''}`.trim();
+  const editorRutas = (
+    <PanelRutasCable
+      conexiones={conexiones}
+      equipos={equipos}
+      rutas={rutas}
+      conexionSeleccionada={conexionRuta}
+      puntoSeleccionado={puntoRuta}
+      largoSala={borrador.largo_m}
+      anchoSala={borrador.ancho_m}
+      altoSala={borrador.alto_m}
+      soloLectura={edicionBloqueada}
+      alSeleccionarConexion={setConexionRuta}
+      alSeleccionarPunto={setPuntoRuta}
+      alCambiar={(siguientes) => {
+        setRutas(siguientes);
+        setEstado((actual) => actual === 'conflicto' ? actual : 'sucio');
+      }}
+    />
+  );
+
+  const resumenSeleccion = resumenDeSeleccion(seleccionValida, borrador);
 
   return (
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
     // objetos y en el inspector, que son controles de verdad.
     <div className="space-y-4" onKeyDown={alPulsarTecla}>
-      {/* Salir de Diagrama con el borrador a medias no puede tragarse el
+      {/* Salir de Plano con el borrador a medias no puede tragarse el
           trabajo: `beforeunload` vive ahí dentro y cubre recargar y cerrar; lo
           demás —las pestañas de la ficha, la barra lateral, el botón atrás— es
           navegación de cliente y no dispara nada por su cuenta. Con la obra
@@ -678,16 +735,26 @@ export function EditorPlanoSala({
             soloLectura={edicionBloqueada}
           />
 
+          {/* Debajo de la barra y en su propia línea: son un filtro de vista,
+              no una herramienta de dibujo, y mezclarlas con zoom y rejilla las
+              hacía parecer parte de lo que se guarda. */}
+          <div className="px-4 py-2 border-b border-linea-suave">
+            <ControlesCapas capas={capas} alAlternar={alternar} />
+          </div>
+
           <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem] items-start">
             <div className="min-w-0 p-4 border-b lg:border-b-0 lg:border-r border-linea-suave">
               <LienzoPlano
-                escena={escena}
+                escena={escenaPintada}
                 vista={vistaEfectiva}
                 seleccion={seleccionValida}
                 herramienta={herramienta}
                 rejilla={rejilla}
                 soloLectura={edicionBloqueada}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
+                alMenuContextual={(objetivo, punto) =>
+                  setMenu({ seleccion: objetivo, x: punto.x, y: punto.y })
+                }
                 alArrastrar={arrastrar}
                 alSoltar={soltar}
                 alDesplazarVista={(dx, dy) => setVista(desplazarVista(vistaEfectiva, dx, dy))}
@@ -699,6 +766,20 @@ export function EditorPlanoSala({
                   colocar(objetivo, punto);
                   cancelarBandeja();
                   return true;
+                }}
+                puntosRuta={conexionRuta ? rutaDe(rutas, conexionRuta)?.puntos : []}
+                puntoRutaSeleccionado={puntoRuta}
+                alSeleccionarPuntoRuta={setPuntoRuta}
+                alMoverPuntoRuta={(orden, punto) => {
+                  if (!conexionRuta) return;
+                  const actual = rutaDe(rutas, conexionRuta)?.puntos[orden];
+                  if (!actual) return;
+                  const limitado = limitarPuntoRuta(
+                    { ...actual, ...punto },
+                    { largo_m: borrador.largo_m, ancho_m: borrador.ancho_m, alto_m: borrador.alto_m },
+                  );
+                  setRutas(moverPunto(rutas, conexionRuta, orden, limitado));
+                  setEstado((estadoActual) => estadoActual === 'conflicto' ? estadoActual : 'sucio');
                 }}
               />
 
@@ -737,33 +818,47 @@ export function EditorPlanoSala({
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  alAnadirPuerta={anadirPuertaNueva}
                   aviso={avisoAlta}
                 />
               )}
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccionValida}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
-              <div className="p-4 border-t border-linea">{inspector}</div>
+              <div className="p-4 border-t border-linea">{editorRutas}</div>
+              {/* `tabIndex={-1}`: no entra en el recorrido del tabulador —sería
+                  una parada vacía— pero se le puede llevar el foco a mano
+                  cuando alguien pide «Propiedades» desde el menú contextual. */}
+              <div
+                ref={propiedades}
+                tabIndex={-1}
+                aria-label="Propiedades de lo seleccionado"
+                className="p-4 border-t border-linea"
+              >
+                {inspector}
+              </div>
             </div>
           </div>
 
           <PanelMovil resumen={resumenSeleccion}>
             <div className="pt-2">
+              <div className="p-4 border-b border-linea">{editorRutas}</div>
               {!edicionBloqueada && (
                 <BibliotecaElementos
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  alAnadirPuerta={anadirPuertaNueva}
                   aviso={avisoAlta}
                 />
               )}
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccionValida}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
               <div className="pt-4">{inspector}</div>
@@ -780,6 +875,16 @@ export function EditorPlanoSala({
           0,01 m. Escape quita la selección.
         </p>
       )}
+
+      {/* Fuera del SVG y con posición de ventana: dentro del lienzo se
+          recortaría con el `viewBox` y se escalaría con el zoom. */}
+      <MenuContextualPlano
+        abierto={menu}
+        borrador={borrador}
+        soloLectura={edicionBloqueada}
+        alOperar={operar}
+        alCerrar={cerrarMenu}
+      />
     </div>
   );
 }

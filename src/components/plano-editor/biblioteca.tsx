@@ -4,7 +4,13 @@ import { useId, useState } from 'react';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 import { BuscadorMobiliario } from '@/components/catalogo/buscador-mobiliario';
 import { MAXIMO_ALTA_MOBILIARIO } from '@/lib/plano-editor';
-import type { ArticuloElegible, MuebleCatalogo } from '@/lib/tipos';
+import {
+  ETIQUETA_PARED,
+  PAREDES_SALA,
+  type ArticuloElegible,
+  type MuebleCatalogo,
+  type ParedSala,
+} from '@/lib/tipos';
 
 /**
  * `Añadir elementos`: las dos cajas de búsqueda del lateral del editor.
@@ -25,6 +31,7 @@ export function BibliotecaElementos({
   categorias,
   alAnadirMuebles,
   alAnadirEquipo,
+  alAnadirPuerta,
   aviso,
 }: {
   /** Las secciones del catálogo de mobiliario, para el filtro. */
@@ -37,6 +44,11 @@ export function BibliotecaElementos({
   alAnadirMuebles: (mueble: MuebleCatalogo, cantidad: number) => void;
   alAnadirEquipo: (articulo: ArticuloElegible) => void;
   /**
+   * Añadir una puerta en una pared. No hay catálogo detrás: una puerta es
+   * arquitectura de la sala, no una referencia que se pide.
+   */
+  alAnadirPuerta: (pared: ParedSala) => void;
+  /**
    * Qué pasó con lo último que se añadió. Lo decide y lo guarda el editor:
    * Descartar tiene que poder borrarlo, y esta caja no sabe nada del
    * borrador.
@@ -45,6 +57,7 @@ export function BibliotecaElementos({
 }) {
   const [categoria, setCategoria] = useState('');
   const [cantidad, setCantidad] = useState(1);
+  const [pared, setPared] = useState<ParedSala>('sur');
   const [elegido, setElegido] = useState<MuebleCatalogo | null>(null);
   const base = useId();
 
@@ -146,6 +159,45 @@ export function BibliotecaElementos({
           />
           <p className="mt-2 text-tinta-tenue text-[0.75rem]">
             Entra sin colocar: se sitúa arrastrándolo o con `Colocar en el centro`.
+          </p>
+        </div>
+      </details>
+
+      <details className="group">
+        <summary className="cursor-pointer py-2 min-h-11 flex items-center">
+          Arquitectura
+        </summary>
+
+        <div className="pb-2 space-y-3">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label htmlFor={`${base}pared`} className="t-etiqueta block mb-1">
+                Pared de la puerta
+              </label>
+              <select
+                id={`${base}pared`}
+                value={pared}
+                onChange={(e) => setPared(e.target.value as ParedSala)}
+                className="w-full min-h-11"
+              >
+                {PAREDES_SALA.map((par) => (
+                  <option key={par} value={par}>
+                    {ETIQUETA_PARED[par]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => alAnadirPuerta(pared)}
+              className="boton min-h-11 px-4"
+            >
+              Añadir puerta
+            </button>
+          </div>
+          <p className="text-tinta-tenue text-[0.75rem]">
+            Entra «Sin medir»: la anchura y la altura se escriben en Propiedades
+            cuando alguien las mide.
           </p>
         </div>
       </details>

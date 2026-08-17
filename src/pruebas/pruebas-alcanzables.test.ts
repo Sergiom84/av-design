@@ -1,0 +1,118 @@
+/**
+ * Ninguna prueba se queda fuera de `npm test`.
+ *
+ * Esto pasó de verdad. El comando de pruebas listaba, para `src/components/`,
+ * un patrón que solo terminaba en `.test.tsx`, y un fichero de pruebas de
+ * lógica pura dentro de esa carpeta acaba llamándose `.test.ts` porque no
+ * monta ningún componente. Resultado: veintiséis comprobaciones escritas,
+ * pasando en local al ejecutarlas a mano, y jamás ejecutadas por la suite. El
+ * contador seguía en verde y seguía dando el mismo número de antes.
+ *
+ * Un hueco así no lo caza nadie mirando: la suite no falla, simplemente no
+ * mira. Por eso esta guarda barre el árbol de verdad, exige que el barrido
+ * encuentre ficheros antes de comparar, y compara contra los patrones que hay
+ * escritos en `package.json` —no contra una lista a mano, que se quedaría
+ * vieja el día que alguien añada una carpeta.
+ */
+
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, it } from 'node:test';
+
+const RAIZ = fileURLToPath(new URL('../../', import.meta.url));
+
+/** Los patrones que `npm test` pasa al ejecutor, tal y como están escritos. */
+function patronesDePrueba(): string[] {
+  const paquete = JSON.parse(readFileSync(`${RAIZ}package.json`, 'utf8'));
+  const comando: string = paquete.scripts.test;
+  const patrones = [...comando.matchAll(/"([^"]*\*[^"]*)"/g)].map((m) => m[1]);
+  assert.ok(
+    patrones.length > 0,
+    'no se reconoció ningún patrón en el script de pruebas: esta guarda está leyendo mal package.json',
+  );
+  return patrones;
+}
+
+/** Todos los ficheros de prueba que hay en el árbol, en rutas con barra. */
+function ficherosDePrueba(): string[] {
+  const encontrados: string[] = [];
+  const visitar = (relativo: string) => {
+    for (const e of readdirSync(`${RAIZ}${relativo}`, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const hijo = `${relativo}${e.name}`;
+      if (e.isDirectory()) visitar(`${hijo}/`);
+      else if (/\.test\.(ts|tsx|mts|mjs|js)$/.test(e.name)) encontrados.push(hijo);
+    }
+  };
+  visitar('src/');
+  visitar('scripts/');
+  return encontrados.sort();
+}
+
+/**
+ * Un glob de los que admite `node --test`, reducido a expresión regular.
+ *
+ * Se traduce segmento a segmento y no con reemplazos encadenados sobre la
+ * cadena entera. La primera versión usaba un carácter centinela para marcar el
+ * comodín de profundidad, y ese centinela era un byte nulo: Git pasó a tratar
+ * este fichero como binario, así que la guarda que vigila la suite dejaba de
+ * verse en cualquier diff. Un control que no se puede revisar no es un
+ * control.
+ */
+function comoRegExp(patron: string): RegExp {
+  const segmentos = patron.split('/');
+  let fuente = '';
+  segmentos.forEach((segmento, i) => {
+    const ultimo = i === segmentos.length - 1;
+    if (segmento === '**') {
+      // Cualquier número de carpetas intermedias, incluida ninguna. Se come su
+      // propia barra, por eso no se añade separador después.
+      fuente += '(?:[^/]+/)*';
+      return;
+    }
+    fuente += segmento.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+    if (!ultimo) fuente += '/';
+  });
+  return new RegExp(`^${fuente}$`);
+}
+
+describe('todas las pruebas del árbol entran en npm test', () => {
+  it('el barrido encuentra ficheros de prueba', () => {
+    assert.ok(
+      ficherosDePrueba().length > 20,
+      'el barrido apenas encontró pruebas: está mirando donde no es',
+    );
+  });
+
+  it('la traducción de globs reconoce lo que tiene que reconocer', () => {
+    // Sin esto, un fallo en `comoRegExp` que hiciera coincidir cualquier cosa
+    // dejaría la guarda de abajo aprobando siempre, en silencio.
+    const profundo = comoRegExp('src/components/**/*.test.ts');
+    assert.ok(profundo.test('src/components/plano-editor/capas-plano.test.ts'));
+    assert.ok(profundo.test('src/components/x.test.ts'), 'debe valer también sin carpeta intermedia');
+    assert.ok(!profundo.test('src/components/plano-editor/capas-plano.test.tsx'));
+    assert.ok(!profundo.test('src/lib/croquis.test.ts'), 'no debe salirse de su carpeta');
+
+    const plano = comoRegExp('src/lib/*.test.ts');
+    assert.ok(plano.test('src/lib/croquis.test.ts'));
+    assert.ok(!plano.test('src/lib/sub/croquis.test.ts'), 'un solo asterisco no cruza barras');
+  });
+
+  it('cada fichero de prueba encaja con algún patrón del script', () => {
+    const patrones = patronesDePrueba().map(comoRegExp);
+    const huerfanos = ficherosDePrueba().filter((f) => !patrones.some((p) => p.test(f)));
+    assert.deepEqual(
+      huerfanos,
+      [],
+      `estas pruebas existen pero npm test no las ejecuta: ${huerfanos.join(', ')}`,
+    );
+  });
+
+  it('este fichero es texto para Git, no un binario', () => {
+    // La versión anterior llevaba bytes nulos dentro y `git show` lo mostraba
+    // como `Bin 0 -> 3168 bytes`: el diff desaparecía de la revisión.
+    const bruto = readFileSync(`${RAIZ}src/pruebas/pruebas-alcanzables.test.ts`);
+    assert.equal(bruto.includes(0), false, 'hay un byte nulo: Git tratará el fichero como binario');
+  });
+});

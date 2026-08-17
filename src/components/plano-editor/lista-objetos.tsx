@@ -1,8 +1,9 @@
 'use client';
 
-import { ETIQUETA_EXTREMO } from '@/lib/tipos';
+import { ETIQUETA_EXTREMO, ETIQUETA_PARED } from '@/lib/tipos';
 import {
   agruparEquipos,
+  estadoDeLaPuerta,
   estadoDelMueble,
   type BorradorPlano,
   type MuebleBorrador,
@@ -130,6 +131,25 @@ export function ListaObjetos({
                 </li>
               ))}
             </ul>
+          </li>
+        ))}
+
+        {borrador.puertas.map((puerta) => (
+          <li key={puerta.id}>
+            <Fila
+              activo={activo({ tipo: 'puerta', id: puerta.id })}
+              onClick={() => alSeleccionar({ tipo: 'puerta', id: puerta.id })}
+              titulo="Puerta"
+              detalle={
+                `${ETIQUETA_PARED[puerta.pared]} · a ${metros(puerta.posicion_m)} m` +
+                (estadoDeLaPuerta(puerta) === 'medida'
+                  ? ` · ${metros(puerta.anchura_m ?? 0)} × ${metros(puerta.altura_m ?? 0)} m`
+                  : ' · sin medir') +
+                (puerta.es_nuevo ? ' · sin guardar' : '')
+              }
+              tenue={estadoDeLaPuerta(puerta) !== 'medida'}
+              arrastre={arrastreDeBandeja?.({ tipo: 'puerta', id: puerta.id })}
+            />
           </li>
         ))}
 

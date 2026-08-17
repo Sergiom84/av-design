@@ -6,10 +6,14 @@ import {
   construirDiagrama,
   etiquetasDeEquipos,
   ladoDePuerto,
+  normalizarFiltroSenal,
+  senalEnFiltro,
   MEDIDAS_DIAGRAMA,
+  SENALES_POR_FILTRO,
   type EntradaDiagrama,
 } from './diagrama';
-import type { Conexion, EquipoEnSala, Puerto } from './tipos';
+import { PREFIJO_CABLE } from './tipos';
+import type { Conexion, EquipoEnSala, Puerto, Senal } from './tipos';
 
 /**
  * El caso de referencia es la sala de telepresencia: caja de conexiones que
@@ -236,6 +240,38 @@ describe('construirDiagrama', () => {
     assert.ok(escena.ancho > 0 && escena.alto > 0);
   });
 
+  it('ancla por instancia, puerto y ordinal cuando dos equipos comparten referencia', () => {
+    const salida = { ...puerto('p-out', 'a-matriz', 'OUTPUT', 'salida'), total: 2 };
+    const entrada = { ...puerto('p-in', 'a-tv', 'INPUT', 'entrada'), total: 2 };
+    const escena = construirDiagrama({
+      equipos: [
+        equipo('matriz-1', 'Matriz', 'a-matriz'),
+        equipo('matriz-2', 'Matriz', 'a-matriz'),
+        equipo('tv-1', 'Pantalla', 'a-tv'),
+        equipo('tv-2', 'Pantalla', 'a-tv'),
+      ],
+      puertosPorArticulo: new Map([['a-matriz', [salida]], ['a-tv', [entrada]]]),
+      conexiones: [
+        conexion('c1', 'matriz-1', 'tv-1', {
+          puerto_origen_id: salida.id, puerto_origen_ordinal: 1,
+          puerto_destino_id: entrada.id, puerto_destino_ordinal: 1,
+        }),
+        conexion('c2', 'matriz-2', 'tv-2', {
+          puerto_origen_id: salida.id, puerto_origen_ordinal: 2,
+          puerto_destino_id: entrada.id, puerto_destino_ordinal: 2,
+        }),
+      ],
+    });
+    const bloque = (id: string) => escena.bloques.find((b) => b.equipo_id === id)!;
+    const linea = (id: string) => escena.lineas.find((l) => l.conexion_id === id)!;
+
+    assert.equal(linea('c1').puntos[0].y, bloque('matriz-1').salidas[0].y);
+    assert.equal(linea('c1').puntos.at(-1)!.y, bloque('tv-1').entradas[0].y);
+    assert.equal(linea('c2').puntos[0].y, bloque('matriz-2').salidas[1].y);
+    assert.equal(linea('c2').puntos.at(-1)!.y, bloque('tv-2').entradas[1].y);
+    assert.equal(bloque('matriz-2').salidas[1].nombre, 'OUTPUT 2');
+  });
+
   it('un equipo sin puertos en el catálogo sigue teniendo bloque', () => {
     const entrada = entradaTipo();
     entrada.puertosPorArticulo.delete('a-caja');
@@ -245,5 +281,247 @@ describe('construirDiagrama', () => {
     assert.equal(caja.entradas.length + caja.salidas.length, 0);
     // Y su cable sale igualmente, a media cabecera.
     assert.equal(escena.lineas.length, 2);
+  });
+});
+
+// ---------------------------------------------------------------------
+// Filtro de señal
+// ---------------------------------------------------------------------
+
+/**
+ * Una sala con las nueve señales sobre la mesa, que es lo que hace visible el
+ * filtro. El tramo códec → pantalla lleva un puerto catalogado como `otro`
+ * (un DisplayPort del CSV) sirviendo una conexión declarada `hdmi`: esa
+ * discrepancia existe hoy en los datos y produce aviso, no bloqueo.
+ */
+function entradaMixta(): EntradaDiagrama {
+  const equipos = [
+    equipo('e-caja', 'Caja de conexiones', 'a-caja'),
+    equipo('e-codec', 'Codec Cisco', 'a-codec'),
+    equipo('e-tv', 'Pantalla', 'a-tv'),
+    equipo('e-suelto', 'Altavoz', 'a-alt'),
+  ];
+  const puertosPorArticulo = new Map<string, Puerto[]>([
+    ['a-caja', [puerto('p-caja-out', 'a-caja', 'HDMI OUT', 'salida')]],
+    [
+      'a-codec',
+      [
+        puerto('p-codec-in', 'a-codec', 'HDMI IN 1', 'entrada', 'hdmi', 1),
+        // Serigrafiado DisplayPort, catalogado `otro`: el cajón de sastre.
+        puerto('p-codec-dp', 'a-codec', 'DP OUT', 'salida', 'otro', 2),
+        puerto('p-codec-lan', 'a-codec', 'LAN PoE', 'bidireccional', 'red', 3),
+        puerto('p-codec-mic', 'a-codec', 'MIC IN 1', 'entrada', 'microfono', 4),
+      ],
+    ],
+    ['a-tv', [puerto('p-tv-in', 'a-tv', 'HDMI IP1', 'entrada')]],
+    ['a-alt', [puerto('p-alt-in', 'a-alt', 'LINE IN', 'entrada', 'audio_linea')]],
+  ]);
+  const conexiones = [
+    conexion('c1', 'e-caja', 'e-codec', { senal: 'hdmi', puerto_destino_id: 'p-codec-in' }),
+    conexion('c2', 'e-caja', 'e-codec', { senal: 'red' }),
+    conexion('c3', 'e-codec', 'e-tv', {
+      senal: 'hdmi',
+      puerto_origen_id: 'p-codec-dp',
+      puerto_destino_id: 'p-tv-in',
+    }),
+    conexion('c4', 'e-codec', 'e-suelto', {
+      senal: 'audio_linea',
+      puerto_destino_id: 'p-alt-in',
+    }),
+    conexion('c5', 'e-caja', 'e-codec', { senal: 'microfono', puerto_destino_id: 'p-codec-mic' }),
+    conexion('c6', 'e-codec', 'e-tv', { senal: 'audio_altavoz' }),
+    conexion('c7', 'e-caja', 'e-codec', { senal: 'usb' }),
+    conexion('c8', 'e-caja', 'e-codec', { senal: 'control' }),
+    conexion('c9', 'e-caja', 'e-tv', { senal: 'alimentacion' }),
+    conexion('c10', 'e-caja', 'e-tv', { senal: 'otro' }),
+  ];
+  return { equipos, puertosPorArticulo, conexiones };
+}
+
+/** Las señales de las líneas dibujadas, sin repetir y ordenadas. */
+function senalesDibujadas(entrada: EntradaDiagrama): Senal[] {
+  return [...new Set(construirDiagrama(entrada).lineas.map((l) => l.senal))].sort();
+}
+
+describe('normalizarFiltroSenal', () => {
+  it('acepta exactamente las tres cadenas de la lista blanca', () => {
+    assert.equal(normalizarFiltroSenal('video'), 'video');
+    assert.equal(normalizarFiltroSenal('audio'), 'audio');
+    assert.equal(normalizarFiltroSenal('red'), 'red');
+  });
+
+  it('lo vacío, lo desconocido y lo repetido devuelven la vista completa', () => {
+    assert.equal(normalizarFiltroSenal(undefined), null);
+    assert.equal(normalizarFiltroSenal(null), null);
+    assert.equal(normalizarFiltroSenal(''), null);
+    assert.equal(normalizarFiltroSenal('VIDEO'), null);
+    assert.equal(normalizarFiltroSenal('hdmi'), null);
+    assert.equal(normalizarFiltroSenal("video'; drop table conexiones;--"), null);
+    // Un parámetro repetido llega a Next como array.
+    assert.equal(normalizarFiltroSenal(['video', 'audio']), null);
+    assert.equal(normalizarFiltroSenal(['video']), null);
+  });
+
+  it('no se cuela nada heredado de Object.prototype', () => {
+    assert.equal(normalizarFiltroSenal('toString'), null);
+    assert.equal(normalizarFiltroSenal('constructor'), null);
+  });
+});
+
+describe('senalEnFiltro', () => {
+  it('sin filtro pasa cualquier señal', () => {
+    for (const s of Object.keys(PREFIJO_CABLE) as Senal[]) {
+      assert.equal(senalEnFiltro(s, null), true);
+    }
+  });
+
+  it('cada filtro deja pasar solo sus señales', () => {
+    assert.deepEqual([...SENALES_POR_FILTRO.video], ['hdmi']);
+    assert.deepEqual(
+      [...SENALES_POR_FILTRO.audio].sort(),
+      ['audio_altavoz', 'audio_linea', 'microfono'],
+    );
+    assert.deepEqual([...SENALES_POR_FILTRO.red], ['red']);
+  });
+});
+
+describe('construirDiagrama con filtro de señal', () => {
+  it('sin filtro se dibuja todo, incluida `otro`', () => {
+    const escena = construirDiagrama(entradaMixta());
+    assert.equal(escena.lineas.length, 10);
+    assert.ok(escena.lineas.some((l) => l.senal === 'otro'));
+  });
+
+  it('vídeo son solo las líneas hdmi', () => {
+    assert.deepEqual(senalesDibujadas({ ...entradaMixta(), filtroSenal: 'video' }), ['hdmi']);
+  });
+
+  it('audio son línea, altavoz y micrófono', () => {
+    assert.deepEqual(senalesDibujadas({ ...entradaMixta(), filtroSenal: 'audio' }), [
+      'audio_altavoz',
+      'audio_linea',
+      'microfono',
+    ]);
+  });
+
+  it('red son solo las líneas de red', () => {
+    assert.deepEqual(senalesDibujadas({ ...entradaMixta(), filtroSenal: 'red' }), ['red']);
+  });
+
+  it('usb, control, alimentación y otro no salen en ninguna vista filtrada', () => {
+    const fuera: Senal[] = ['usb', 'control', 'alimentacion', 'otro'];
+    for (const filtro of ['video', 'audio', 'red'] as const) {
+      const senales = senalesDibujadas({ ...entradaMixta(), filtroSenal: filtro });
+      for (const s of fuera) {
+        assert.equal(senales.includes(s), false, `${s} se coló en la vista de ${filtro}`);
+      }
+    }
+  });
+
+  it('los identificadores son los de la colección completa: la brida ya está puesta', () => {
+    const completa = construirDiagrama(entradaMixta());
+    const todos = new Map(completa.lineas.map((l) => [l.conexion_id, l.identificador]));
+    // c1 y c3 son las dos de vídeo: HD-1000 y HD-1001 en la vista completa.
+    assert.equal(todos.get('c1'), 'HD-1000');
+    assert.equal(todos.get('c3'), 'HD-1001');
+
+    for (const filtro of ['video', 'audio', 'red'] as const) {
+      const escena = construirDiagrama({ ...entradaMixta(), filtroSenal: filtro });
+      for (const linea of escena.lineas) {
+        assert.equal(
+          linea.identificador,
+          todos.get(linea.conexion_id),
+          `${linea.conexion_id} cambió de identificador en la vista de ${filtro}`,
+        );
+      }
+    }
+  });
+
+  it('cada serie conserva su prefijo dentro de la vista filtrada', () => {
+    const escena = construirDiagrama({ ...entradaMixta(), filtroSenal: 'audio' });
+    assert.deepEqual(
+      escena.lineas.map((l) => l.identificador).sort(),
+      ['ALT-1000', 'AUD-1000', 'MIC-1000'],
+    );
+  });
+
+  it('las conexiones que esconde el filtro no cuentan como omitidas', () => {
+    const entrada = entradaMixta();
+    entrada.conexiones.push(conexion('c11', 'e-codec', 'e-fantasma', { senal: 'red' }));
+    assert.equal(construirDiagrama(entrada).omitidas, 1);
+    // En vídeo, la del fantasma es de red: ni se dibuja ni se cuenta.
+    assert.equal(construirDiagrama({ ...entrada, filtroSenal: 'video' }).omitidas, 0);
+    assert.equal(construirDiagrama({ ...entrada, filtroSenal: 'red' }).omitidas, 1);
+  });
+
+  it('los bloques de todos los equipos se conservan: filtra señal, no inventario', () => {
+    const completa = construirDiagrama(entradaMixta());
+    for (const filtro of ['video', 'audio', 'red'] as const) {
+      const escena = construirDiagrama({ ...entradaMixta(), filtroSenal: filtro });
+      assert.deepEqual(
+        escena.bloques.map((b) => b.equipo_id).sort(),
+        completa.bloques.map((b) => b.equipo_id).sort(),
+        `faltan bloques en la vista de ${filtro}`,
+      );
+    }
+  });
+
+  it('las columnas se derivan de lo visible: quien solo tiene red no emite en la vista de vídeo', () => {
+    const escena = construirDiagrama({ ...entradaMixta(), filtroSenal: 'audio' });
+    const porId = new Map(escena.bloques.map((b) => [b.equipo_id, b]));
+    // En audio, el altavoz recibe (c4) y la pantalla también (c6): ninguno
+    // queda en la columna de los desconectados, y la caja sigue emitiendo (c5).
+    assert.ok(porId.get('e-caja')!.x < porId.get('e-codec')!.x);
+    assert.ok(porId.get('e-codec')!.x < porId.get('e-suelto')!.x);
+  });
+
+  it('con soloConectados, el puerto de una conexión visible se queda aunque su señal catalogada discrepe', () => {
+    const escena = construirDiagrama({
+      ...entradaMixta(),
+      filtroSenal: 'video',
+      soloConectados: true,
+    });
+    const codec = escena.bloques.find((b) => b.equipo_id === 'e-codec')!;
+    const dp = codec.salidas.find((f) => f.nombre === 'DP OUT');
+    assert.ok(dp, 'el puerto catalogado `otro` sirve una conexión hdmi visible: sigue ahí');
+    assert.equal(dp!.conectado, true);
+    // Y la línea se ancla en su fila, no a media cabecera.
+    const l3 = escena.lineas.find((l) => l.conexion_id === 'c3')!;
+    assert.equal(l3.puntos[0].y, dp!.y);
+    // El micrófono, en cambio, no tiene cable visible en la vista de vídeo.
+    assert.equal(
+      codec.entradas.some((f) => f.nombre === 'MIC IN 1'),
+      false,
+    );
+  });
+
+  it('un filtro sin coincidencias deja la escena sin líneas, pero con sus bloques', () => {
+    const entrada: EntradaDiagrama = {
+      ...entradaMixta(),
+      conexiones: entradaMixta().conexiones.filter((c) => c.senal === 'otro'),
+      filtroSenal: 'video',
+    };
+    const escena = construirDiagrama(entrada);
+    assert.equal(escena.lineas.length, 0);
+    assert.equal(escena.omitidas, 0);
+    assert.equal(escena.bloques.length, 4);
+  });
+
+  it('no muta la entrada', () => {
+    const entrada = entradaMixta();
+    const antes = JSON.stringify({
+      conexiones: entrada.conexiones,
+      equipos: entrada.equipos,
+      puertos: [...entrada.puertosPorArticulo],
+    });
+    construirDiagrama({ ...entrada, filtroSenal: 'video', soloConectados: true });
+    assert.equal(
+      JSON.stringify({
+        conexiones: entrada.conexiones,
+        equipos: entrada.equipos,
+        puertos: [...entrada.puertosPorArticulo],
+      }),
+      antes,
+    );
   });
 });

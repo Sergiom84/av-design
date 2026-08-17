@@ -1,58 +1,33 @@
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
-import { obtenerDatosPlanoSala } from '@/lib/datos-plano';
-import { categoriasDeMobiliario, nombreDePlantilla } from '@/lib/datos';
+import { guardarEditorConexiones } from '@/app/acciones-diagrama';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { EditorPlanoSala } from '@/components/plano-editor/editor-plano-sala';
-import { OrigenDiagrama } from '@/components/plano-editor/origen-diagrama';
+import { EditorConexiones } from '@/components/diagrama/editor-conexiones';
+import { fichaDeSala } from '../datos-ficha';
+import { obtenerDatosPlanoSala } from '@/lib/datos-plano';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Diagrama: el plano en planta de la sala, editable.
+ * Diagrama: el editor de conexiones puerto a puerto.
  *
- * No dibuja nada aparte. Edita las medidas, la mesa, el mobiliario, las
- * posiciones de los equipos y las rosetas —los mismos datos que ya alimentan
- * el croquis de Resumen, el cálculo de cable y la lista de material— y el
- * croquis se redibuja solo. No hay imagen guardada, ni JSON de lienzo, ni
- * segunda fuente de verdad.
- *
- * La primera vez pregunta de dónde sale el plano. Una vez contestado no
- * vuelve a preguntarlo: es la diferencia entre decidirlo una vez y pagar un
- * peaje en cada visita a cada una de las 390 salas.
+ * La misma fuente normalizada que alimenta la tabla y los metros de Cableado.
  */
 export default async function DiagramaSala({ params }: PageProps<'/salas/[id]/diagrama'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const datos = await obtenerDatosPlanoSala(id);
-  if (!datos) notFound();
+  const [ficha, datosPlano] = await Promise.all([fichaDeSala(id), obtenerDatosPlanoSala(id)]);
+  if (!ficha || !datosPlano) notFound();
 
-  if (!datos.sala.diagrama_iniciado_en) {
-    return (
-      <OrigenDiagrama
-        salaId={datos.sala.id}
-        version={datos.sala.diagrama_version}
-        cerrado={datos.cerrado}
-      />
-    );
-  }
-
-  const [categorias, plantilla] = await Promise.all([
-    categoriasDeMobiliario(),
-    nombreDePlantilla(datos.sala.diagrama_plantilla_id),
-  ]);
-
-  return (
-    <EditorPlanoSala
-      sala={datos.sala}
-      equipos={datos.equipos}
-      conexiones={datos.conexiones}
-      tomas={datos.tomas}
-      muebles={datos.muebles}
-      categoriasMobiliario={categorias}
-      plantillaBase={plantilla}
-      cerrado={datos.cerrado}
-    />
-  );
+  return <EditorConexiones
+    sala={ficha.sala}
+    version={ficha.sala.diagrama_version}
+    conexiones={ficha.conexiones}
+    equipos={ficha.equipos}
+    puertos={ficha.puertos}
+    articulos={ficha.articulos}
+    cerrado={datosPlano.cerrado}
+    guardar={guardarEditorConexiones}
+  />;
 }

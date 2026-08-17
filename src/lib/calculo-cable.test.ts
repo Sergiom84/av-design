@@ -7,6 +7,7 @@ import {
   calcularConexion,
   calcularRecorrido,
   dimensionarCanalizacion,
+  longitudPolilinea,
 } from './calculo-cable';
 import {
   Articulo,
@@ -112,6 +113,14 @@ const CAT6A: Articulo = {
 };
 
 describe('recorrido físico', () => {
+  test('la polilínea suma cada segmento en tres dimensiones y respeta el orden', () => {
+    const puntos = [
+      { orden: 0, x_m: 3, y_m: 0, z_m: 2.5 },
+      { orden: 1, x_m: 3, y_m: 2, z_m: 2.5 },
+    ];
+    assert.equal(longitudPolilinea(PANTALLA.posicion, puntos, CAJA.posicion), 4.75);
+  });
+
   test('por falso techo sube, recorre en ortogonal y baja', () => {
     const r = calcularRecorrido(PANTALLA.posicion, CAJA.posicion, 'falso_techo', SALA);
     // sube 2,7 − 1,5 = 1,2 · horizontal |3−3| + |0−2| = 2 · baja 2,7 − 0,75 = 1,95
@@ -178,6 +187,23 @@ describe('longitud de la tirada', () => {
     assert.equal(r.holgura_origen_m, 0.35); // pantalla
     assert.equal(r.holgura_destino_m, 0.5); // caja de conexiones
     assert.equal(r.longitud_m, 6); // 5,15 + 0,35 + 0,5
+  });
+
+  test('los puntos manuales sustituyen el recorrido automático pero conservan holgura y margen', () => {
+    const r = calcularConexion(
+      {
+        ...conexion,
+        puntos_paso: [
+          { orden: 1, x_m: 3, y_m: 2, z_m: 2.5 },
+          { orden: 0, x_m: 3, y_m: 0, z_m: 2.5 },
+        ],
+      },
+      SALA,
+      equipos,
+      articulos,
+    )!;
+    assert.equal(r.detalle.recorrido_m, 4.75);
+    assert.equal(r.longitud_m, 5.6);
   });
 
   test('ajusta al latiguillo comercial inmediatamente superior', () => {

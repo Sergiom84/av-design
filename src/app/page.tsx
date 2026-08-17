@@ -113,15 +113,24 @@ export default async function Panel() {
 
         <Tarjeta titulo="Cómo se trabaja">
           <ol className="list-decimal ml-5 space-y-2">
-            <li>
-              Rellenas una vez las medidas de cada{' '}
-              <Enlace href="/plantillas">plantilla</Enlace> (SALA TP aforo 8, ULTRALIGERA
-              QR aforo 4…).
-            </li>
-            <li>
-              Creas una <Enlace href="/salas">sala</Enlace> desde la plantilla. Hereda
-              medidas y equipamiento; solo corriges lo que cambie.
-            </li>
+            {c.plantillas === 0 ? (
+              <li>
+                Creas una <Enlace href="/salas/nueva">sala en blanco</Enlace> con sus
+                medidas reales. Más adelante puedes guardar una como plantilla si se repite.
+              </li>
+            ) : (
+              <>
+                <li>
+                  Rellenas una vez las medidas de cada{' '}
+                  <Enlace href="/plantillas">plantilla</Enlace> (SALA TP aforo 8,
+                  ULTRALIGERA QR aforo 4…).
+                </li>
+                <li>
+                  Creas una <Enlace href="/salas">sala</Enlace> desde la plantilla.
+                  Hereda medidas y equipamiento; solo corriges lo que cambie.
+                </li>
+              </>
+            )}
             <li>Colocas los equipos en la sala y defines qué conecta con qué.</li>
             <li>
               La app calcula los metros de cada tirada por su ruta real y devuelve la lista

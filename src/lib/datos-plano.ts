@@ -1,7 +1,14 @@
 import 'server-only';
 import { sql } from './db';
 import { esUuid } from './uuid';
-import type { Conexion, EquipoEnSala, MuebleEnSala, Sala, TomaRed } from './tipos';
+import type {
+  Conexion,
+  EquipoEnSala,
+  MuebleEnSala,
+  PuertaEnSala,
+  Sala,
+  TomaRed,
+} from './tipos';
 
 /**
  * Lo que necesita el editor del plano y nada más.
@@ -20,6 +27,7 @@ export interface DatosPlanoSala {
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles: MuebleEnSala[];
+  puertas: PuertaEnSala[];
   /** La obra cerrada es de solo lectura, y eso se decide en el servidor. */
   cerrado: boolean;
 }
@@ -47,7 +55,8 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasTomas, filasMuebles] = await Promise.all([
+  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles, filasPuertas] =
+    await Promise.all([
     sql<Fila[]>`select id, sala_id, articulo_id, nombre, cantidad, extremo,
                        x_m, y_m, z_m, posicion_confirmada, rotacion_grados,
                        origen_plantilla_linea_id, toma_red_id
@@ -55,6 +64,10 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     sql<Fila[]>`select id, sala_id, origen_id, destino_id, senal, ruta,
                        longitud_manual_m, articulo_cable_id, notas
                 from conexiones where sala_id = ${id} order by creado_en, id`,
+    sql<Fila[]>`select p.id, p.conexion_id, p.orden, p.x_m, p.y_m, p.z_m
+                from conexion_puntos_paso p
+                join conexiones c on c.id = p.conexion_id
+                where c.sala_id = ${id} order by p.conexion_id, p.orden`,
     sql<Fila[]>`select id, sala_id, codigo, ubicacion, x_m, y_m, z_m, notas
                 from tomas_red where sala_id = ${id} order by codigo`,
     sql<Fila[]>`select id, sala_id, mobiliario_id, nombre, forma,
@@ -62,6 +75,8 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
                        rotacion_grados, posicion_confirmada,
                        origen_plantilla_mobiliario_id, orden
                 from sala_mobiliario where sala_id = ${id} order by orden, creado_en`,
+    sql<Fila[]>`select id, sala_id, pared, posicion_m, anchura_m, altura_m, orden
+                from puertas where sala_id = ${id} order by orden, creado_en`,
   ]);
 
   const sala: Sala = {
@@ -130,6 +145,15 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
       notas: s(f.notas),
+      puntos_paso: filasPuntos
+        .filter((p) => String(p.conexion_id) === String(f.id))
+        .map((p) => ({
+          id: String(p.id),
+          orden: Number(p.orden),
+          x_m: Number(p.x_m),
+          y_m: Number(p.y_m),
+          z_m: Number(p.z_m),
+        })),
     })),
     muebles: filasMuebles.map((f) => ({
       id: String(f.id),
@@ -146,6 +170,15 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       rotacion_grados: Number(f.rotacion_grados ?? 0),
       posicion_confirmada: f.posicion_confirmada === true,
       origen_plantilla_mobiliario_id: s(f.origen_plantilla_mobiliario_id),
+      orden: Number(f.orden ?? 100),
+    })),
+    puertas: filasPuertas.map((f) => ({
+      id: String(f.id),
+      sala_id: String(f.sala_id),
+      pared: (f.pared as PuertaEnSala['pared']) ?? 'sur',
+      posicion_m: Number(f.posicion_m ?? 0),
+      anchura_m: n(f.anchura_m),
+      altura_m: n(f.altura_m),
       orden: Number(f.orden ?? 100),
     })),
     tomas: filasTomas.map((f) => ({

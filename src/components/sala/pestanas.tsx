@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useSelectedLayoutSegment } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { PESTANAS } from './lista-pestanas';
+
 /**
  * La barra de pestañas de la ficha. Cada pestaña es una ruta, no un estado:
  * se puede enlazar, se vuelve con el botón del navegador y funciona sin
@@ -41,19 +43,13 @@ function Flecha({ direccion }: { direccion: 'izquierda' | 'derecha' }) {
     </svg>
   );
 }
-const PESTANAS = [
-  { segmento: null, etiqueta: 'Resumen' },
-  { segmento: 'diagrama', etiqueta: 'Diagrama' },
-  { segmento: 'equipamiento', etiqueta: 'Equipamiento' },
-  { segmento: 'cableado', etiqueta: 'Cableado' },
-  { segmento: 'logistica', etiqueta: 'Logística y ciclo de vida' },
-  { segmento: 'documentos', etiqueta: 'Documentos' },
-] as const;
+
+// La lista vive en `lista-pestanas.ts`, que no es cliente: así una guarda
+// puede leerla sin montar React y comprobar que cada pestaña tiene su ruta.
 
 export function PestanasDeSala({ salaId }: { salaId: string }) {
   const activo = useSelectedLayoutSegment();
   const contenedorRef = useRef<HTMLElement>(null);
-  const activaRef = useRef<HTMLAnchorElement>(null);
   const [desborde, setDesborde] = useState({ izquierda: false, derecha: false });
 
   const medir = useCallback(() => {
@@ -78,17 +74,28 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
   }, [medir]);
 
   useEffect(() => {
-    const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    activaRef.current?.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
-      behavior: reducido ? 'auto' : 'smooth',
-    });
-    // Un scroll instantáneo (`auto`, con `prefers-reduced-motion` o sin él
-    // en salas ya visibles) puede no disparar el evento `scroll` con tiempo
+    const el = contenedorRef.current;
+    if (!el) return;
+
+    // El desplazamiento es instantáneo y no `smooth`, aunque no haya
+    // `prefers-reduced-motion`. Esto se comprobó midiendo: con `smooth` la
+    // barra no se movía ni un píxel —ni a 320 px ni en escritorio, ni al
+    // entrar ni al cambiar de pestaña—, y con `auto` se colocaba en su sitio.
+    // Un entorno donde el navegador ignora el desplazamiento suave deja la
+    // pestaña activa fuera de la vista sin decir nada, que es peor que no
+    // animar: esto no es una animación que alguien haya pedido, es colocar la
+    // vista al abrir una página. Sin ramas, misma conducta para todo el mundo.
+    //
+    // La activa se busca por `aria-current="page"`, que ya está ahí para el
+    // lector de pantalla, en vez de por una `ref` compartida entre los ocho
+    // enlaces: una sola `ref` para varios hermanos depende del orden en que
+    // React monta y desmonta, y no hace falta correr ese riesgo.
+    const activa = el.querySelector<HTMLAnchorElement>('[aria-current="page"]');
+    activa?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+
+    // Un scroll instantáneo puede no disparar el evento `scroll` con tiempo
     // para el próximo pintado: se remide aquí mismo en vez de fiarlo solo al
-    // listener. Con `smooth` esta medida es la de partida; el listener de
-    // 'scroll' recoge el resto mientras la animación sigue en marcha.
+    // listener, que si no dejaría las flechas de desbordamiento mintiendo.
     medir();
   }, [activo, medir]);
 
@@ -109,7 +116,6 @@ export function PestanasDeSala({ salaId }: { salaId: string }) {
           return (
             <Link
               key={etiqueta}
-              ref={activa ? activaRef : undefined}
               // Literal de plantilla sin cast: typedRoutes valida el segmento y
               // un typo en PESTANAS deja de compilar.
               href={segmento === null ? `/salas/${salaId}` : `/salas/${salaId}/${segmento}`}

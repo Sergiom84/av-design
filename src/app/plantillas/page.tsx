@@ -1,5 +1,5 @@
 import { hayConfiguracion } from '@/lib/db';
-import { listarPlantillas, tiradasDePlantillas } from '@/lib/datos';
+import { listarPlantillas, puertosDeArticulos, tiradasDePlantillas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera } from '@/components/ui';
 import { FichaDePlantilla } from '@/components/plantilla/ficha';
@@ -24,6 +24,9 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
     listarPlantillas(),
     tiradasDePlantillas(),
   ]);
+  const puertos = await puertosDeArticulos(
+    plantillas.flatMap((p) => p.lineas.map((l) => l.articulo_id).filter((id): id is string => Boolean(id))),
+  );
   const sinMedidas = plantillas.filter((p) => p.largo_m == null).length;
 
   return (
@@ -51,6 +54,7 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
             plantilla={p}
             lineas={p.lineas}
             tiradas={tiradas.filter((t) => t.plantilla_id === p.id)}
+            puertos={puertos}
             orden={i + 1}
             abierta={p.id === idAbierta}
           />

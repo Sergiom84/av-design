@@ -44,6 +44,12 @@ desde el móvil y cierre de obra con bajas.
 El detalle de las fases está en `docs/02-propuesta-app.md`. El análisis del flujo
 real de XTEN-AV, con qué copiar y qué no, en `docs/06-xtenav-flujo-creacion.md`.
 
+## Orden de validación visual
+
+Toda revisión funcional visual empieza en navegador de escritorio y recorre el
+flujo completo. La vista móvil se prueba al final, como validación de cierre;
+nunca como primer recorrido.
+
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind 4 · Postgres · despliegue en
@@ -80,19 +86,29 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   nota, no bloquea. La recepción es por pedido (`movimientos.quien`), no un
   hito. Los técnicos y sus roles se siembran de `data/tecnicos.csv` con la
   convención `fuente` csv/app.
-- **La ficha de sala son seis pestañas por ruta** (`salas/[id]`, `/diagrama`,
-  `/equipamiento`, `/cableado`, `/logistica`, `/documentos`) con layout
-  compartido. Las acciones que tocan la sala revalidan con alcance `layout`;
-  `typedRoutes` está activado y `next build` caza los enlaces rotos.
+- **La ficha de sala son ocho pestañas por ruta** (`salas/[id]`, `/plano`,
+  `/diagrama`, `/acotaciones`, `/equipamiento`, `/cableado`, `/logistica`,
+  `/documentos`) con layout compartido. Las acciones que tocan la sala
+  revalidan con alcance `layout`; `typedRoutes` está activado y `next build`
+  caza los enlaces rotos. Serán siete: `/cableado` se retira cuando
+  `/diagrama` cubra su flujo, y no antes, porque hoy es la única superficie
+  del esquema de conexiones.
+- **`Plano` es dónde está cada cosa; `Diagrama` es qué conecta con qué.** Eran
+  la misma pestaña y el nombre describía la que no era. La posición física
+  vive en `/plano`; el editor de conexiones puerto a puerto, en `/diagrama`.
+  En la base y en los símbolos quedan nombres de cuando la pestaña se llamaba
+  así (`salas.diagrama_version`, `guardarDiagramaSala`, `OrigenDiagrama`):
+  renombrarlos es una migración aparte, con su propio riesgo, y no se hace de
+  paso.
 - **El plano se edita donde vive, y no se guarda como imagen.** La pestaña
-  `Diagrama` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
+  `Plano` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
   medidas, mesa, mobiliario, posiciones de equipo y rosetas: los mismos datos
   que alimentan
   el croquis de Resumen y el cálculo de cable. No hay PNG, ni SVG final, ni
   JSON de lienzo en la base. El lienzo pinta la misma `GeometriaPlano` que el
   croquis, para que una posición confirmada dé el mismo dibujo en los dos
   sitios. En código el plano en planta se llama `plano-editor`: `diagrama` a
-  secas ya es el esquema de conexiones de Cableado.
+  secas es el esquema de conexiones.
 - **Colocado y estimado son cosas distintas.** `sala_equipos.posicion_confirmada`
   las separa, porque `(0,0,0)` significaba a la vez «sin colocar» y la esquina
   de la sala, que es justo donde va el rack. Un equipo sin confirmar se dibuja
@@ -141,7 +157,16 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   una plantilla con sillas sí pasa la sala a `manuales`. Y añadir una silla a
   mano **materializa antes las del aforo en su sitio** con la misma
   `sillasAlrededor()`: sin eso una sala de aforo ocho pasaba a dibujar nueve, y
-  apagarlas sin materializarlas las habría hecho desaparecer.
+  apagarlas sin materializarlas las habría hecho desaparecer. Las salas que ya
+  existen se pasan a `manuales` con `npm run migrar:sillas`, un paso manual del
+  despliegue que **importa** esa geometría en vez de repetirla en SQL: la sala
+  sin mesa, sin aforo o donde no caben todas se queda en `derivadas` y se sigue
+  dibujando como hoy. Contra una base que no sea la de Docker se ejecuta **a
+  mano y nombrando la base de destino** (`--confirmo=<base>`), nunca desde un
+  despliegue automático; en seco se puede mirar producción sin ceremonia. Y lo
+  que escribe queda marcado con `sala_mobiliario.fuente = 'backfill'`, misma
+  convención que `precios` y `puertos`: el defecto de la columna es `app`, así
+  que la silla que colocó una persona no la borra el rollback documentado.
 - **La mesa principal es una y no se instancia.** Vive en `salas.mesa_*` y es el
   elemento canónico. El buscador ofrece `Mesa principal` para poder encontrarla:
   elegirla selecciona la que hay y abre su inspector, no crea una fila. El
@@ -316,6 +341,9 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 | `npm run test:diagrama` | Guardas del guardado del plano contra Postgres real |
 | `npm run test:plantillas` | Ida y vuelta sala ↔ plantilla contra Postgres real |
 | `npm run test:guardas-sala` | Guardas de «proyecto cerrado» contra Postgres real |
+| `npm run test:migracion` | La migración del rol de mobiliario sobre la versión anterior |
+| `npm run test:backfill-sillas` | Paridad del croquis antes y después de materializar las sillas |
+| `npm run migrar:sillas` | Materializa las sillas del aforo como filas. En seco; escribe con `-- --aplicar`. Paso manual, posterior a `db:migrate`; contra producción se ejecuta a mano y exige `--confirmo=<nombre_de_la_base>` |
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
 | `npm run usuarios:admin` | Crea o restablece el administrador. Paso manual del despliegue: el alta de usuarios vive dentro de la aplicación y a la aplicación se entra con un usuario. Contra una base que no sea local exige `--confirmo=<nombre_de_la_base>` |

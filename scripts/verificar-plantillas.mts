@@ -61,6 +61,9 @@ const NOMBRE_CARRERA = 'TEST plantillas carrera';
 const NOMBRE_ENCOGIDA = 'TEST plantillas encogida';
 /** Lo mismo pero con el equipo sin colocar: eso sí puede nacer. */
 const NOMBRE_SIN_COLOCAR = 'TEST plantillas sin colocar';
+const articuloBocasId = randomUUID();
+const puertoSalidaId = randomUUID();
+const puertoEntradaId = randomUUID();
 
 async function limpiar() {
   await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL}, ${NOMBRE_SIN_COLOCAR})`;
@@ -70,6 +73,7 @@ async function limpiar() {
     'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
   );
   await sql`delete from plantillas_sala where nombre like ${NOMBRE_PLANTILLA + '%'}`;
+  await sql`delete from articulos where id = ${articuloBocasId}`;
 }
 
 /** La escena que se compara: todo lo que dibuja el croquis, sin ids. */
@@ -92,14 +96,24 @@ async function escenaDe(salaId: string) {
     from sala_mobiliario where sala_id = ${salaId} order by orden, nombre`;
 
   const tiradas = await sql<Array<Record<string, unknown>>>`
-    select o.nombre as origen, d.nombre as destino, c.senal, c.ruta, c.notas
+    select o.nombre as origen, d.nombre as destino, c.senal, c.ruta, c.notas,
+           bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
+           bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
     from conexiones c
     join sala_equipos o on o.id = c.origen_id
     join sala_equipos d on d.id = c.destino_id
+    left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
+    left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
     where c.sala_id = ${salaId}
     order by o.nombre, d.nombre, c.senal`;
 
-  return JSON.parse(JSON.stringify({ sala, equipos, muebles, tiradas }));
+  // Las puertas viajan en los dos sentidos, con su estado: una sin medir
+  // vuelve sin medir, no con una anchura inventada.
+  const puertas = await sql<Array<Record<string, unknown>>>`
+    select pared, posicion_m, anchura_m, altura_m
+    from puertas where sala_id = ${salaId} order by orden, pared`;
+
+  return JSON.parse(JSON.stringify({ sala, equipos, muebles, tiradas, puertas }));
 }
 
 try {
@@ -147,8 +161,11 @@ try {
     values (${salaId}, ${NOMBRE_SALA}, 'SALA TP', 8, 6, 4, 3,
             2.4, 1.2, 73, 2.1, 1.4, 30)`;
 
-  const [articulo] = await sql<Array<{ id: string }>>`
-    select id from articulos where activo order by modelo limit 1`;
+  await sql`insert into articulos (id, tipo, categoria, modelo) values (${articuloBocasId}, 'equipo', 'TEST', 'TEST PLANTILLAS BOCAS')`;
+  await sql`insert into puertos (id, articulo_id, nombre, total, sentido, senal) values
+    (${puertoSalidaId}, ${articuloBocasId}, 'OUTPUT', 2, 'salida', 'hdmi'),
+    (${puertoEntradaId}, ${articuloBocasId}, 'INPUT', 2, 'entrada', 'hdmi')`;
+  const articulo = { id: articuloBocasId };
 
   const equipo = async (
     nombre: string,
@@ -194,9 +211,14 @@ try {
     'la coordenada tecleada en Equipamiento coloca el equipo',
   );
 
-  await sql`
+  const [conexionDetallada] = await sql<Array<{ id: string }>>`
     insert into conexiones (sala_id, origen_id, destino_id, senal, ruta, notas)
-    values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada')`;
+    values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada') returning id`;
+  await sql.begin(async (tx) => {
+    await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+      (${conexionDetallada.id}, 'origen', ${caja}, ${puertoSalidaId}, 2),
+      (${conexionDetallada.id}, 'destino', ${pantalla}, ${puertoEntradaId}, 1)`;
+  });
 
   // Dos sillas: una colocada y girada, otra sin colocar. Las dos tienen que
   // volver, y la segunda tiene que volver SIN colocar.
@@ -212,6 +234,15 @@ try {
     insert into sala_mobiliario
       (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, orden)
     values (${salaId}, ${sillaCat.id}, 'Silla', 'circulo', 0.5, 0.5, 1)`;
+
+  // Dos puertas: una medida y una sin medir. Las dos tienen que viajar, y la
+  // segunda tiene que volver SIN medir.
+  await sql`
+    insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+    values (${salaId}, 'sur', 1.2, 0.9, 2.1, 1)`;
+  await sql`
+    insert into puertas (sala_id, pared, orden, posicion_m)
+    values (${salaId}, 'este', 2, 0.8)`;
 
   const antes = await escenaDe(salaId);
 
@@ -297,6 +328,10 @@ try {
   afirmar(
     JSON.stringify(antes.muebles) === JSON.stringify(despues.muebles),
     'el mobiliario vuelve con sus medidas, su sitio y su giro, y lo no colocado sigue sin colocar',
+  );
+  afirmar(
+    JSON.stringify(antes.puertas) === JSON.stringify(despues.puertas),
+    'las puertas vuelven con su pared, su posición y su estado, y la sin medir sigue sin medir',
   );
 
   // Con mobiliario heredado no puede quedar la fuente derivada activa: el
@@ -560,6 +595,44 @@ try {
     Number(huellaEncogida.cuantos) === 0,
     'y no deja ni un equipo ni un mueble sueltos: o cabe todo o no nace nada',
   );
+
+  // La misma regla con una puerta: la plantilla la coloca cerca del final de
+  // su pared de 6 m, y una sala corregida a 4 deja el hueco en la calle. Es
+  // `puertasFueraDePared`, la misma guarda del guardado manual, y el rechazo
+  // es atómico: ni sala, ni puertas huérfanas.
+  const plantillaPuertaLejos = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaPuertaLejos}, ${NOMBRE_PLANTILLA + ' puerta lejos'}, 'TEST', 8, 6, 4, 3)`;
+  await sql`
+    insert into puertas (plantilla_id, pared, posicion_m, anchura_m, altura_m, orden)
+    values (${plantillaPuertaLejos}, 'sur', 4.8, 0.9, 2.1, 1)`;
+
+  const alSalaPuertaLejos = new FormData();
+  alSalaPuertaLejos.set('plantilla_id', plantillaPuertaLejos);
+  alSalaPuertaLejos.set('nombre', NOMBRE_ENCOGIDA + ' puerta');
+  alSalaPuertaLejos.set('tipologia', 'TEST');
+  alSalaPuertaLejos.set('aforo', '8');
+  alSalaPuertaLejos.set('largo_m', '4');
+  alSalaPuertaLejos.set('ancho_m', '3');
+  alSalaPuertaLejos.set('alto_m', '3');
+  const rechazoPuerta = await altaDeSala(alSalaPuertaLejos);
+
+  const [salasPuerta] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from salas where nombre = ${NOMBRE_ENCOGIDA + ' puerta'}`;
+  afirmar(
+    Number(salasPuerta.cuantas) === 0,
+    'una plantilla cuya puerta no cabe en las medidas corregidas no crea la sala',
+  );
+  afirmar(
+    Boolean(rechazoPuerta?.error),
+    'y el alta explica el rechazo de la puerta en vez de crearla a medias',
+  );
+  const [puertasHuerfanas] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from puertas p
+    join salas s on s.id = p.sala_id
+    where s.nombre = ${NOMBRE_ENCOGIDA + ' puerta'}`;
+  afirmar(Number(puertasHuerfanas.cuantas) === 0, 'y no queda ninguna puerta huérfana');
 
   // El control positivo, sin el cual la guarda podría estar rechazando siempre:
   // un equipo SIN colocar no tiene posición, así que no puede quedarse fuera de

@@ -25,6 +25,8 @@ import type {
   Extremo,
   FormaMueble,
   MuebleEnSala,
+  ParedSala,
+  PuertaEnSala,
   Sala,
   Senal,
   TomaRed,
@@ -100,6 +102,11 @@ export interface TiradaCroquis {
   senal: Senal;
   desde: { x_m: number; y_m: number };
   hasta: { x_m: number; y_m: number };
+  /**
+   * Recorrido medido entre los extremos, en el orden en que pasa el cable.
+   * Vacío conserva el recorrido ortogonal automático de las salas antiguas.
+   */
+  puntos_paso: { x_m: number; y_m: number }[];
   /** Metros calculados por `calculo-cable.ts`. Nulo mientras no haya cálculo. */
   metros: number | null;
 }
@@ -111,6 +118,22 @@ export interface TomaCroquis {
   y_m: number;
 }
 
+/**
+ * Una puerta sobre una pared, ya resuelta a dos puntos.
+ *
+ * `desde` es el arranque del hueco y `hasta` su fin. Sin medir, los dos
+ * puntos coinciden: el dibujo marca dónde está y el rótulo dice «Sin medir»,
+ * porque inventar una anchura para que el símbolo quede bonito es dar por
+ * medido lo que nadie ha medido.
+ */
+export interface PuertaCroquis {
+  id: string;
+  pared: ParedSala;
+  desde: { x_m: number; y_m: number };
+  hasta: { x_m: number; y_m: number };
+  medida: boolean;
+}
+
 /** Una cota acotada entre dos puntos, con su texto ya formateado. */
 export interface CotaCroquis {
   clave: string;
@@ -119,6 +142,18 @@ export interface CotaCroquis {
   texto: string;
   /** Dónde se despega la línea de cota del objeto que mide. */
   lado: 'arriba' | 'abajo' | 'izquierda' | 'derecha';
+}
+
+/**
+ * Una nota al pie del croquis, con su procedencia.
+ *
+ * Lleva `clave` por lo mismo que la lleva `CotaCroquis`: para poder saber de
+ * qué habla sin leer el texto. Una vista que oculte el equipamiento tiene que
+ * poder retirar «Pantalla a 120 cm del suelo» sin ponerse a comparar cadenas.
+ */
+export interface AnotacionCroquis {
+  clave: string;
+  texto: string;
 }
 
 export interface EscenaCroquis {
@@ -134,9 +169,11 @@ export interface EscenaCroquis {
   equipos: EquipoCroquis[];
   tomas: TomaCroquis[];
   tiradas: TiradaCroquis[];
+  /** Arquitectura de la sala: no pertenecen a ninguna capa apagable. */
+  puertas: PuertaCroquis[];
   cotas: CotaCroquis[];
   /** Notas al pie: alturas y todo lo que no cabe en una planta. */
-  anotaciones: string[];
+  anotaciones: AnotacionCroquis[];
   /** Lo que falta por medir. Se enseña, no se inventa. */
   avisos: string[];
 }
@@ -498,6 +535,7 @@ export interface EntradaCroquis {
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles?: MuebleEnSala[];
+  puertas?: PuertaEnSala[];
   /** Metros por conexión, ya calculados. Lo que devuelve `calcularConexion()`. */
   metrosPorConexion?: Map<string, number>;
 }
@@ -513,6 +551,7 @@ export function construirEscena({
   conexiones,
   tomas,
   muebles = [],
+  puertas = [],
   metrosPorConexion,
 }: EntradaCroquis): EscenaCroquis {
   const avisos: string[] = [];
@@ -635,6 +674,7 @@ export function construirEscena({
         senal: c.senal,
         desde: { x_m: origen.x_m, y_m: origen.y_m },
         hasta: { x_m: destino.x_m, y_m: destino.y_m },
+        puntos_paso: (c.puntos_paso ?? []).map((p) => ({ x_m: p.x_m, y_m: p.y_m })),
         metros: metrosPorConexion?.get(c.id) ?? null,
       },
     ];
@@ -643,6 +683,19 @@ export function construirEscena({
   const tomasDibujadas: TomaCroquis[] = tomas
     .filter((t) => t.x_m != null && t.y_m != null)
     .map((t) => ({ id: t.id, codigo: t.codigo, x_m: t.x_m!, y_m: t.y_m! }));
+
+  const puertasDibujadas: PuertaCroquis[] = puertas.map((p) =>
+    puertaSobrePared(p, rectSala),
+  );
+
+  const sinMedirPuertas = puertasDibujadas.filter((p) => !p.medida).length;
+  if (sinMedirPuertas > 0) {
+    avisos.push(
+      sinMedirPuertas === 1
+        ? 'Una puerta sigue sin medir.'
+        : `${sinMedirPuertas} puertas siguen sin medir.`,
+    );
+  }
 
   return {
     titulo: sala.nombre,
@@ -653,9 +706,51 @@ export function construirEscena({
     equipos: dibujados,
     tomas: tomasDibujadas,
     tiradas,
+    puertas: puertasDibujadas,
     cotas: cotasDeLaEscena(sala, rectSala, mesa, dibujados),
     anotaciones: anotacionesDeLaEscena(sala, mesa, dibujados),
     avisos,
+  };
+}
+
+/**
+ * Resuelve una puerta a sus dos puntos sobre la pared.
+ *
+ * El arranque se recorta a la pared para que un dato viejo —una puerta medida
+ * antes de encoger la sala— no dibuje fuera del rectángulo: el dato no se
+ * toca, se recorta el dibujo, como hace `plano-sala.tsx` con los símbolos.
+ * En una sala sin medir no se recorta nada, que es el criterio de
+ * `limitarALaSala`.
+ */
+function puertaSobrePared(p: PuertaEnSala, sala: Rectangulo): PuertaCroquis {
+  const medida = p.anchura_m != null && p.altura_m != null;
+  const horizontal = p.pared === 'norte' || p.pared === 'sur';
+  const longitud = horizontal ? sala.largo_m : sala.ancho_m;
+
+  const recortar = (v: number) =>
+    longitud > 0 ? Math.min(Math.max(v, 0), longitud) : Math.max(v, 0);
+  const desde_m = recortar(p.posicion_m);
+  const hasta_m = medida ? recortar(p.posicion_m + (p.anchura_m as number)) : desde_m;
+
+  const enPared = (a_lo_largo: number): { x_m: number; y_m: number } => {
+    switch (p.pared) {
+      case 'sur':
+        return { x_m: redondear(a_lo_largo), y_m: 0 };
+      case 'norte':
+        return { x_m: redondear(a_lo_largo), y_m: sala.ancho_m };
+      case 'oeste':
+        return { x_m: 0, y_m: redondear(a_lo_largo) };
+      case 'este':
+        return { x_m: sala.largo_m, y_m: redondear(a_lo_largo) };
+    }
+  };
+
+  return {
+    id: p.id,
+    pared: p.pared,
+    desde: enPared(desde_m),
+    hasta: enPared(hasta_m),
+    medida,
   };
 }
 
@@ -783,24 +878,33 @@ function anotacionesDeLaEscena(
   sala: Sala,
   mesa: MesaCroquis | null,
   equipos: EquipoCroquis[],
-): string[] {
-  const notas: string[] = [];
+): AnotacionCroquis[] {
+  const notas: AnotacionCroquis[] = [];
 
-  if (sala.alto_m) notas.push(`Alto de la sala ${metros(sala.alto_m)} m`);
+  if (sala.alto_m) notas.push({ clave: 'sala_alto', texto: `Alto de la sala ${metros(sala.alto_m)} m` });
   if (sala.alto_falso_techo_m) {
-    notas.push(`Falso techo a ${metros(sala.alto_falso_techo_m)} m`);
+    notas.push({
+      clave: 'sala_falso_techo',
+      texto: `Falso techo a ${metros(sala.alto_falso_techo_m)} m`,
+    });
   }
-  if (sala.mesa_alto_cm) notas.push(`Altura de la mesa ${entero(sala.mesa_alto_cm)} cm`);
+  if (sala.mesa_alto_cm) {
+    notas.push({ clave: 'mesa_alto', texto: `Altura de la mesa ${entero(sala.mesa_alto_cm)} cm` });
+  }
   // Las cotas de la mesa girada no se dibujan; sus medidas se leen aquí.
   if (mesa && mesa.rotacion_grados) {
-    notas.push(
-      `Mesa ${metros(mesa.largo_m)} × ${metros(mesa.ancho_m)} m girada ${entero(mesa.rotacion_grados)}°`,
-    );
+    notas.push({
+      clave: 'mesa_girada',
+      texto: `Mesa ${metros(mesa.largo_m)} × ${metros(mesa.ancho_m)} m girada ${entero(mesa.rotacion_grados)}°`,
+    });
   }
 
   for (const e of equipos) {
     if (e.extremo === 'pantalla' && e.z_m > 0) {
-      notas.push(`${e.nombre} a ${entero(e.z_m * 100)} cm del suelo`);
+      notas.push({
+        clave: `equipo_altura:${e.id}`,
+        texto: `${e.nombre} a ${entero(e.z_m * 100)} cm del suelo`,
+      });
     }
   }
 

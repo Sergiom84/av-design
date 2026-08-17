@@ -92,6 +92,9 @@ const salaLegadoId = randomUUID();
 // el señuelo que necesitan).
 const salaCerradaBorrarId = randomUUID();
 const salaLegadoBorrarId = randomUUID();
+const articuloBocasId = randomUUID();
+const puertoSalidaId = randomUUID();
+const puertoEntradaId = randomUUID();
 
 async function limpiar() {
   // `sala_equipos` tiene `on delete cascade` desde `salas` (db/schema.sql):
@@ -102,10 +105,16 @@ async function limpiar() {
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
   await sql`delete from localizaciones where id = ${localizacionId}`;
   await sql`delete from proyectos where id = ${proyectoId}`;
+  await sql`delete from articulos where id = ${articuloBocasId}`;
 }
 
 async function preparar() {
   await limpiar(); // por si quedó algo de una ejecución anterior interrumpida
+
+  await sql`insert into articulos (id, tipo, categoria, modelo) values (${articuloBocasId}, 'equipo', 'TEST', 'TEST BOCAS GUARDA')`;
+  await sql`insert into puertos (id, articulo_id, nombre, total, sentido, senal) values
+    (${puertoSalidaId}, ${articuloBocasId}, 'OUTPUT', 1, 'salida', 'hdmi'),
+    (${puertoEntradaId}, ${articuloBocasId}, 'INPUT', 1, 'entrada', 'hdmi')`;
 
   await sql`insert into proyectos (id, nombre) values (${proyectoId}, 'TEST-guarda-equipos')`;
   await sql`insert into localizaciones (id, proyecto_id, nombre)
@@ -135,8 +144,8 @@ async function preparar() {
 async function nuevoEquipo(salaId: string, etiqueta: string): Promise<string> {
   const id = randomUUID();
   await sql`
-    insert into sala_equipos (id, sala_id, nombre, cantidad, extremo, x_m, y_m, z_m)
-    values (${id}, ${salaId}, ${etiqueta}, 1, 'pared', 0, 0, 0)`;
+    insert into sala_equipos (id, sala_id, articulo_id, nombre, cantidad, extremo, x_m, y_m, z_m)
+    values (${id}, ${salaId}, ${articuloBocasId}, ${etiqueta}, 1, 'pared', 0, 0, 0)`;
   return id;
 }
 
@@ -484,6 +493,10 @@ try {
     fd.set('sala_id', salaCerradaId);
     fd.set('origen_id', origenId);
     fd.set('destino_id', destinoId);
+    fd.set('puerto_origen_id', puertoSalidaId);
+    fd.set('puerto_origen_ordinal', '1');
+    fd.set('puerto_destino_id', puertoEntradaId);
+    fd.set('puerto_destino_ordinal', '1');
     await invocar(anadirConexion, fd);
     const tras = await contarConexionesDeSala(salaCerradaId);
     afirmar(tras === antes, `proyecto cerrado: no inserta (conexiones ${antes} → ${tras})`);
@@ -496,6 +509,10 @@ try {
     fd.set('sala_id', salaLegadoId);
     fd.set('origen_id', origenId);
     fd.set('destino_id', destinoId);
+    fd.set('puerto_origen_id', puertoSalidaId);
+    fd.set('puerto_origen_ordinal', '1');
+    fd.set('puerto_destino_id', puertoEntradaId);
+    fd.set('puerto_destino_ordinal', '1');
     await invocar(anadirConexion, fd);
     const tras = await contarConexionesDeSala(salaLegadoId);
     afirmar(tras === antes + 1, `sala legado: sí inserta (conexiones ${antes} → ${tras})`);
@@ -555,6 +572,10 @@ try {
       fd.set('id', conexionId);
       fd.set('sala_id', salaId);
       fd.set('senal', 'red');
+      fd.set('puerto_origen_id', puertoSalidaId);
+      fd.set('puerto_origen_ordinal', '1');
+      fd.set('puerto_destino_id', puertoEntradaId);
+      fd.set('puerto_destino_ordinal', '1');
       return fd;
     },
     cambio: (antes, tras) => antes?.senal !== tras?.senal,

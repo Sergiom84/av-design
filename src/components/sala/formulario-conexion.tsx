@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 import { Aviso, Boton, Campo } from '@/components/ui';
-import { anadirConexion } from '@/app/acciones';
+import { anadirConexionConEstado } from '@/app/acciones';
 import { avisosDeConexion } from '@/lib/cable-schedule';
+import { bocasDePuerto } from '@/lib/bocas-puerto';
 import {
   ETIQUETA_RUTA,
   ETIQUETA_SENAL,
@@ -50,8 +51,11 @@ export function FormularioConexion({
   const [destinoId, setDestinoId] = useState('');
   const [puertoOrigenId, setPuertoOrigenId] = useState('');
   const [puertoDestinoId, setPuertoDestinoId] = useState('');
+  const [ordinalOrigen, setOrdinalOrigen] = useState<number | null>(null);
+  const [ordinalDestino, setOrdinalDestino] = useState<number | null>(null);
   const [cableId, setCableId] = useState('');
   const [senal, setSenal] = useState<Senal>('hdmi');
+  const [estado, accion] = useActionState(anadirConexionConEstado, { error: null });
 
   const porArticulo = useMemo(() => {
     const mapa = new Map<string, Puerto[]>();
@@ -79,33 +83,43 @@ export function FormularioConexion({
   );
 
   /** El puerto manda sobre la señal: si eliges un HDMI OUT, la tirada es HDMI. */
-  const elegirPuerto = (id: string, lado: 'origen' | 'destino') => {
-    if (lado === 'origen') setPuertoOrigenId(id);
-    else setPuertoDestinoId(id);
+  const elegirPuerto = (valor: string, lado: 'origen' | 'destino') => {
+    const [id = '', ordinalTexto = ''] = valor.split(':');
+    const ordinal = Number(ordinalTexto) || null;
+    if (lado === 'origen') {
+      setPuertoOrigenId(id);
+      setOrdinalOrigen(ordinal);
+    } else {
+      setPuertoDestinoId(id);
+      setOrdinalDestino(ordinal);
+    }
     const p = porId.get(id);
     if (p) setSenal(p.senal);
   };
 
   const selectorPuerto = (lado: 'origen' | 'destino') => {
     const equipoId = lado === 'origen' ? origenId : destinoId;
-    const valor = lado === 'origen' ? puertoOrigenId : puertoDestinoId;
+    const puertoId = lado === 'origen' ? puertoOrigenId : puertoDestinoId;
+    const ordinal = lado === 'origen' ? ordinalOrigen : ordinalDestino;
+    const valor = puertoId && ordinal ? `${puertoId}:${ordinal}` : '';
     const lista = puertosDe(equipoId);
 
     return (
       <select
-        name={`puerto_${lado}_id`}
+        name={`boca_${lado}`}
+        required
         value={valor}
         onChange={(e) => elegirPuerto(e.target.value, lado)}
         disabled={lista.length === 0}
         className="min-w-[11rem]"
       >
         <option value="">{lista.length === 0 ? '— sin puertos —' : '— sin detallar —'}</option>
-        {lista.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nombre} · {ETIQUETA_SENTIDO[p.sentido]}
+        {lista.flatMap((p) => bocasDePuerto(p, equipoId).map((boca) => (
+          <option key={`${p.id}:${boca.ordinal}`} value={`${p.id}:${boca.ordinal}`}>
+            {boca.etiqueta} · {ETIQUETA_SENTIDO[p.sentido]}
             {p.conector ? ` · ${p.conector}` : ''}
           </option>
-        ))}
+        )))}
       </select>
     );
   };
@@ -117,10 +131,14 @@ export function FormularioConexion({
 
   return (
     <form
-      action={anadirConexion}
+      action={accion}
       className="mt-4 pt-4 border-t border-linea space-y-3"
     >
       <input type="hidden" name="sala_id" value={salaId} />
+      <input type="hidden" name="puerto_origen_id" value={puertoOrigenId} />
+      <input type="hidden" name="puerto_origen_ordinal" value={ordinalOrigen ?? ''} />
+      <input type="hidden" name="puerto_destino_id" value={puertoDestinoId} />
+      <input type="hidden" name="puerto_destino_ordinal" value={ordinalDestino ?? ''} />
 
       <div className="flex flex-wrap items-end gap-2">
         <Campo etiqueta="Origen">
@@ -131,6 +149,7 @@ export function FormularioConexion({
             onChange={(e) => {
               setOrigenId(e.target.value);
               setPuertoOrigenId('');
+              setOrdinalOrigen(null);
             }}
           >
             <option value="">—</option>
@@ -150,6 +169,7 @@ export function FormularioConexion({
             onChange={(e) => {
               setDestinoId(e.target.value);
               setPuertoDestinoId('');
+              setOrdinalDestino(null);
             }}
           >
             <option value="">—</option>
@@ -205,7 +225,9 @@ export function FormularioConexion({
         <Campo etiqueta="Longitud manual" ayuda="Vacío = calculada">
           <input name="longitud_manual_m" type="number" step="0.01" min="0" className="w-24" />
         </Campo>
-        <Boton>Añadir conexión</Boton>
+        <Boton disabled={!puertoOrigenId || !ordinalOrigen || !puertoDestinoId || !ordinalDestino || origenId === destinoId}>
+          Añadir conexión
+        </Boton>
       </div>
 
       {sinPuertos.length > 0 && (
@@ -222,8 +244,8 @@ export function FormularioConexion({
               </Link>
             </span>
           ))}
-          . Se puede crear la conexión igual, pero la tabla de cables saldrá sin
-          puerto ni conector hasta que se rellenen en su ficha.
+          . Añade sus puertos físicos en la ficha del artículo para poder crear
+          la conexión.
         </Aviso>
       )}
 
@@ -236,6 +258,7 @@ export function FormularioConexion({
           </ul>
         </Aviso>
       )}
+      {estado.error && <Aviso tono="alerta">{estado.error}</Aviso>}
     </form>
   );
 }

@@ -11,7 +11,13 @@ import { pendienteDeRecibir } from '@/lib/compras';
 import { ETIQUETA_PEDIDO, type LineaPedido, type Pedido, type Ubicacion } from '@/lib/tipos';
 
 /** La ficha del pedido: quién, para qué obra y en qué estado va. */
-export function CabeceraPedido({ pedido }: { pedido: Pedido }) {
+export function CabeceraPedido({
+  pedido,
+  tienePreciosOrientativos,
+}: {
+  pedido: Pedido;
+  tienePreciosOrientativos: boolean;
+}) {
   return (
     <Tarjeta titulo="Pedido">
       <div className="grid sm:grid-cols-2 gap-4 mb-4">
@@ -55,13 +61,21 @@ export function CabeceraPedido({ pedido }: { pedido: Pedido }) {
             <input type="hidden" name="estado" value={estado} />
             <Boton
               variante={pedido.estado === estado ? 'principal' : 'secundario'}
-              disabled={pedido.estado === estado}
+              disabled={
+                pedido.estado === estado ||
+                (tienePreciosOrientativos && (estado === 'pedido' || estado === 'recibido'))
+              }
             >
               {ETIQUETA_PEDIDO[estado]}
             </Boton>
           </form>
         ))}
       </div>
+      {tienePreciosOrientativos && (
+        <p className="text-sm text-aviso mt-3">
+          Añade una oferta final para poder mandar y recibir este pedido.
+        </p>
+      )}
     </Tarjeta>
   );
 }
@@ -139,7 +153,7 @@ export function LineasPedido({
                   )}
                 </td>
                 <td>
-                  {pendiente > 0 && pedido.estado !== 'borrador' ? (
+                  {pendiente > 0 && pedido.estado !== 'borrador' && !l.precio_orientativo ? (
                     <form
                       action={recibirLineaPedido}
                       className="flex flex-wrap items-end gap-2"
@@ -170,7 +184,11 @@ export function LineasPedido({
                     </form>
                   ) : (
                     <span className="text-tinta-tenue">
-                      {pedido.estado === 'borrador' ? 'Mándalo primero' : 'Completa'}
+                      {l.precio_orientativo
+                        ? 'Oferta final pendiente'
+                        : pedido.estado === 'borrador'
+                          ? 'Mándalo primero'
+                          : 'Completa'}
                     </span>
                   )}
                 </td>
@@ -188,7 +206,7 @@ export function LineasPedido({
       </table>
       </ContenedorTabla>
 
-      {pendientes.length > 0 && pedido.estado !== 'borrador' && (
+      {pendientes.length > 0 && pedido.estado !== 'borrador' && orientativas.length === 0 && (
         <form
           action={recibirPedidoCompleto}
           className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-linea"

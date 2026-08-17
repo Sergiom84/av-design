@@ -3,7 +3,7 @@
  *
  * El editor del plano mantiene un borrador local y solo escribe al pulsar
  * `Guardar cambios`. `beforeunload` cubre recargar y cerrar la pestaña, pero la
- * ficha de sala son seis pestañas por ruta unidas por `<Link>`: eso es
+ * ficha de sala son varias pestañas por ruta unidas por `<Link>`: eso es
  * navegación de cliente, sin recarga, y `beforeunload` no se entera. Mover un
  * equipo, pulsar `Resumen` y volver era perder el trabajo sin un solo aviso.
  *

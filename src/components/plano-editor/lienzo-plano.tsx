@@ -1,15 +1,21 @@
 'use client';
 
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { proyectar, type EscenaCroquis } from '@/lib/croquis';
 import { comoViewBox, type Seleccion, type Vista } from '@/lib/plano-editor';
 import {
   GeometriaPlano,
+  cajaDeLaPuerta,
   cajaDelEquipo,
   cajaDelMueble,
   giroEnPantalla,
 } from '@/components/croquis/plano-sala';
 import type { Herramienta } from './barra-herramientas';
+import type { PuntoPasoCable } from '@/lib/tipos';
 
 /**
  * El lienzo del editor.
@@ -44,11 +50,16 @@ export function LienzoPlano({
   rejilla,
   soloLectura,
   alSeleccionar,
+  alMenuContextual,
   alArrastrar,
   alSoltar,
   alDesplazarVista,
   alSoltarDesdeBandeja,
   previsualizacion,
+  puntosRuta = [],
+  puntoRutaSeleccionado = null,
+  alSeleccionarPuntoRuta,
+  alMoverPuntoRuta,
   svgRef,
 }: {
   escena: EscenaCroquis;
@@ -58,6 +69,15 @@ export function LienzoPlano({
   rejilla: boolean;
   soloLectura: boolean;
   alSeleccionar: (s: Seleccion) => void;
+  /**
+   * Botón derecho sobre un objeto. El punto llega en coordenadas de ventana
+   * porque el menú se ancla ahí, no dentro del SVG: un menú dibujado en el
+   * lienzo se recorta con el `viewBox` y se escala con el zoom.
+   *
+   * Es opcional a propósito: el lienzo tiene que seguir funcionando sin menú,
+   * porque el botón derecho nunca puede ser el único camino a una operación.
+   */
+  alMenuContextual?: (s: Exclude<Seleccion, null>, punto: { x: number; y: number }) => void;
   alArrastrar: (s: Exclude<Seleccion, null>, punto: PuntoMetros) => void;
   alSoltar: () => void;
   alDesplazarVista: (dx: number, dy: number) => void;
@@ -69,6 +89,10 @@ export function LienzoPlano({
   alSoltarDesdeBandeja?: (punto: PuntoMetros) => boolean;
   /** Dónde caería lo que se está arrastrando desde la bandeja lateral. */
   previsualizacion?: PuntoMetros | null;
+  puntosRuta?: readonly PuntoPasoCable[];
+  puntoRutaSeleccionado?: number | null;
+  alSeleccionarPuntoRuta?: (orden: number) => void;
+  alMoverPuntoRuta?: (orden: number, punto: PuntoMetros) => void;
   /** El editor necesita el SVG para convertir el puntero a metros. */
   svgRef?: React.RefObject<SVGSVGElement | null>;
 }) {
@@ -77,6 +101,7 @@ export function LienzoPlano({
   const arrastre = useRef<
     | { tipo: 'objeto'; objetivo: Exclude<Seleccion, null>; dx_m: number; dy_m: number }
     | { tipo: 'vista'; x: number; y: number }
+    | { tipo: 'punto-ruta'; orden: number }
     | null
   >(null);
 
@@ -138,6 +163,10 @@ export function LienzoPlano({
       alDesplazarVista(a.x - x, a.y - y);
       return;
     }
+    if (a.tipo === 'punto-ruta') {
+      alMoverPuntoRuta?.(a.orden, enMetros(ev));
+      return;
+    }
     const punto = enMetros(ev);
     alArrastrar(a.objetivo, { x_m: punto.x_m + a.dx_m, y_m: punto.y_m + a.dy_m });
   };
@@ -146,6 +175,27 @@ export function LienzoPlano({
     if (arrastre.current?.tipo === 'objeto') alSoltar();
     arrastre.current = null;
   };
+
+  /**
+   * El botón derecho sobre un objeto: lo selecciona y pide el menú.
+   *
+   * Selecciona antes de abrir porque el menú actúa sobre lo seleccionado, y
+   * porque quien pulsa con el derecho sobre una silla espera que el menú hable
+   * de esa silla y no de lo que hubiera antes. `preventDefault` quita el menú
+   * del navegador, que aquí no ofrece nada útil.
+   *
+   * Sin `alMenuContextual` no se intercepta nada: el navegador hace lo suyo y
+   * el lienzo se comporta como siempre.
+   */
+  const menuDe = (objetivo: Exclude<Seleccion, null>) =>
+    alMenuContextual
+      ? (ev: ReactMouseEvent) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          alSeleccionar(objetivo);
+          alMenuContextual(objetivo, { x: ev.clientX, y: ev.clientY });
+        }
+      : undefined;
 
   const seleccionado = (s: Exclude<Seleccion, null>) =>
     seleccion?.tipo === s.tipo &&
@@ -173,6 +223,29 @@ export function LienzoPlano({
       {rejilla && <Rejilla p={p} escena={escena} />}
 
       <GeometriaPlano p={p} escena={escena} />
+
+      {/* Los puntos de paso son controles visuales del mismo recorrido que
+          pinta GeometriaPlano. El formulario lateral mantiene el camino de
+          teclado; estos tiradores hacen viable medir y corregir con ratón o
+          dedo sobre el plano. */}
+      {!soloLectura && puntosRuta.map((punto, indice) => (
+        <circle
+          key={punto.id ?? indice}
+          cx={p.x(punto.x_m)}
+          cy={p.y(punto.y_m)}
+          r={puntoRutaSeleccionado === indice ? 9 : 7}
+          fill="var(--fondo)"
+          stroke="var(--acento)"
+          strokeWidth={puntoRutaSeleccionado === indice ? 3 : 2}
+          className="cursor-grab"
+          onPointerDown={(ev) => {
+            ev.stopPropagation();
+            alSeleccionarPuntoRuta?.(indice);
+            arrastre.current = { tipo: 'punto-ruta', orden: indice };
+            (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+          }}
+        />
+      ))}
 
       {/* Previsualización de colocación: dónde caería lo que viene de la
           bandeja. Discontinua y sin relleno, para que no se confunda con algo
@@ -228,6 +301,7 @@ export function LienzoPlano({
                 y_m: escena.mesa!.centro.y_m,
               })
             }
+            onContextMenu={menuDe({ tipo: 'mesa' })}
           />
         )}
 
@@ -245,6 +319,7 @@ export function LienzoPlano({
               onPointerDown={(ev) =>
                 empezarObjeto(ev, { tipo: 'mueble', id: m.id }, { x_m: m.x_m, y_m: m.y_m })
               }
+              onContextMenu={menuDe({ tipo: 'mueble', id: m.id })}
             />
           );
         })}
@@ -263,6 +338,31 @@ export function LienzoPlano({
               onPointerDown={(ev) =>
                 empezarObjeto(ev, { tipo: 'equipo', id: e.id }, { x_m: e.x_m, y_m: e.y_m })
               }
+              onContextMenu={menuDe({ tipo: 'equipo', id: e.id })}
+            />
+          );
+        })}
+
+        {escena.puertas.map((puerta) => {
+          const caja = cajaDeLaPuerta(p, puerta);
+          // El ancla del arrastre es el centro del hueco: `posicionEnPared`
+          // vuelve a restar media anchura al colocar.
+          const centro = {
+            x_m: (puerta.desde.x_m + puerta.hasta.x_m) / 2,
+            y_m: (puerta.desde.y_m + puerta.hasta.y_m) / 2,
+          };
+          return (
+            <Agarre
+              key={puerta.id}
+              activo={seleccionado({ tipo: 'puerta', id: puerta.id })}
+              x={caja.x}
+              y={caja.y}
+              ancho={caja.ancho}
+              alto={caja.alto}
+              onPointerDown={(ev) =>
+                empezarObjeto(ev, { tipo: 'puerta', id: puerta.id }, centro)
+              }
+              onContextMenu={menuDe({ tipo: 'puerta', id: puerta.id })}
             />
           );
         })}
@@ -278,6 +378,7 @@ export function LienzoPlano({
             onPointerDown={(ev) =>
               empezarObjeto(ev, { tipo: 'toma', id: t.id }, { x_m: t.x_m, y_m: t.y_m })
             }
+            onContextMenu={menuDe({ tipo: 'toma', id: t.id })}
           />
         ))}
       </g>
@@ -300,6 +401,7 @@ function Agarre({
   alto,
   giro,
   onPointerDown,
+  onContextMenu,
 }: {
   activo: boolean;
   x: number;
@@ -308,6 +410,7 @@ function Agarre({
   alto: number;
   giro?: string;
   onPointerDown: (ev: ReactPointerEvent) => void;
+  onContextMenu?: (ev: ReactMouseEvent) => void;
 }) {
   const margen = 3;
   return (
@@ -319,6 +422,7 @@ function Agarre({
         height={alto}
         fill="transparent"
         onPointerDown={onPointerDown}
+        onContextMenu={onContextMenu}
       />
       {activo && (
         <>

@@ -51,6 +51,14 @@ import {
   zoomDe,
   type BorradorPlano,
   type PatchEquipoPlano,
+  anadirPuerta,
+  aplicarIdsReales,
+  desplazarPuerta,
+  editarPuerta,
+  estadoDeLaPuerta,
+  longitudDePared,
+  moverPuerta,
+  puertasFueraDePared,
 } from './plano-editor';
 import { construirEscena, sillasAlrededor, mesaDeLaSala } from './croquis';
 import type { EquipoEnSala, MuebleCatalogo, Sala, TomaRed } from './tipos';
@@ -1315,5 +1323,183 @@ describe('la vista del lienzo', () => {
     assert.equal(zoomDe(v, BASE.ancho_px), 8);
     for (let i = 0; i < 40; i += 1) v = acercar(v, 0.5, BASE);
     assert.equal(zoomDe(v, BASE.ancho_px), 0.25);
+  });
+});
+
+describe('las puertas del plano', () => {
+  // La sala de siempre: 4,70 × 2,50 × 2,70.
+  const base = () => borradorDesde(SALA, [], []);
+  const conPuerta = () => anadirPuerta(base(), 'p1', 'sur');
+
+  it('una puerta nace en mitad de su pared y «Sin medir»', () => {
+    const b = conPuerta();
+    assert.equal(b.puertas.length, 1);
+    const p = b.puertas[0];
+    assert.equal(p.posicion_m, 2.35);
+    assert.equal(p.anchura_m, null);
+    assert.equal(p.altura_m, null);
+    assert.equal(p.es_nuevo, true);
+    assert.equal(estadoDeLaPuerta(p), 'sin_medir');
+  });
+
+  it('la longitud de la pared depende de su orientación', () => {
+    assert.equal(longitudDePared('sur', SALA), SALA.largo_m);
+    assert.equal(longitudDePared('norte', SALA), SALA.largo_m);
+    assert.equal(longitudDePared('este', SALA), SALA.ancho_m);
+    assert.equal(longitudDePared('oeste', SALA), SALA.ancho_m);
+  });
+
+  it('mover ajusta a la rejilla y no deja salir el hueco de la pared', () => {
+    let b = editarPuerta(conPuerta(), 'p1', { anchura_m: 0.9, altura_m: 2.1 });
+    b = moverPuerta(b, 'p1', 4.63);
+    // 4,63 se ajusta a 4,6, pero 4,6 + 0,9 se sale de 4,7: se recorta a 3,8.
+    assert.equal(b.puertas[0].posicion_m, 3.8);
+    b = moverPuerta(b, 'p1', -2);
+    assert.equal(b.puertas[0].posicion_m, 0);
+  });
+
+  it('desplazar solo escucha al eje de su pared', () => {
+    const b = conPuerta();
+    const movida = desplazarPuerta(b, 'p1', { dx_m: PASO_REJILLA_M, dy_m: 0 });
+    assert.equal(movida.puertas[0].posicion_m, 2.5);
+    // La flecha vertical no mueve una puerta de la pared sur: devuelve la
+    // misma referencia, no un paso de deshacer en blanco.
+    assert.equal(desplazarPuerta(b, 'p1', { dx_m: 0, dy_m: PASO_REJILLA_M }), b);
+  });
+
+  it('editar limpia medidas no positivas y cambiar de pared recorta la posición', () => {
+    let b = editarPuerta(conPuerta(), 'p1', { anchura_m: -1, altura_m: 0 });
+    assert.equal(b.puertas[0].anchura_m, null);
+    assert.equal(b.puertas[0].altura_m, null);
+    // En la pared este la pared mide 2,50: con una anchura de 0,9 el tope es 1,6.
+    b = editarPuerta(b, 'p1', { anchura_m: 0.9, altura_m: 2.1 });
+    b = editarPuerta(b, 'p1', { pared: 'este' });
+    assert.equal(b.puertas[0].pared, 'este');
+    assert.equal(b.puertas[0].posicion_m, 1.6);
+  });
+
+  it('una medida sin la otra es «a medias» y se avisa', () => {
+    const b = editarPuerta(conPuerta(), 'p1', { anchura_m: 0.9 });
+    assert.equal(estadoDeLaPuerta(b.puertas[0]), 'a_medias');
+    assert.ok(
+      avisosDelBorrador(b).some((a) => a.includes('una medida sin la otra')),
+    );
+  });
+
+  it('quitar una puerta alcanza también a las persistidas', () => {
+    const original = base();
+    const guardada = { ...conPuerta().puertas[0], es_nuevo: false };
+    const b = { ...original, puertas: [guardada] };
+    const sin = quitarAlta(b, { tipo: 'puerta', id: 'p1' });
+    assert.equal(sin.puertas.length, 0);
+  });
+
+  it('el patch distingue alta, cambio y baja, y las bajas encienden hayCambios', () => {
+    const original = {
+      ...base(),
+      puertas: [
+        { id: 'p1', pared: 'sur' as const, posicion_m: 1, anchura_m: null, altura_m: null, orden: 1, es_nuevo: false },
+        { id: 'p2', pared: 'norte' as const, posicion_m: 2, anchura_m: 0.9, altura_m: 2.1, orden: 2, es_nuevo: false },
+      ],
+    };
+    let borrador = moverPuerta(original, 'p2', 1.5);
+    borrador = anadirPuerta(borrador, 'tmp-p', 'este');
+    borrador = quitarAlta(borrador, { tipo: 'puerta', id: 'p1' });
+
+    const patch = construirPatch('s1', 3, original, borrador);
+    assert.deepEqual(patch.puertas_baja, ['p1']);
+    assert.equal(patch.puertas_alta.length, 1);
+    assert.equal(patch.puertas_alta[0].id, 'tmp-p');
+    assert.equal(patch.puertas_cambio.length, 1);
+    assert.equal(patch.puertas_cambio[0].posicion_m, 1.5);
+    assert.ok(hayCambios(patch));
+
+    // Solo la baja también es un cambio.
+    const soloBaja = construirPatch(
+      's1',
+      3,
+      original,
+      quitarAlta(original, { tipo: 'puerta', id: 'p1' }),
+    );
+    assert.deepEqual(soloBaja.puertas_baja, ['p1']);
+    assert.ok(hayCambios(soloBaja));
+  });
+
+  it('mover una puerta no afecta al cálculo de cable', () => {
+    const original = conPuerta();
+    const borrador = moverPuerta(original, 'p1', 1);
+    assert.equal(afectaAlCalculo(original, borrador), false);
+  });
+
+  it('encoger la sala arrastra la puerta para que el hueco siga cabiendo', () => {
+    let b = editarPuerta(conPuerta(), 'p1', { anchura_m: 0.9, altura_m: 2.1 });
+    b = moverPuerta(b, 'p1', 3.8);
+    const encogida = cambiarMedidasSala(b, { largo_m: 3 });
+    assert.equal(encogida.puertas[0].posicion_m, 2.1);
+  });
+
+  it('el guardado devuelve ids reales también para puertas', () => {
+    const b = conPuerta();
+    const conIds = aplicarIdsReales(b, { p1: 'real-1' });
+    assert.equal(conIds.puertas[0].id, 'real-1');
+    assert.equal(conIds.puertas[0].es_nuevo, false);
+  });
+
+  describe('puertasFueraDePared, la guarda compartida con el servidor', () => {
+    const medidas = { largo_m: 4.7, ancho_m: 2.5, alto_m: 2.7 };
+    const puerta = (extra: Partial<Parameters<typeof puertasFueraDePared>[0][number]>) => [
+      { id: 'p1', pared: 'sur' as const, posicion_m: 0, anchura_m: null, altura_m: null, ...extra },
+    ];
+
+    it('el hueco exacto contra el final de la pared entra', () => {
+      assert.deepEqual(
+        puertasFueraDePared(puerta({ posicion_m: 3.8, anchura_m: 0.9, altura_m: 2.7 }), medidas),
+        [],
+      );
+    });
+
+    it('un centímetro más allá no entra', () => {
+      assert.equal(
+        puertasFueraDePared(puerta({ posicion_m: 3.81, anchura_m: 0.9, altura_m: 2.1 }), medidas)
+          .length,
+        1,
+      );
+    });
+
+    it('en la pared corta manda el ancho de la sala', () => {
+      const este = [
+        { id: 'p1', pared: 'este' as const, posicion_m: 1.7, anchura_m: 0.9, altura_m: 2.1 },
+      ];
+      assert.equal(puertasFueraDePared(este, medidas).length, 1);
+    });
+
+    it('más alta que la sala no entra', () => {
+      assert.equal(
+        puertasFueraDePared(puerta({ anchura_m: 0.9, altura_m: 2.71 }), medidas).length,
+        1,
+      );
+    });
+
+    it('una medida sin la otra se rechaza entera', () => {
+      assert.equal(puertasFueraDePared(puerta({ anchura_m: 0.9 }), medidas).length, 1);
+      assert.equal(puertasFueraDePared(puerta({ altura_m: 2.1 }), medidas).length, 1);
+    });
+
+    it('sin medir solo exige que el arranque esté en la pared', () => {
+      assert.deepEqual(puertasFueraDePared(puerta({ posicion_m: 4.7 }), medidas), []);
+      assert.equal(puertasFueraDePared(puerta({ posicion_m: 4.71 }), medidas).length, 1);
+    });
+
+    it('una sala sin medir no admite puertas situadas', () => {
+      assert.equal(
+        puertasFueraDePared(puerta({}), { largo_m: 0, ancho_m: 2.5, alto_m: 2.7 }).length,
+        1,
+      );
+    });
+
+    it('una posición negativa o no finita se rechaza', () => {
+      assert.equal(puertasFueraDePared(puerta({ posicion_m: -0.01 }), medidas).length, 1);
+      assert.equal(puertasFueraDePared(puerta({ posicion_m: Number.NaN }), medidas).length, 1);
+    });
   });
 });

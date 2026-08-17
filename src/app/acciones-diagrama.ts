@@ -8,6 +8,7 @@ import { normalizarGrados } from '@/lib/croquis';
 import {
   MAXIMO_MOBILIARIO_POR_PATCH,
   coordenadasFueraDeSala,
+  puertasFueraDePared,
   type PatchPlano,
 } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
@@ -118,6 +119,33 @@ const esquemaMuebleAlta = esquemaMueble.extend({
   forma: z.enum(['rectangulo', 'circulo']),
 });
 
+/**
+ * Una puerta del patch. Sin medida por defecto en ningún sitio: la anchura y
+ * la altura son nulas hasta que alguien las mide, y la pareja entera o
+ * ninguna la exige `puertasFueraDePared`, la misma guarda que usa el editor.
+ */
+const esquemaPuerta = z.object({
+  id: z.string().refine(esUuid, 'id no es un uuid'),
+  pared: z.enum(['norte', 'sur', 'este', 'oeste']),
+  posicion_m: z.number().finite().min(0).max(1000),
+  anchura_m: z.number().finite().positive().max(100).nullable(),
+  altura_m: z.number().finite().positive().max(100).nullable(),
+  orden: z.number().int().min(0).max(10000),
+});
+
+const esquemaPuntoPaso = z.object({
+  id: z.string().refine(esUuid, 'id no es un uuid').optional(),
+  orden: z.number().int().min(0).max(199),
+  x_m: numeroPlano,
+  y_m: numeroPlano,
+  z_m: numeroPlano,
+});
+
+const esquemaRutaCambio = z.object({
+  conexion_id: z.string().refine(esUuid, 'conexion_id no es un uuid'),
+  puntos: z.array(esquemaPuntoPaso).max(200),
+});
+
 const esquemaPatch = z.object({
   sala_id: z.string().refine(esUuid, 'sala_id no es un uuid'),
   versionEsperada: z.number().int().min(0),
@@ -131,6 +159,10 @@ const esquemaPatch = z.object({
   mobiliario_cambio: z.array(esquemaMueble).max(500),
   mobiliario_baja: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(500),
   tomas: z.array(esquemaToma).max(500),
+  puertas_alta: z.array(esquemaPuerta).max(100),
+  puertas_cambio: z.array(esquemaPuerta).max(100),
+  puertas_baja: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(100),
+  rutas_cambio: z.array(esquemaRutaCambio).max(500).default([]),
   inicio_diagrama: z
     .object({
       origen: z.enum(['desde_cero', 'plantilla']),
@@ -214,18 +246,28 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
   // ninguna prueba, y eso es una propiedad de la comprobación, no un hueco.
   if (new Set(p.equipos.map((e) => e.id)).size !== p.equipos.length) return fallo('ajeno');
   if (new Set(p.tomas.map((t) => t.id)).size !== p.tomas.length) return fallo('ajeno');
+  if (new Set(p.rutas_cambio.map((r) => r.conexion_id)).size !== p.rutas_cambio.length) {
+    return fallo('ajeno');
+  }
+  if (p.rutas_cambio.some((r) => r.puntos.some((punto, i) => punto.orden !== i))) {
+    return fallo('invalido');
+  }
 
   // Los ids temporales no se escriben, pero sí tienen que ser distintos entre
   // sí y distintos de los que ya existen: un id repetido en las altas dejaría
   // dos sillas compartiendo entrada en el mapa de vuelta, y el editor movería
   // una creyendo mover la otra.
-  const temporales = [...p.equipos_alta, ...p.mobiliario_alta].map((x) => x.id);
+  const temporales = [...p.equipos_alta, ...p.mobiliario_alta, ...p.puertas_alta].map(
+    (x) => x.id,
+  );
   if (new Set(temporales).size !== temporales.length) return fallo('ajeno');
 
   const persistidos = [
     ...p.equipos.map((e) => e.id),
     ...p.mobiliario_cambio.map((m) => m.id),
     ...p.mobiliario_baja,
+    ...p.puertas_cambio.map((d) => d.id),
+    ...p.puertas_baja,
   ];
   if (temporales.some((id) => persistidos.includes(id))) return fallo('ajeno');
   if (new Set(p.mobiliario_cambio.map((m) => m.id)).size !== p.mobiliario_cambio.length) {
@@ -235,6 +277,13 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
   // Cambiar y borrar el mismo mueble en el mismo guardado no es una intención,
   // es un borrador roto.
   if (p.mobiliario_cambio.some((m) => p.mobiliario_baja.includes(m.id))) return fallo('ajeno');
+
+  // Mismas reglas para las puertas: sin repetidos y sin cambiar lo que se borra.
+  if (new Set(p.puertas_cambio.map((d) => d.id)).size !== p.puertas_cambio.length) {
+    return fallo('ajeno');
+  }
+  if (new Set(p.puertas_baja).size !== p.puertas_baja.length) return fallo('ajeno');
+  if (p.puertas_cambio.some((d) => p.puertas_baja.includes(d.id))) return fallo('ajeno');
 
   const transaccion = sql.begin(async (tx): Promise<ResultadoGuardado> => {
     // `for update` bloquea la fila hasta el commit: dos guardados simultáneos
@@ -280,6 +329,105 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
     };
     if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
+
+    // Se juzga el estado FINAL de todas las rutas, no solo las que viajan en
+    // el patch. Reducir la sala puede dejar fuera un punto persistido aunque
+    // nadie haya abierto esa ruta. Las sustituciones (incluida [] = borrar)
+    // se aplican primero en memoria para que reducir + corregir en un único
+    // guardado sea válido, pero aún no se ha escrito nada.
+    const puntosPersistidos = await tx<
+      Array<{
+        conexion_id: string;
+        orden: number;
+        x_m: string;
+        y_m: string;
+        z_m: string;
+      }>
+    >`select p.conexion_id, p.orden, p.x_m, p.y_m, p.z_m
+      from conexion_puntos_paso p
+      join conexiones c on c.id = p.conexion_id
+      where c.sala_id = ${p.sala_id}
+      order by p.conexion_id, p.orden
+      for update of c, p`;
+    const rutasFinales = new Map<
+      string,
+      Array<{ orden: number; x_m: number; y_m: number; z_m: number }>
+    >();
+    for (const punto of puntosPersistidos) {
+      const ruta = rutasFinales.get(punto.conexion_id) ?? [];
+      ruta.push({
+        orden: Number(punto.orden),
+        x_m: Number(punto.x_m),
+        y_m: Number(punto.y_m),
+        z_m: Number(punto.z_m),
+      });
+      rutasFinales.set(punto.conexion_id, ruta);
+    }
+
+    if (p.rutas_cambio.length > 0) {
+      const idsConexion = p.rutas_cambio.map((r) => r.conexion_id);
+      const propias = await tx<Array<{ id: string }>>`
+        select id from conexiones
+        where sala_id = ${p.sala_id} and id in ${tx(idsConexion)}
+        order by id for update`;
+      if (propias.length !== idsConexion.length) return fallo('ajeno');
+      for (const ruta of p.rutas_cambio) rutasFinales.set(ruta.conexion_id, ruta.puntos);
+    }
+    if (
+      [...rutasFinales.values()].some((ruta) =>
+        ruta.some(
+          (punto) =>
+            punto.x_m < 0 ||
+            punto.x_m > medidas.largo_m ||
+            punto.y_m < 0 ||
+            punto.y_m > medidas.ancho_m ||
+            punto.z_m < 0 ||
+            punto.z_m > medidas.alto_m,
+        ),
+      )
+    ) {
+      return fallo('fuera');
+    }
+    // Se valida el estado FINAL, no solo las puertas que el navegador dice
+    // haber tocado. Reducir una sala puede dejar fuera una puerta persistida
+    // aunque el patch no la incluya. Las bajas y cambios se aplican primero en
+    // memoria para que reducir + quitar/recolocar en el mismo guardado sí sea
+    // una operación válida. Todo ocurre antes de la primera escritura: un
+    // `return fallo()` posterior resolvería `sql.begin` y confirmaría lo ya
+    // escrito.
+    const puertasPersistidas = await tx<
+      Array<{
+        id: string;
+        pared: 'norte' | 'sur' | 'este' | 'oeste';
+        posicion_m: string;
+        anchura_m: string | null;
+        altura_m: string | null;
+        orden: number;
+      }>
+    >`select id, pared, posicion_m, anchura_m, altura_m, orden
+      from puertas where sala_id = ${p.sala_id}`;
+    const puertasFinales = new Map(
+      puertasPersistidas.map((d) => [
+        d.id,
+        {
+          id: d.id,
+          pared: d.pared,
+          posicion_m: Number(d.posicion_m),
+          anchura_m: d.anchura_m == null ? null : Number(d.anchura_m),
+          altura_m: d.altura_m == null ? null : Number(d.altura_m),
+          orden: Number(d.orden),
+        },
+      ]),
+    );
+    const puertasTocadas = [...p.puertas_cambio.map((d) => d.id), ...p.puertas_baja];
+    if (puertasTocadas.some((id) => !puertasFinales.has(id))) return fallo('ajeno');
+    for (const id of p.puertas_baja) puertasFinales.delete(id);
+    for (const d of p.puertas_cambio) puertasFinales.set(d.id, d);
+    if (
+      puertasFueraDePared([...puertasFinales.values(), ...p.puertas_alta], medidas).length > 0
+    ) {
+      return fallo('fuera');
+    }
 
     // Pertenencia: se cuenta contra la base, no contra lo que dice el patch.
     if (p.equipos.length > 0) {
@@ -394,6 +542,14 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         where id = ${t.id} and sala_id = ${p.sala_id}`;
     }
 
+    for (const ruta of p.rutas_cambio) {
+      await tx`delete from conexion_puntos_paso where conexion_id = ${ruta.conexion_id}`;
+      for (const punto of ruta.puntos) {
+        await tx`insert into conexion_puntos_paso (conexion_id, orden, x_m, y_m, z_m)
+          values (${ruta.conexion_id}, ${punto.orden}, ${punto.x_m}, ${punto.y_m}, ${punto.z_m})`;
+      }
+    }
+
     // ------------------------------------------------------- altas y bajas
     //
     // El id temporal no se escribe: cada alta recibe el uuid que le pone
@@ -443,6 +599,34 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
           orden = ${m.orden},
           actualizado_en = now()
         where id = ${m.id} and sala_id = ${p.sala_id}`;
+    }
+
+    for (const d of p.puertas_alta) {
+      // Una puerta no tiene catálogo: no hay nada que releer. El id temporal
+      // sigue sin escribirse, como en el resto de altas.
+      const [fila] = await tx<Array<{ id: string }>>`
+        insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+        values (${p.sala_id}, ${d.pared}, ${d.posicion_m}, ${d.anchura_m},
+                ${d.altura_m}, ${d.orden})
+        returning id`;
+      ids[d.id] = fila.id;
+    }
+
+    for (const d of p.puertas_cambio) {
+      await tx`
+        update puertas set
+          pared = ${d.pared}, posicion_m = ${d.posicion_m},
+          anchura_m = ${d.anchura_m}, altura_m = ${d.altura_m},
+          orden = ${d.orden}, actualizado_en = now()
+        where id = ${d.id} and sala_id = ${p.sala_id}`;
+    }
+
+    if (p.puertas_baja.length > 0) {
+      // Una puerta no es extremo de ninguna tirada ni material de la sala:
+      // la baja no deja nada colgando, así que alcanza a las persistidas.
+      await tx`
+        delete from puertas
+        where sala_id = ${p.sala_id} and id in ${tx(p.puertas_baja)}`;
     }
 
     if (p.mobiliario_baja.length > 0) {
@@ -542,6 +726,263 @@ function revalidarLaFicha() {
   revalidatePath('/');
 }
 
+// =====================================================================
+// Editor de conexiones
+//
+// `/cableado` conserva por ahora sus acciones de formulario en `acciones.ts`.
+// Esta acción es el guardado atómico del editor visual: no crea otro dominio,
+// escribe las mismas `conexiones` y `conexion_bocas` y comparte con Plano el
+// contador optimista de la sala.
+
+const senalConexion = z.enum([
+  'hdmi',
+  'red',
+  'usb',
+  'audio_linea',
+  'audio_altavoz',
+  'microfono',
+  'alimentacion',
+  'control',
+  'otro',
+]);
+const rutaConexion = z.enum(['falso_techo', 'canaleta', 'suelo_tecnico', 'directo']);
+const uuidNullable = z.string().refine(esUuid, 'id no es un uuid').nullable();
+
+const extremosConexion = z.object({
+  origen_id: z.string().refine(esUuid, 'origen_id no es un uuid'),
+  destino_id: z.string().refine(esUuid, 'destino_id no es un uuid'),
+  puerto_origen_id: z.string().refine(esUuid, 'puerto_origen_id no es un uuid'),
+  puerto_origen_ordinal: z.number().int().min(1).max(10000),
+  puerto_destino_id: z.string().refine(esUuid, 'puerto_destino_id no es un uuid'),
+  puerto_destino_ordinal: z.number().int().min(1).max(10000),
+  senal: senalConexion,
+  articulo_cable_id: uuidNullable,
+  ruta: rutaConexion.nullable(),
+});
+
+const esquemaEditorConexiones = z.object({
+  sala_id: z.string().refine(esUuid, 'sala_id no es un uuid'),
+  versionEsperada: z.number().int().min(0),
+  altas: z.array(extremosConexion.extend({ temporal_id: z.string().min(1).max(120) })).max(500),
+  cambios: z
+    .array(extremosConexion.extend({ id: z.string().refine(esUuid, 'id no es un uuid') }))
+    .max(500),
+  bajas: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(500),
+});
+
+export type PatchEditorConexiones = z.input<typeof esquemaEditorConexiones>;
+export type ResultadoEditorConexiones =
+  | { ok: true; version: number; ids: Record<string, string> }
+  | {
+      ok: false;
+      motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno';
+      detalle: string;
+    };
+
+const MENSAJE_CONEXIONES: Record<Extract<ResultadoEditorConexiones, { ok: false }>['motivo'], string> = {
+  invalido: 'Hay datos de conexiones que no se pueden guardar.',
+  no_existe: 'La sala ya no existe.',
+  cerrado: 'La obra está cerrada: sus conexiones no se pueden modificar.',
+  conflicto: 'La sala cambió en otra pestaña.',
+  ajeno: 'Alguna conexión, equipo o boca no pertenece a esta sala.',
+};
+
+function falloConexiones(
+  motivo: Extract<ResultadoEditorConexiones, { ok: false }>['motivo'],
+): Extract<ResultadoEditorConexiones, { ok: false }> {
+  return { ok: false, motivo, detalle: MENSAJE_CONEXIONES[motivo] };
+}
+
+type ConexionEditorValidada = z.infer<typeof extremosConexion>;
+
+/**
+ * Guarda un lote completo del editor de conexiones.
+ *
+ * Orden único de cerrojos: sala -> conexiones -> equipos -> puertos. Las
+ * listas se ordenan por UUID antes de bloquearlas. Dos altas que pretenden la
+ * misma boca no tienen aún una conexión común que bloquear; el cerrojo del
+ * puerto las serializa y la segunda ve la ocupación que dejó la primera.
+ */
+export async function guardarEditorConexiones(
+  patch: PatchEditorConexiones,
+): Promise<ResultadoEditorConexiones> {
+  await exigirEdicion('salas');
+  const validado = esquemaEditorConexiones.safeParse(patch);
+  if (!validado.success) return falloConexiones('invalido');
+  const p = validado.data;
+
+  const temporales = p.altas.map((c) => c.temporal_id);
+  const cambios = p.cambios.map((c) => c.id);
+  if (
+    new Set(temporales).size !== temporales.length ||
+    new Set(cambios).size !== cambios.length ||
+    new Set(p.bajas).size !== p.bajas.length ||
+    cambios.some((id) => p.bajas.includes(id)) ||
+    [...p.altas, ...p.cambios].some((c) => c.origen_id === c.destino_id)
+  ) {
+    return falloConexiones('invalido');
+  }
+
+  const mutaciones = [...p.cambios, ...p.altas];
+  // Una boca solo puede aparecer una vez incluso dentro del mismo lote. Esta
+  // comprobación da un error de dominio antes de depender del UNIQUE diferido.
+  const bocasPedidas = mutaciones.flatMap((c) => [
+    `${c.origen_id}:${c.puerto_origen_id}:${c.puerto_origen_ordinal}`,
+    `${c.destino_id}:${c.puerto_destino_id}:${c.puerto_destino_ordinal}`,
+  ]);
+  if (new Set(bocasPedidas).size !== bocasPedidas.length) return falloConexiones('invalido');
+
+  try {
+    const resultado = await sql.begin(async (tx): Promise<ResultadoEditorConexiones> => {
+      const [sala] = await tx<
+        Array<{ id: string; diagrama_version: number; localizacion_id: string | null }>
+      >`select id, diagrama_version, localizacion_id
+        from salas where id = ${p.sala_id} for update`;
+      if (!sala) return falloConexiones('no_existe');
+
+      const [cierre] = await tx<Array<{ cerrado: boolean }>>`
+        select exists (
+          select 1 from hitos_proyecto h
+          join localizaciones l on l.proyecto_id = h.proyecto_id
+          where l.id = ${sala.localizacion_id} and h.tipo = 'cierre'
+        ) as cerrado`;
+      if (cierre?.cerrado) return falloConexiones('cerrado');
+      if (Number(sala.diagrama_version) !== p.versionEsperada) {
+        return falloConexiones('conflicto');
+      }
+
+      const idsPersistidos = [...new Set([...cambios, ...p.bajas])].sort();
+      if (idsPersistidos.length > 0) {
+        const propias = await tx<Array<{ id: string }>>`
+          select id from conexiones
+          where sala_id = ${p.sala_id} and id in ${tx(idsPersistidos)}
+          order by id for update`;
+        if (propias.length !== idsPersistidos.length) return falloConexiones('ajeno');
+      }
+
+      const equiposIds = [...new Set(mutaciones.flatMap((c) => [c.origen_id, c.destino_id]))].sort();
+      const equipos = equiposIds.length
+        ? await tx<Array<{ id: string; sala_id: string; articulo_id: string | null; cantidad: number }>>`
+            select id, sala_id, articulo_id, cantidad from sala_equipos
+            where id in ${tx(equiposIds)} order by id for update`
+        : [];
+      if (equipos.length !== equiposIds.length || equipos.some((e) => e.sala_id !== p.sala_id)) {
+        return falloConexiones('ajeno');
+      }
+      const equipoPorId = new Map(equipos.map((e) => [e.id, e]));
+
+      const puertosIds = [
+        ...new Set(mutaciones.flatMap((c) => [c.puerto_origen_id, c.puerto_destino_id])),
+      ].sort();
+      const puertos = puertosIds.length
+        ? await tx<Array<{ id: string; articulo_id: string; total: number }>>`
+            select id, articulo_id, total from puertos
+            where id in ${tx(puertosIds)} order by id for update`
+        : [];
+      if (puertos.length !== puertosIds.length) return falloConexiones('ajeno');
+      const puertoPorId = new Map(puertos.map((puerto) => [puerto.id, puerto]));
+
+      for (const c of mutaciones) {
+        const origen = equipoPorId.get(c.origen_id)!;
+        const destino = equipoPorId.get(c.destino_id)!;
+        const puertoOrigen = puertoPorId.get(c.puerto_origen_id)!;
+        const puertoDestino = puertoPorId.get(c.puerto_destino_id)!;
+        if (
+          origen.cantidad !== 1 ||
+          destino.cantidad !== 1 ||
+          !origen.articulo_id ||
+          !destino.articulo_id ||
+          puertoOrigen.articulo_id !== origen.articulo_id ||
+          puertoDestino.articulo_id !== destino.articulo_id ||
+          c.puerto_origen_ordinal > Number(puertoOrigen.total) ||
+          c.puerto_destino_ordinal > Number(puertoDestino.total)
+        ) {
+          return falloConexiones('invalido');
+        }
+      }
+
+      const cablesIds = [
+        ...new Set(mutaciones.map((c) => c.articulo_cable_id).filter((id): id is string => id !== null)),
+      ];
+      if (cablesIds.length > 0) {
+        const cables = await tx<Array<{ id: string }>>`
+          select id from articulos where id in ${tx(cablesIds)} and activo and tipo = 'cable'`;
+        if (cables.length !== cablesIds.length) return falloConexiones('invalido');
+      }
+
+      // Se excluyen del test las conexiones que el mismo lote sustituye o
+      // borra. El cerrojo previo de puertos hace que esta lectura sea válida
+      // también frente a otra alta concurrente sobre la misma boca.
+      if (bocasPedidas.length > 0) {
+        const reemplazadas = [...new Set([...cambios, ...p.bajas])];
+        const ocupadas = await tx<Array<{ equipo_id: string; puerto_id: string; ordinal: number }>>`
+          select b.equipo_id, b.puerto_id, b.ordinal
+          from conexion_bocas b
+          where ${reemplazadas.length ? tx`b.conexion_id not in ${tx(reemplazadas)}` : tx`true`}
+            and b.equipo_id in ${tx(equiposIds)}
+            and b.puerto_id in ${tx(puertosIds)}`;
+        if (
+          ocupadas.some((b) =>
+            bocasPedidas.includes(`${b.equipo_id}:${b.puerto_id}:${Number(b.ordinal)}`),
+          )
+        ) {
+          return falloConexiones('invalido');
+        }
+      }
+
+      if (p.bajas.length > 0) {
+        await tx`delete from conexiones where sala_id = ${p.sala_id} and id in ${tx(p.bajas)}`;
+      }
+
+      const escribir = async (id: string, c: ConexionEditorValidada) => {
+        // Actualizar las columnas legacy dispara su invalidación de bocas. Se
+        // escribe después la pareja explícita en la misma transacción.
+        await tx`update conexiones set
+          origen_id = ${c.origen_id}, destino_id = ${c.destino_id},
+          puerto_origen_id = ${c.puerto_origen_id},
+          puerto_destino_id = ${c.puerto_destino_id},
+          senal = ${c.senal}::senal, articulo_cable_id = ${c.articulo_cable_id},
+          ruta = ${c.ruta}::ruta_cable
+          where id = ${id} and sala_id = ${p.sala_id}`;
+        await tx`delete from conexion_bocas where conexion_id = ${id}`;
+        await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+          (${id}, 'origen', ${c.origen_id}, ${c.puerto_origen_id}, ${c.puerto_origen_ordinal}),
+          (${id}, 'destino', ${c.destino_id}, ${c.puerto_destino_id}, ${c.puerto_destino_ordinal})`;
+      };
+
+      for (const c of p.cambios) await escribir(c.id, c);
+
+      const ids: Record<string, string> = {};
+      for (const c of p.altas) {
+        const [nueva] = await tx<Array<{ id: string }>>`
+          insert into conexiones
+            (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta,
+             puerto_origen_id, puerto_destino_id)
+          values (${p.sala_id}, ${c.origen_id}, ${c.destino_id}, ${c.articulo_cable_id},
+                  ${c.senal}::senal, ${c.ruta}::ruta_cable,
+                  ${c.puerto_origen_id}, ${c.puerto_destino_id})
+          returning id`;
+        await escribir(nueva.id, c);
+        ids[c.temporal_id] = nueva.id;
+      }
+
+      const [nuevaVersion] = await tx<Array<{ diagrama_version: number }>>`
+        update salas set diagrama_version = diagrama_version + 1
+        where id = ${p.sala_id} returning diagrama_version`;
+      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids };
+    });
+
+    if (resultado.ok) revalidarLaFicha();
+    return resultado;
+  } catch (error) {
+    const postgresError = error as { code?: string; constraint_name?: string };
+    if (['23503', '23505', '23514', '22P02'].includes(postgresError.code ?? '')) {
+      return falloConexiones('invalido');
+    }
+    throw error;
+  }
+}
+
 /**
  * Declarar que el plano se prepara desde cero.
  *
@@ -567,6 +1008,9 @@ export async function iniciarDiagramaDesdeCero(
     mobiliario_cambio: [],
     mobiliario_baja: [],
     tomas: [],
+    puertas_alta: [],
+    puertas_cambio: [],
+    puertas_baja: [],
     inicio_diagrama: { origen: 'desde_cero', plantilla_id: null },
     sillas_modo: null,
   });
@@ -687,18 +1131,29 @@ export async function aplicarPlantillaAlDiagrama(
     // aceptaba una plantilla de 4 × 4 y la roseta se quedaba fuera del plano
     // sin que nadie la moviera.
     const [ocupacion] = await tx<
-      Array<{ equipos: string; conexiones: string; muebles: string; tomas: string }>
+      Array<{
+        equipos: string;
+        conexiones: string;
+        muebles: string;
+        tomas: string;
+        puertas: string;
+      }>
     >`
       select
         (select count(*) from sala_equipos    where sala_id = ${salaId})::text as equipos,
         (select count(*) from conexiones      where sala_id = ${salaId})::text as conexiones,
         (select count(*) from sala_mobiliario where sala_id = ${salaId})::text as muebles,
-        (select count(*) from tomas_red       where sala_id = ${salaId})::text as tomas`;
+        (select count(*) from tomas_red       where sala_id = ${salaId})::text as tomas,
+        (select count(*) from puertas         where sala_id = ${salaId})::text as puertas`;
     const vacia =
       Number(ocupacion.equipos) === 0 &&
       Number(ocupacion.conexiones) === 0 &&
       Number(ocupacion.muebles) === 0 &&
-      Number(ocupacion.tomas) === 0;
+      Number(ocupacion.tomas) === 0 &&
+      // Las puertas cuentan como ocupación por lo mismo que las rosetas:
+      // alguien las situó en una pared, y aplicar una plantilla sustituye las
+      // medidas de esa pared.
+      Number(ocupacion.puertas) === 0;
 
     // La sala que nació de esta misma plantilla ya la tiene aplicada, se mire
     // por `plantilla_id` (el alta) o por `diagrama_plantilla_id` (una
@@ -825,6 +1280,15 @@ export async function aplicarPlantillaAlDiagrama(
         from plantilla_mobiliario pm
         where pm.plantilla_id = ${plantillaId}`;
 
+      // Las puertas de la plantilla, con su estado tal cual: una puerta sin
+      // medir en la plantilla llega sin medir a la sala. La ausencia se
+      // propaga como ausencia.
+      await tx`
+        insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+        select ${salaId}, pp.pared, pp.posicion_m, pp.anchura_m, pp.altura_m, pp.orden
+        from puertas pp
+        where pp.plantilla_id = ${plantillaId}`;
+
       // ------------------------------------- postcondición: una sola mesa
       //
       // La comprobación previa mira `plantilla_mobiliario` ANTES de copiarlo,
@@ -854,16 +1318,26 @@ export async function aplicarPlantillaAlDiagrama(
 
       const tiradas = await tx<
         Array<{
+          id: string;
           origen_linea_id: string;
           destino_linea_id: string;
           articulo_cable_id: string | null;
           senal: string;
           ruta: string | null;
           notas: string | null;
+          puerto_origen_id: string | null;
+          ordinal_origen: number | null;
+          puerto_destino_id: string | null;
+          ordinal_destino: number | null;
         }>
-      >`select origen_linea_id, destino_linea_id, articulo_cable_id, senal, ruta, notas
-        from plantilla_conexiones where plantilla_id = ${plantillaId}
-        order by orden, creado_en`;
+      >`select c.id, c.origen_linea_id, c.destino_linea_id, c.articulo_cable_id, c.senal, c.ruta, c.notas,
+               bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
+               bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
+        from plantilla_conexiones c
+        left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = c.id and bo.lado = 'origen'
+        left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = c.id and bd.lado = 'destino'
+        where c.plantilla_id = ${plantillaId}
+        order by c.orden, c.creado_en`;
 
       // Una tirada cuyo equipo no se heredó —la línea estaba marcada «no en
       // todas»— se salta: insertarla apuntando a nada deja la sala con una
@@ -872,10 +1346,26 @@ export async function aplicarPlantillaAlDiagrama(
         const origen = equipoDeLinea.get(t.origen_linea_id);
         const destino = equipoDeLinea.get(t.destino_linea_id);
         if (!origen || !destino) continue;
-        await tx`
+        if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
+          const puertosDetalle = [t.puerto_origen_id, t.puerto_destino_id].sort();
+          await tx`select id from puertos where id in ${tx(puertosDetalle)} order by id for update`;
+        }
+        const [conexion] = await tx<Array<{ id: string }>>`
           insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta, notas)
           values (${salaId}, ${origen}, ${destino}, ${t.articulo_cable_id},
-                  ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas})`;
+                  ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas}) returning id`;
+        await tx`insert into conexion_puntos_paso (conexion_id, orden, x_m, y_m, z_m)
+          select ${conexion.id}, orden, x_m, y_m, z_m
+          from plantilla_conexion_puntos_paso
+          where plantilla_conexion_id = ${t.id}
+          order by orden`;
+        if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
+          await tx`update conexiones set puerto_origen_id = ${t.puerto_origen_id},
+              puerto_destino_id = ${t.puerto_destino_id} where id = ${conexion.id}`;
+          await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+            (${conexion.id}, 'origen', ${origen}, ${t.puerto_origen_id}, ${t.ordinal_origen}),
+            (${conexion.id}, 'destino', ${destino}, ${t.puerto_destino_id}, ${t.ordinal_destino})`;
+        }
       }
 
       // ------------------------------------------------- la sala resultante
@@ -906,6 +1396,12 @@ export async function aplicarPlantillaAlDiagrama(
       const rosetas = await tx<
         Array<{ id: string; x_m: string | null; y_m: string | null; z_m: string | null }>
       >`select id, x_m, y_m, z_m from tomas_red where sala_id = ${salaId}`;
+      const puntosRuta = await tx<
+        Array<{ id: string; x_m: string; y_m: string; z_m: string }>
+      >`select p.id, p.x_m, p.y_m, p.z_m
+        from conexion_puntos_paso p
+        join conexiones c on c.id = p.conexion_id
+        where c.sala_id = ${salaId}`;
 
       const problemas = coordenadasFueraDeSala(
         {
@@ -935,6 +1431,45 @@ export async function aplicarPlantillaAlDiagrama(
           })),
         },
         medidas,
+      );
+
+      for (const punto of puntosRuta) {
+        const x = Number(punto.x_m);
+        const y = Number(punto.y_m);
+        const z = Number(punto.z_m);
+        if (
+          x < 0 || x > medidas.largo_m ||
+          y < 0 || y > medidas.ancho_m ||
+          z < 0 || z > medidas.alto_m
+        ) {
+          problemas.push(`El punto de paso ${punto.id} queda fuera de la sala.`);
+        }
+      }
+
+      // Las puertas copiadas se juzgan con la misma guarda que el guardado
+      // manual: si la plantilla trae una puerta que no cabe en sus propias
+      // medidas, no se aplica.
+      const puertasCopiadas = await tx<
+        Array<{
+          id: string;
+          pared: string;
+          posicion_m: string;
+          anchura_m: string | null;
+          altura_m: string | null;
+        }>
+      >`select id, pared, posicion_m, anchura_m, altura_m from puertas where sala_id = ${salaId}`;
+
+      problemas.push(
+        ...puertasFueraDePared(
+          puertasCopiadas.map((d) => ({
+            id: d.id,
+            pared: d.pared as 'norte' | 'sur' | 'este' | 'oeste',
+            posicion_m: Number(d.posicion_m),
+            anchura_m: num(d.anchura_m),
+            altura_m: num(d.altura_m),
+          })),
+          medidas,
+        ),
       );
 
       if (problemas.length > 0) {

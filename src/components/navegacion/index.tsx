@@ -4,7 +4,8 @@ import { useState, type ReactNode, type ComponentType } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { salir } from '@/app/acciones-sesion';
-import { RUTA_ENTRADA } from '@/lib/sesion';
+import { RUTA_CUENTA, RUTA_ENTRADA } from '@/lib/sesion';
+import type { Seccion } from '@/lib/usuarios';
 import {
   IconoPanel,
   IconoProyectos,
@@ -16,36 +17,55 @@ import {
   IconoCompras,
   IconoCarga,
   IconoParametros,
+  IconoUsuarios,
+  IconoCuenta,
   IconoSalir,
   IconoMenu,
   IconoCerrar,
 } from './iconos';
 
+/*
+  El menú. El `id` es el mismo que en `src/lib/usuarios.ts`: es lo que decide
+  si esta entrada se enseña. Esconder una sección aquí NO es la guarda —la
+  dirección se puede escribir a mano—; la guarda es el `layout.tsx` de cada
+  sección. Esto es para que nadie vea diez puertas y sepa que siete están
+  cerradas para él.
+*/
 const SECCIONES: {
+  id: Seccion;
   href: string;
   etiqueta: string;
   Icono: ComponentType<{ className?: string }>;
 }[] = [
-  { href: '/', etiqueta: 'Panel', Icono: IconoPanel },
-  { href: '/proyectos', etiqueta: 'Proyectos', Icono: IconoProyectos },
-  { href: '/salas', etiqueta: 'Salas', Icono: IconoSalas },
-  { href: '/plantillas', etiqueta: 'Plantillas', Icono: IconoPlantillas },
-  { href: '/checkin', etiqueta: 'Check-in', Icono: IconoCheckin },
-  { href: '/catalogo', etiqueta: 'Catálogo', Icono: IconoCatalogo },
-  { href: '/almacen', etiqueta: 'Almacén', Icono: IconoAlmacen },
-  { href: '/compras', etiqueta: 'Compras', Icono: IconoCompras },
-  { href: '/carga', etiqueta: 'Carga', Icono: IconoCarga },
-  { href: '/parametros', etiqueta: 'Parámetros', Icono: IconoParametros },
+  { id: 'panel', href: '/', etiqueta: 'Panel', Icono: IconoPanel },
+  { id: 'proyectos', href: '/proyectos', etiqueta: 'Proyectos', Icono: IconoProyectos },
+  { id: 'salas', href: '/salas', etiqueta: 'Salas', Icono: IconoSalas },
+  { id: 'plantillas', href: '/plantillas', etiqueta: 'Plantillas', Icono: IconoPlantillas },
+  { id: 'checkin', href: '/checkin', etiqueta: 'Check-in', Icono: IconoCheckin },
+  { id: 'catalogo', href: '/catalogo', etiqueta: 'Catálogo', Icono: IconoCatalogo },
+  { id: 'almacen', href: '/almacen', etiqueta: 'Almacén', Icono: IconoAlmacen },
+  { id: 'compras', href: '/compras', etiqueta: 'Compras', Icono: IconoCompras },
+  { id: 'carga', href: '/carga', etiqueta: 'Carga', Icono: IconoCarga },
+  { id: 'parametros', href: '/parametros', etiqueta: 'Parámetros', Icono: IconoParametros },
+  { id: 'usuarios', href: '/usuarios', etiqueta: 'Usuarios', Icono: IconoUsuarios },
 ];
 
 function seccionActiva(ruta: string, href: string) {
   return href === '/' ? ruta === '/' : ruta.startsWith(href);
 }
 
-function Secciones({ ruta, alNavegar }: { ruta: string; alNavegar?: () => void }) {
+function Secciones({
+  ruta,
+  visibles,
+  alNavegar,
+}: {
+  ruta: string;
+  visibles: readonly Seccion[];
+  alNavegar?: () => void;
+}) {
   return (
     <nav className="flex flex-col gap-1 px-3" aria-label="Secciones">
-      {SECCIONES.map(({ href, etiqueta, Icono }) => {
+      {SECCIONES.filter((s) => visibles.includes(s.id)).map(({ href, etiqueta, Icono }) => {
         const activa = seccionActiva(ruta, href);
         return (
           <Link
@@ -76,21 +96,35 @@ function Marca() {
   );
 }
 
-function BotonSalir() {
-  /*
-    Salir va abajo del todo y sin destacar: se usa una vez al día y no compite
-    con las nueve secciones que se usan todo el rato.
-  */
+/*
+  Quién eres y salir, abajo del todo y sin destacar: se usan una vez al día y
+  no compiten con las secciones, que se usan todo el rato. El nombre está ahí
+  porque en una aplicación con permisos por persona, «no veo Compras» y «he
+  entrado con la cuenta de otro» se parecen demasiado desde fuera.
+*/
+function Pie({ nombre, alNavegar }: { nombre?: string; alNavegar?: () => void }) {
   return (
-    <form action={salir} className="mt-auto px-3 pb-4">
-      <button
-        type="submit"
-        className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
-      >
-        <IconoSalir className="size-5 shrink-0" />
-        Salir
-      </button>
-    </form>
+    <div className="mt-auto px-3 pb-4">
+      {nombre && (
+        <Link
+          href={RUTA_CUENTA as never}
+          onClick={alNavegar}
+          className="flex items-center gap-3 min-h-11 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
+        >
+          <IconoCuenta className="size-5 shrink-0" />
+          <span className="min-w-0 truncate">{nombre}</span>
+        </Link>
+      )}
+      <form action={salir}>
+        <button
+          type="submit"
+          className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2 text-rail-texto hover:bg-rail-hundido hover:text-rail-texto-activo"
+        >
+          <IconoSalir className="size-5 shrink-0" />
+          Salir
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -99,7 +133,16 @@ function BotonSalir() {
   superior con el título de la sección. En la puerta no hay marco: desde ahí
   no se llega a ningún sitio.
 */
-export function Marco({ children }: { children: ReactNode }) {
+export function Marco({
+  children,
+  visibles = [],
+  nombre,
+}: {
+  children: ReactNode;
+  /** Las secciones que esta persona puede abrir. Las decide el servidor. */
+  visibles?: readonly Seccion[];
+  nombre?: string;
+}) {
   const ruta = usePathname();
   const [abierto, setAbierto] = useState(false);
 
@@ -119,8 +162,8 @@ export function Marco({ children }: { children: ReactNode }) {
       {/* Sidebar de escritorio */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-rail md:flex">
         <Marca />
-        <Secciones ruta={ruta} />
-        <BotonSalir />
+        <Secciones ruta={ruta} visibles={visibles} />
+        <Pie nombre={nombre} />
       </aside>
 
       {/* Cajón móvil */}
@@ -144,8 +187,12 @@ export function Marco({ children }: { children: ReactNode }) {
                 <IconoCerrar />
               </button>
             </div>
-            <Secciones ruta={ruta} alNavegar={() => setAbierto(false)} />
-            <BotonSalir />
+            <Secciones
+              ruta={ruta}
+              visibles={visibles}
+              alNavegar={() => setAbierto(false)}
+            />
+            <Pie nombre={nombre} alNavegar={() => setAbierto(false)} />
           </aside>
         </div>
       )}

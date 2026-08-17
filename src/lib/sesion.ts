@@ -1,18 +1,24 @@
 /**
  * Puerta de entrada de la aplicación.
  *
- * Una sola clave para todo el departamento, no un usuario por persona. Es lo
- * que corresponde hoy: la aplicación está en una dirección pública de internet
- * con el inventario real dentro, y lo que hace falta es que no entre quien pase
- * por ahí. Saber quién tocó qué es otro problema y llegará con `rol_usuario`,
- * que ya está en el esquema esperando.
+ * Antes había una sola clave para todo el departamento. Servía para lo que
+ * hacía falta entonces —que no entrara quien pasara por la dirección— pero no
+ * distinguía a nadie: ni quién tocó qué, ni qué puede ver cada uno. Ahora se
+ * entra con usuario y contraseña, y la clave de departamento ya no existe.
  *
- * La clave NO se guarda en ningún sitio: se guarda su huella SHA-256. Ni en la
- * configuración de Render, ni en un fichero, ni aquí. Se compara huella contra
- * huella.
+ * Este fichero es solo la mitad de la puerta, la que corre en el runtime de
+ * borde: ahí no hay base de datos, así que aquí no se puede saber si alguien
+ * sigue de alta ni qué permisos tiene. Lo único que se resuelve aquí es si la
+ * cookie está firmada por este servidor y no ha caducado, y de quién dice ser.
  *
- * Todo esto usa Web Crypto y no `node:crypto` a propósito: el middleware corre
- * en el runtime de borde, donde `node:crypto` no existe.
+ * Quién es de verdad y qué puede ver lo resuelve `sesion-servidor.ts`
+ * consultando la base en cada petición. Esa división es deliberada: un cambio
+ * de rol o de permisos surte efecto en la petición siguiente, no en el login
+ * siguiente. Meter los permisos dentro de la cookie los habría congelado hasta
+ * que a la persona le caducara la sesión, doce horas después.
+ *
+ * Todo esto usa Web Crypto y no `node:crypto` a propósito: `node:crypto` no
+ * existe en el runtime de borde.
  */
 
 /** Cuánto dura la sesión. Una jornada larga: se entra por la mañana y se sale. */
@@ -23,8 +29,11 @@ export const COOKIE_SESION = 'av_sesion';
 /** A dónde se va quien no ha entrado. */
 export const RUTA_ENTRADA = '/entrar';
 
+/** Dónde cambia cada uno su propia contraseña. */
+export const RUTA_CUENTA = '/cuenta';
+
 /**
- * Rutas que no piden clave. La de entrada, obviamente, y los recursos que
+ * Rutas que no piden sesión. La de entrada, obviamente, y los recursos que
  * necesita para pintarse. Todo lo demás pasa por la puerta.
  */
 export function esRutaLibre(ruta: string): boolean {
@@ -61,14 +70,9 @@ const aHex = (b: ArrayBuffer): string =>
     .map((x) => x.toString(16).padStart(2, '0'))
     .join('');
 
-/** Huella de la clave. Es lo que se configura en el servidor, no la clave. */
-export async function huella(clave: string): Promise<string> {
-  return aHex(await crypto.subtle.digest('SHA-256', codificar(clave)));
-}
-
 /**
  * Comparación en tiempo constante. Comparar con `===` filtra por cuánto tarda
- * cuántos caracteres llevas acertados, y eso permite adivinar la clave a
+ * cuántos caracteres llevas acertados, y eso permite adivinar la firma a
  * ciegas. Cuesta cuatro líneas evitarlo.
  */
 export function igualSinFiltrar(a: string, b: string): boolean {
@@ -80,38 +84,56 @@ export function igualSinFiltrar(a: string, b: string): boolean {
   return distinto === 0;
 }
 
+export interface Sesion {
+  usuarioId: string;
+  expiraEnMs: number;
+}
+
 /**
- * El contenido de la cookie: cuándo caduca y una firma de esa fecha.
+ * El contenido de la cookie: cuándo caduca, de quién es, y una firma de las dos
+ * cosas juntas.
  *
- * Se firma con el secreto del servidor, así que nadie puede fabricarse una
- * cookie con la fecha que le convenga. Y como la fecha va dentro de lo firmado,
- * tampoco puede estirar una sesión caducada.
+ * El identificador va **dentro** de lo firmado. Si fuera aparte, cualquiera
+ * podría coger su propia cookie válida y cambiar el identificador por el del
+ * administrador. Firmar solo la fecha protegía la duración de la sesión, que
+ * era lo único que había dentro; ahora hay una identidad y hay que firmarla.
  */
 export async function firmarSesion(
   secreto: string,
   expiraEnMs: number,
+  usuarioId: string,
 ): Promise<string> {
-  return `${expiraEnMs}.${await firma(secreto, String(expiraEnMs))}`;
+  const cuerpo = `${expiraEnMs}.${usuarioId}`;
+  return `${cuerpo}.${await firma(secreto, cuerpo)}`;
 }
 
-export async function sesionValida(
+/**
+ * Lee la cookie y devuelve de quién es, o `null`.
+ *
+ * `null` cubre todos los casos —no hay cookie, está mal formada, la firma no
+ * cuadra, ha caducado— y a propósito: quien la recibe no debe poder distinguir
+ * «caducada» de «falsificada» para actuar distinto.
+ */
+export async function leerSesion(
   secreto: string,
   cookie: string | undefined,
   ahoraMs: number,
-): Promise<boolean> {
-  if (!cookie) return false;
+): Promise<Sesion | null> {
+  if (!cookie) return null;
 
-  const corte = cookie.indexOf('.');
-  if (corte <= 0) return false;
+  const partes = cookie.split('.');
+  if (partes.length !== 3) return null;
 
-  const expira = cookie.slice(0, corte);
-  const recibida = cookie.slice(corte + 1);
+  const [expira, usuarioId, recibida] = partes;
+  if (!usuarioId) return null;
 
-  const esperada = await firma(secreto, expira);
-  if (!igualSinFiltrar(recibida, esperada)) return false;
+  const esperada = await firma(secreto, `${expira}.${usuarioId}`);
+  if (!igualSinFiltrar(recibida, esperada)) return null;
 
   const caducidad = Number(expira);
-  return Number.isFinite(caducidad) && caducidad > ahoraMs;
+  if (!Number.isFinite(caducidad) || caducidad <= ahoraMs) return null;
+
+  return { usuarioId, expiraEnMs: caducidad };
 }
 
 async function firma(secreto: string, mensaje: string): Promise<string> {
@@ -126,33 +148,15 @@ async function firma(secreto: string, mensaje: string): Promise<string> {
 }
 
 /**
- * Limpia lo que llega de la configuración del servidor.
- *
- * Copiar una huella al portapapeles con `| clip` arrastra el salto de línea
- * final, y Render lo guarda tal cual: 65 caracteres en vez de 64, y la clave
- * correcta deja de entrar sin que nada explique por qué. Costó una tarde.
- *
- * Se recorta y se pasa a minúsculas porque una huella es hexadecimal: `3F` y
- * `3f` son el mismo valor, y quien la pega de un sitio a otro no tiene por qué
- * saberlo.
- */
-export function limpiarHuella(valor: string | undefined): string | undefined {
-  const limpio = valor?.trim().toLowerCase();
-  return limpio ? limpio : undefined;
-}
-
-/**
  * El secreto de firma solo se recorta: pasarlo a minúsculas lo cambiaría, y
  * cambiar el secreto echa a todo el mundo de golpe.
+ *
+ * Se recorta porque copiar un valor al portapapeles con `| clip` arrastra el
+ * salto de línea final y Render lo guarda tal cual. Costó una tarde.
  */
 export function limpiarSecreto(valor: string | undefined): string | undefined {
   const limpio = valor?.trim();
   return limpio ? limpio : undefined;
-}
-
-export interface Configuracion {
-  huellaClave: string | undefined;
-  secreto: string | undefined;
 }
 
 export type EstadoPuerta = 'abierta' | 'protegida' | 'sin_configurar';
@@ -160,17 +164,19 @@ export type EstadoPuerta = 'abierta' | 'protegida' | 'sin_configurar';
 /**
  * Qué hacer según lo que haya configurado.
  *
- * - `protegida`: hay clave y secreto. Lo normal en producción.
- * - `abierta`: no hay nada configurado y no estamos en producción. Es el
- *   desarrollo de todos los días, y pedir clave ahí solo estorba.
- * - `sin_configurar`: producción sin clave. **No se deja pasar.** Es la única
+ * - `protegida`: hay secreto de firma. Lo normal en producción.
+ * - `abierta`: no hay secreto y no estamos en producción. Es el desarrollo de
+ *   todos los días. En ese modo `sesion-servidor.ts` devuelve un administrador
+ *   ficticio, para no exigir una base sembrada con usuarios solo para abrir una
+ *   página. Nunca ocurre en producción.
+ * - `sin_configurar`: producción sin secreto. **No se deja pasar.** Es la única
  *   decisión defendible: un despliegue al que se le olvidó la variable es
  *   exactamente el caso en el que el inventario acaba abierto a internet.
  */
 export function estadoPuerta(
-  { huellaClave, secreto }: Configuracion,
+  secreto: string | undefined,
   produccion: boolean,
 ): EstadoPuerta {
-  if (huellaClave && secreto) return 'protegida';
+  if (secreto) return 'protegida';
   return produccion ? 'sin_configurar' : 'abierta';
 }

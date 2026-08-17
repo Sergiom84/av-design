@@ -1,16 +1,28 @@
+import { hayConfiguracion } from '@/lib/db';
+import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Boton, Campo } from '@/components/ui';
 import { entrar } from '../acciones-sesion';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * La puerta. Una clave para todo el departamento: lo que hace falta hoy es que
- * no entre quien pase por la dirección, no saber quién tocó qué.
+ * La puerta. Usuario y contraseña: hasta ahora era una clave para todo el
+ * departamento, y con eso no se sabía quién tocó qué ni se podía dar a cada uno
+ * lo suyo.
  *
  * Sin navegación y sin nada más: desde aquí no se llega a ningún dato.
  */
 export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
   const { destino, error } = await searchParams;
+
+  // Sin base de datos no hay usuarios contra los que comprobar nada. Se dice
+  // lo que pasa en vez de enseñar un formulario que siempre va a fallar.
+  if (!hayConfiguracion()) return <SinConfigurar />;
+
+  const mensaje =
+    error === 'espera'
+      ? 'Demasiados intentos seguidos. Prueba dentro de unos minutos.'
+      : 'El usuario o la contraseña no son correctos.';
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
@@ -22,7 +34,7 @@ export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
 
         {error && (
           <div className="mb-4">
-            <Aviso tono="alerta">La clave no es correcta.</Aviso>
+            <Aviso tono="alerta">{mensaje}</Aviso>
           </div>
         )}
 
@@ -32,18 +44,34 @@ export default async function Entrar({ searchParams }: PageProps<'/entrar'>) {
             name="destino"
             value={typeof destino === 'string' ? destino : '/'}
           />
-          <Campo etiqueta="Clave del departamento">
+          <Campo etiqueta="Usuario">
+            <input
+              name="usuario"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+              required
+              className="w-full"
+            />
+          </Campo>
+          <Campo etiqueta="Contraseña">
             <input
               name="clave"
               type="password"
               autoComplete="current-password"
-              autoFocus
               required
               className="w-full"
             />
           </Campo>
           <Boton>Entrar</Boton>
         </form>
+
+        <p className="text-tinta-tenue mt-6 text-[0.6875rem]">
+          El alta la da el administrador del departamento.
+        </p>
       </div>
     </div>
   );

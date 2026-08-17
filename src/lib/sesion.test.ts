@@ -6,31 +6,15 @@ import {
   esRutaLibre,
   estadoPuerta,
   firmarSesion,
-  huella,
   igualSinFiltrar,
-  limpiarHuella,
+  leerSesion,
   limpiarSecreto,
-  sesionValida,
 } from './sesion';
 
 const SECRETO = 'secreto-de-pruebas-largo-y-tonto';
 const AHORA = 1_800_000_000_000;
-
-describe('la huella de la clave', () => {
-  it('la misma clave da la misma huella', async () => {
-    assert.equal(await huella('abeto'), await huella('abeto'));
-  });
-
-  it('claves distintas dan huellas distintas', async () => {
-    assert.notEqual(await huella('abeto'), await huella('abeta'));
-  });
-
-  it('la huella no contiene la clave', async () => {
-    const h = await huella('caja-de-conexiones');
-    assert.ok(!h.includes('caja'));
-    assert.equal(h.length, 64);
-  });
-});
+const YO = '11111111-1111-1111-1111-111111111111';
+const OTRO = '22222222-2222-2222-2222-222222222222';
 
 describe('la comparación no filtra por tiempo', () => {
   it('iguales', () => {
@@ -51,56 +35,69 @@ describe('la comparación no filtra por tiempo', () => {
 });
 
 describe('la sesión firmada', () => {
-  it('una sesión recién hecha vale', async () => {
-    const cookie = await firmarSesion(SECRETO, AHORA + 60_000);
-    assert.equal(await sesionValida(SECRETO, cookie, AHORA), true);
+  it('una sesión recién hecha vale y dice de quién es', async () => {
+    const cookie = await firmarSesion(SECRETO, AHORA + 60_000, YO);
+    const sesion = await leerSesion(SECRETO, cookie, AHORA);
+    assert.equal(sesion?.usuarioId, YO);
   });
 
   it('una sesión caducada no vale', async () => {
-    const cookie = await firmarSesion(SECRETO, AHORA - 1);
-    assert.equal(await sesionValida(SECRETO, cookie, AHORA), false);
+    const cookie = await firmarSesion(SECRETO, AHORA - 1, YO);
+    assert.equal(await leerSesion(SECRETO, cookie, AHORA), null);
   });
 
   it('sin cookie no se pasa', async () => {
-    assert.equal(await sesionValida(SECRETO, undefined, AHORA), false);
-    assert.equal(await sesionValida(SECRETO, '', AHORA), false);
+    assert.equal(await leerSesion(SECRETO, undefined, AHORA), null);
+    assert.equal(await leerSesion(SECRETO, '', AHORA), null);
   });
 
   it('una cookie inventada no vale', async () => {
-    assert.equal(
-      await sesionValida(SECRETO, `${AHORA + 60_000}.aaaa`, AHORA),
-      false,
-    );
+    assert.equal(await leerSesion(SECRETO, `${AHORA + 60_000}.${YO}.aaaa`, AHORA), null);
   });
 
   it('con otro secreto no vale: cambiarlo echa a todo el mundo', async () => {
-    const cookie = await firmarSesion(SECRETO, AHORA + 60_000);
-    assert.equal(await sesionValida('otro secreto', cookie, AHORA), false);
+    const cookie = await firmarSesion(SECRETO, AHORA + 60_000, YO);
+    assert.equal(await leerSesion('otro secreto', cookie, AHORA), null);
   });
 
   it('estirar la caducidad rompe la firma', async () => {
-    const cookie = await firmarSesion(SECRETO, AHORA - 1);
-    const firma = cookie.slice(cookie.indexOf('.') + 1);
-    const estirada = `${AHORA + 999_999}.${firma}`;
-    assert.equal(await sesionValida(SECRETO, estirada, AHORA), false);
+    const cookie = await firmarSesion(SECRETO, AHORA - 1, YO);
+    const firma = cookie.split('.')[2];
+    const estirada = `${AHORA + 999_999}.${YO}.${firma}`;
+    assert.equal(await leerSesion(SECRETO, estirada, AHORA), null);
   });
 
-  it('una cookie con basura no lanza, devuelve falso', async () => {
-    for (const basura of ['.', 'sinpunto', '.abc', 'x.y.z', 'nan.abc']) {
-      assert.equal(await sesionValida(SECRETO, basura, AHORA), false, basura);
+  it('cambiar de quién es la cookie rompe la firma', async () => {
+    // Lo que impide coger la propia sesión y ponerle el identificador del
+    // administrador. Es la razón de que el identificador vaya dentro de lo
+    // firmado y no al lado.
+    const cookie = await firmarSesion(SECRETO, AHORA + 60_000, YO);
+    const [expira, , firma] = cookie.split('.');
+    assert.equal(await leerSesion(SECRETO, `${expira}.${OTRO}.${firma}`, AHORA), null);
+  });
+
+  it('la firma de una persona no sirve para otra en el mismo instante', async () => {
+    const mia = await firmarSesion(SECRETO, AHORA + 60_000, YO);
+    const suya = await firmarSesion(SECRETO, AHORA + 60_000, OTRO);
+    assert.notEqual(mia.split('.')[2], suya.split('.')[2]);
+  });
+
+  it('una cookie con basura no lanza, devuelve nulo', async () => {
+    for (const basura of ['.', 'sinpunto', '.abc', 'x.y', 'a.b.c.d', 'nan.x.abc', `${AHORA + 1}..x`]) {
+      assert.equal(await leerSesion(SECRETO, basura, AHORA), null, basura);
     }
   });
 });
 
-describe('qué rutas no piden clave', () => {
+describe('qué rutas no piden sesión', () => {
   it('la propia entrada y sus recursos', () => {
     assert.equal(esRutaLibre('/entrar'), true);
     assert.equal(esRutaLibre('/_next/static/chunk.js'), true);
     assert.equal(esRutaLibre('/favicon.ico'), true);
   });
 
-  it('todo lo demás pide clave, incluida la interfaz de programación', () => {
-    for (const r of ['/', '/salas', '/salas/abc', '/almacen', '/api/catalogo']) {
+  it('todo lo demás pide sesión, incluida la interfaz de programación', () => {
+    for (const r of ['/', '/salas', '/salas/abc', '/almacen', '/api/catalogo', '/usuarios', '/cuenta']) {
       assert.equal(esRutaLibre(r), false, r);
     }
   });
@@ -138,20 +135,13 @@ describe('a dónde se puede devolver después de entrar', () => {
 
 describe('la limpieza de lo que llega del servidor', () => {
   it('el salto de linea que arrastra el portapapeles no cuenta', () => {
-    // 65 caracteres en vez de 64, y la clave correcta dejaba de entrar.
-    assert.equal(limpiarHuella('a'.repeat(64) + '\n'), 'a'.repeat(64));
-    assert.equal(limpiarHuella('  ' + 'b'.repeat(64) + '  '), 'b'.repeat(64));
-  });
-
-  it('una huella en mayusculas es la misma huella', () => {
-    assert.equal(limpiarHuella('ABCDEF'), 'abcdef');
+    assert.equal(limpiarSecreto('  abc  \n'), 'abc');
   });
 
   it('vacio o solo espacios es no configurado, no cadena vacia', () => {
-    assert.equal(limpiarHuella(undefined), undefined);
-    assert.equal(limpiarHuella(''), undefined);
-    assert.equal(limpiarHuella('   \n'), undefined);
-    assert.equal(limpiarSecreto('  '), undefined);
+    assert.equal(limpiarSecreto(undefined), undefined);
+    assert.equal(limpiarSecreto(''), undefined);
+    assert.equal(limpiarSecreto('   \n'), undefined);
   });
 
   it('el secreto se recorta pero NO se pasa a minusculas: cambiarlo echa a todos', () => {
@@ -160,29 +150,16 @@ describe('la limpieza de lo que llega del servidor', () => {
 });
 
 describe('el estado de la puerta', () => {
-  const configurada = { huellaClave: 'h', secreto: 's' };
-
-  it('con clave y secreto está protegida, se mire donde se mire', () => {
-    assert.equal(estadoPuerta(configurada, true), 'protegida');
-    assert.equal(estadoPuerta(configurada, false), 'protegida');
+  it('con secreto está protegida, se mire donde se mire', () => {
+    assert.equal(estadoPuerta('s', true), 'protegida');
+    assert.equal(estadoPuerta('s', false), 'protegida');
   });
 
   it('en desarrollo sin configurar se pasa: pedir clave ahí solo estorba', () => {
-    assert.equal(
-      estadoPuerta({ huellaClave: undefined, secreto: undefined }, false),
-      'abierta',
-    );
+    assert.equal(estadoPuerta(undefined, false), 'abierta');
   });
 
   it('en producción sin configurar NO se pasa', () => {
-    assert.equal(
-      estadoPuerta({ huellaClave: undefined, secreto: undefined }, true),
-      'sin_configurar',
-    );
-  });
-
-  it('media configuración es no configuración', () => {
-    assert.equal(estadoPuerta({ huellaClave: 'h', secreto: undefined }, true), 'sin_configurar');
-    assert.equal(estadoPuerta({ huellaClave: undefined, secreto: 's' }, true), 'sin_configurar');
+    assert.equal(estadoPuerta(undefined, true), 'sin_configurar');
   });
 });

@@ -11,6 +11,7 @@ import {
   marcarPunto,
 } from '@/lib/datos-checkin';
 import type { EstadoPunto } from '@/lib/tipos';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 /**
  * Escritura del check-in de sala.
@@ -48,6 +49,7 @@ function refrescarVisita(id: string) {
 
 /** Abrir la visita y saltar a ella: quien la crea está en la puerta de la sala. */
 export async function crearVisita(datos: FormData) {
+  await exigirEdicion('checkin');
   const salaId = texto(datos.get('sala_id'));
   if (!salaId) return;
 
@@ -71,6 +73,7 @@ export async function crearVisita(datos: FormData) {
  * botón con el móvil en una mano.
  */
 export async function marcarPuntoVisita(datos: FormData) {
+  await exigirEdicion('checkin');
   const id = texto(datos.get('id'));
   const revisionId = texto(datos.get('revision_id'));
   const estado = estadoValido(datos.get('estado'));
@@ -95,6 +98,7 @@ export async function marcarPuntoVisita(datos: FormData) {
 }
 
 export async function guardarCabeceraVisita(datos: FormData) {
+  await exigirEdicion('checkin');
   const id = texto(datos.get('id'));
   if (!id) return;
   await guardarCabecera({
@@ -111,6 +115,7 @@ export async function guardarCabeceraVisita(datos: FormData) {
  * está en la propia consulta, no en el botón deshabilitado.
  */
 export async function cerrarVisita(datos: FormData) {
+  await exigirEdicion('checkin');
   const id = texto(datos.get('id'));
   if (!id) return;
   await cerrarRevision(id);
@@ -118,6 +123,7 @@ export async function cerrarVisita(datos: FormData) {
 }
 
 export async function borrarVisita(datos: FormData) {
+  await exigirEdicion('checkin');
   const id = texto(datos.get('id'));
   const salaId = texto(datos.get('sala_id'));
   if (!id) return;

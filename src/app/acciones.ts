@@ -8,6 +8,7 @@ import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
 import { coordenadasFueraDeSala } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 /**
  * Lo que el alta devuelve al formulario. `error` nulo es «no ha pasado nada»:
@@ -157,6 +158,7 @@ function posicionDelFormulario(datos: FormData): {
 
 // ---------------------------------------------------------------- plantillas
 export async function guardarMedidasPlantilla(datos: FormData) {
+  await exigirEdicion('plantillas');
   await sql`
     update plantillas_sala set
       largo_m            = ${numero(datos.get('largo_m'))},
@@ -210,6 +212,7 @@ export async function crearSala(
   _previo: EstadoAlta | null,
   datos: FormData,
 ): Promise<EstadoAlta> {
+  await exigirEdicion('salas');
   const plantillaId = texto(datos.get('plantilla_id'));
   const copias = Math.min(
     MAXIMO_COPIAS,
@@ -588,6 +591,7 @@ export async function crearSala(
  * usuario, se desambigua con un sufijo: `Sala TP Madrid (2)`.
  */
 export async function crearPlantillaDesdeSala(datos: FormData) {
+  await exigirEdicion('plantillas');
   const salaId = String(datos.get('sala_id'));
 
   const [sala] = await sql<Array<Record<string, unknown>>>`
@@ -734,6 +738,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
 }
 
 export async function guardarSala(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   // Las medidas, la mesa y el aforo son la mitad del plano: el editor los
   // escribe y el croquis los dibuja. La versión sube en la MISMA sentencia que
@@ -792,6 +797,7 @@ async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
 }
 
 export async function borrarSala(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   if (await proyectoCerradoDeSala(id)) return;
   await sql`delete from salas where id = ${id}`;
@@ -801,6 +807,7 @@ export async function borrarSala(datos: FormData) {
 
 // ------------------------------------------------------------------ equipos
 export async function anadirEquipo(datos: FormData) {
+  await exigirEdicion('salas');
   const salaId = String(datos.get('sala_id'));
   const articuloId = texto(datos.get('articulo_id'));
 
@@ -845,6 +852,7 @@ async function salaIdDeEquipo(equipoId: string): Promise<string | null> {
 }
 
 export async function guardarEquipo(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
   if (!salaId) return;
@@ -884,6 +892,7 @@ export async function guardarEquipo(datos: FormData) {
  * problema.
  */
 export async function ajustarCantidadEquipo(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
   if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
@@ -896,6 +905,7 @@ export async function ajustarCantidadEquipo(datos: FormData) {
 }
 
 export async function borrarEquipo(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
   if (!salaId) return;
@@ -924,6 +934,7 @@ async function salaIdDeToma(tomaId: string): Promise<string | null> {
 }
 
 export async function anadirToma(datos: FormData) {
+  await exigirEdicion('salas');
   const salaId = String(datos.get('sala_id'));
   const codigo = texto(datos.get('codigo'));
   if (!salaId || !codigo) return;
@@ -950,6 +961,7 @@ export async function anadirToma(datos: FormData) {
 }
 
 export async function guardarToma(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeToma(id);
   if (!salaId) return;
@@ -973,6 +985,7 @@ export async function guardarToma(datos: FormData) {
 
 /** Los equipos que pinchaban en ella se quedan sin toma, no se borran. */
 export async function borrarToma(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeToma(id);
   if (!salaId) return;
@@ -996,6 +1009,7 @@ export async function borrarToma(datos: FormData) {
 // pestaña de Diagrama abierta, y eso cuesta trabajo real a cambio de nada.
 
 export async function anadirConexion(datos: FormData) {
+  await exigirEdicion('salas');
   const salaId = String(datos.get('sala_id'));
   const origen = String(datos.get('origen_id'));
   const destino = String(datos.get('destino_id'));
@@ -1030,6 +1044,7 @@ async function salaIdDeConexion(conexionId: string): Promise<string | null> {
  * volver a crearlas, que cambiaría su identificador de cable.
  */
 export async function guardarConexion(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeConexion(id);
   if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
@@ -1046,6 +1061,7 @@ export async function guardarConexion(datos: FormData) {
 }
 
 export async function borrarConexion(datos: FormData) {
+  await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeConexion(id);
   if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
@@ -1055,6 +1071,7 @@ export async function borrarConexion(datos: FormData) {
 
 // ---------------------------------------------------------------- parámetros
 export async function guardarParametros(datos: FormData) {
+  await exigirEdicion('parametros');
   for (const [clave, valor] of datos.entries()) {
     const v = numero(valor);
     if (v == null) continue;
@@ -1066,6 +1083,7 @@ export async function guardarParametros(datos: FormData) {
 
 // ------------------------------------------------------------------ catálogo
 export async function guardarPrecioArticulo(datos: FormData) {
+  await exigirEdicion('catalogo');
   await sql`
     update articulos set
       coste       = ${numero(datos.get('coste'))},
@@ -1079,6 +1097,7 @@ export async function guardarPrecioArticulo(datos: FormData) {
 
 // ------------------------------------------- equipamiento de las plantillas
 export async function anadirLineaPlantilla(datos: FormData) {
+  await exigirEdicion('plantillas');
   const plantillaId = String(datos.get('plantilla_id'));
   const articuloId = texto(datos.get('articulo_id'));
   if (!articuloId) return;
@@ -1105,6 +1124,7 @@ export async function anadirLineaPlantilla(datos: FormData) {
  * de cien líneas en `/plantillas` eso pesaba más que el propio contenido.
  */
 export async function operarLineaPlantilla(datos: FormData) {
+  await exigirEdicion('plantillas');
   const id = String(datos.get('id'));
 
   switch (texto(datos.get('operacion'))) {
@@ -1144,6 +1164,7 @@ export async function operarLineaPlantilla(datos: FormData) {
  * sala: puede haber un adaptador por medio.
  */
 export async function anadirTiradaPlantilla(datos: FormData) {
+  await exigirEdicion('plantillas');
   const plantillaId = String(datos.get('plantilla_id'));
   const origen = texto(datos.get('origen_linea_id'));
   const destino = texto(datos.get('destino_linea_id'));
@@ -1158,6 +1179,7 @@ export async function anadirTiradaPlantilla(datos: FormData) {
 }
 
 export async function quitarTiradaPlantilla(datos: FormData) {
+  await exigirEdicion('plantillas');
   await sql`delete from plantilla_conexiones where id = ${String(datos.get('id'))}`;
   revalidatePath('/plantillas');
 }
@@ -1183,6 +1205,7 @@ async function proveedorId(nombre: string | null): Promise<string | null> {
 }
 
 export async function guardarArticulo(datos: FormData) {
+  await exigirEdicion('catalogo');
   const id = String(datos.get('id'));
   const idProveedor = await proveedorId(texto(datos.get('proveedor')));
 
@@ -1215,6 +1238,7 @@ export async function guardarArticulo(datos: FormData) {
 }
 
 export async function crearArticulo(datos: FormData) {
+  await exigirEdicion('catalogo');
   const idProveedor = await proveedorId(texto(datos.get('proveedor')));
   const [a] = await sql<Array<{ id: string }>>`
     insert into articulos ${sql({
@@ -1245,6 +1269,7 @@ export async function crearArticulo(datos: FormData) {
 
 /** Nombre y sentido son lo mínimo: sin ellos el puerto no dice nada. */
 export async function anadirPuerto(datos: FormData) {
+  await exigirEdicion('catalogo');
   const articuloId = String(datos.get('articulo_id'));
   const nombre = texto(datos.get('nombre'));
   if (!articuloId || !nombre) return;
@@ -1265,6 +1290,7 @@ export async function anadirPuerto(datos: FormData) {
 }
 
 export async function guardarPuerto(datos: FormData) {
+  await exigirEdicion('catalogo');
   const articuloId = String(datos.get('articulo_id'));
   await sql`
     update puertos set
@@ -1280,6 +1306,7 @@ export async function guardarPuerto(datos: FormData) {
 }
 
 export async function borrarPuerto(datos: FormData) {
+  await exigirEdicion('catalogo');
   const articuloId = String(datos.get('articulo_id'));
   await sql`delete from puertos where id = ${String(datos.get('id'))}`;
   revalidatePath(`/articulo/${articuloId}`);
@@ -1288,6 +1315,7 @@ export async function borrarPuerto(datos: FormData) {
 
 /** No se borra: se desactiva, para no romper las salas que ya lo usan. */
 export async function desactivarArticulo(datos: FormData) {
+  await exigirEdicion('catalogo');
   await sql`update articulos set activo = false where id = ${String(datos.get('id'))}`;
   revalidatePath('/catalogo');
   redirect('/catalogo');

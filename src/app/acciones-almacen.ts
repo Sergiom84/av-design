@@ -7,6 +7,7 @@ import { faltaParaSala } from '@/lib/datos-almacen';
 import { estadoPorRecepcion } from '@/lib/compras';
 import { movimientosDeCierre, movimientosDeSalida } from '@/lib/carga';
 import type { EstadoPedido, LineaCarga } from '@/lib/tipos';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 /**
  * Escritura del almacén, las reservas, los pedidos y las cargas.
@@ -37,6 +38,7 @@ function refrescarAlmacen() {
 
 // ------------------------------------------------------------- ubicaciones
 export async function crearUbicacion(datos: FormData) {
+  await exigirEdicion('almacen');
   const nombre = texto(datos.get('nombre'));
   if (!nombre) return;
   await sql`
@@ -56,6 +58,7 @@ export async function crearUbicacion(datos: FormData) {
  * no quien teclea: ver SIGNO_MOVIMIENTO en `src/lib/almacen.ts`.
  */
 export async function registrarMovimiento(datos: FormData) {
+  await exigirEdicion('almacen');
   const articuloId = texto(datos.get('articulo_id'));
   const tipo = texto(datos.get('tipo')) ?? 'entrada';
   const cantidad = numero(datos.get('cantidad'));
@@ -84,6 +87,7 @@ export async function registrarMovimiento(datos: FormData) {
 
 // ------------------------------------------------------------------ reservas
 export async function crearReserva(datos: FormData) {
+  await exigirEdicion('almacen');
   const salaId = texto(datos.get('sala_id'));
   const articuloId = texto(datos.get('articulo_id'));
   const cantidad = numero(datos.get('cantidad'));
@@ -104,6 +108,7 @@ export async function crearReserva(datos: FormData) {
  * Nunca reserva de más: lo que no hay se compra, y para eso está el pedido.
  */
 export async function reservarLoDisponible(datos: FormData) {
+  await exigirEdicion('almacen');
   const salaId = String(datos.get('sala_id'));
   const quien = texto(datos.get('quien'));
   const falta = await faltaParaSala(salaId);
@@ -129,6 +134,7 @@ export async function reservarLoDisponible(datos: FormData) {
 
 /** Soltar la reserva: el material vuelve a estar disponible para otra obra. */
 export async function liberarReserva(datos: FormData) {
+  await exigirEdicion('almacen');
   const salaId = String(datos.get('sala_id'));
   await sql`
     update reservas set estado = 'liberada'
@@ -138,6 +144,7 @@ export async function liberarReserva(datos: FormData) {
 }
 
 export async function borrarReserva(datos: FormData) {
+  await exigirEdicion('almacen');
   const salaId = String(datos.get('sala_id'));
   await sql`delete from reservas where id = ${String(datos.get('id'))}`;
   refrescarAlmacen();
@@ -152,6 +159,7 @@ export async function borrarReserva(datos: FormData) {
  * hace tres meses tiene que seguir contando lo que costó entonces.
  */
 export async function crearPedidoDesdeFalta(datos: FormData) {
+  await exigirEdicion('compras');
   const salaId = String(datos.get('sala_id'));
   const proveedorPedido = texto(datos.get('proveedor'));
   const falta = await faltaParaSala(salaId);
@@ -209,6 +217,7 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
 }
 
 export async function cambiarEstadoPedido(datos: FormData) {
+  await exigirEdicion('compras');
   const id = String(datos.get('id'));
   const estado = (texto(datos.get('estado')) ?? 'borrador') as EstadoPedido;
   await sql`
@@ -222,6 +231,7 @@ export async function cambiarEstadoPedido(datos: FormData) {
 }
 
 export async function guardarPedido(datos: FormData) {
+  await exigirEdicion('compras');
   const id = String(datos.get('id'));
   await sql`
     update pedidos set
@@ -241,6 +251,7 @@ export async function guardarPedido(datos: FormData) {
  * desactualizado, que es el problema de partida.
  */
 export async function recibirLineaPedido(datos: FormData) {
+  await exigirEdicion('compras');
   const lineaId = String(datos.get('id'));
   const pedidoId = String(datos.get('pedido_id'));
   const cantidad = numero(datos.get('cantidad'));
@@ -286,6 +297,7 @@ export async function recibirLineaPedido(datos: FormData) {
 
 /** Recibir de golpe todo lo que falta del pedido. Lo normal cuando llega entero. */
 export async function recibirPedidoCompleto(datos: FormData) {
+  await exigirEdicion('compras');
   const pedidoId = String(datos.get('id'));
   const ubicacionId = texto(datos.get('ubicacion_id'));
   const quien = texto(datos.get('quien'));
@@ -322,12 +334,14 @@ export async function recibirPedidoCompleto(datos: FormData) {
 }
 
 export async function borrarLineaPedido(datos: FormData) {
+  await exigirEdicion('compras');
   const pedidoId = String(datos.get('pedido_id'));
   await sql`delete from pedido_lineas where id = ${String(datos.get('id'))}`;
   revalidatePath(`/compras/${pedidoId}`);
 }
 
 export async function borrarPedido(datos: FormData) {
+  await exigirEdicion('compras');
   await sql`delete from pedidos where id = ${String(datos.get('id'))}`;
   revalidatePath('/compras');
   redirect('/compras');
@@ -340,6 +354,7 @@ export async function borrarPedido(datos: FormData) {
  * cargar sin apartar es cómo se lleva a obra material de otro.
  */
 export async function crearCargaDesdeReservas(datos: FormData) {
+  await exigirEdicion('carga');
   const salaId = String(datos.get('sala_id'));
   const nombre = texto(datos.get('nombre'));
 
@@ -374,6 +389,7 @@ export async function crearCargaDesdeReservas(datos: FormData) {
 
 /** Marcar o desmarcar una línea. Es lo que se hace de pie en el almacén. */
 export async function marcarLineaCarga(datos: FormData) {
+  await exigirEdicion('carga');
   const cargaId = String(datos.get('carga_id'));
   await sql`
     update carga_lineas set cargado = not cargado
@@ -382,6 +398,7 @@ export async function marcarLineaCarga(datos: FormData) {
 }
 
 export async function marcarTodaLaCarga(datos: FormData) {
+  await exigirEdicion('carga');
   const cargaId = String(datos.get('carga_id'));
   await sql`
     update carga_lineas set cargado = ${datos.get('valor') === 'si'}
@@ -395,6 +412,7 @@ export async function marcarTodaLaCarga(datos: FormData) {
  * pura y está probada.
  */
 export async function confirmarCarga(datos: FormData) {
+  await exigirEdicion('carga');
   const cargaId = String(datos.get('id'));
   const ubicacionId = texto(datos.get('ubicacion_id'));
   const quien = texto(datos.get('quien'));
@@ -442,6 +460,7 @@ export async function confirmarCarga(datos: FormData) {
 
 /** El reparto de una línea al volver de obra: instalado, devuelto y roto. */
 export async function guardarCierreLinea(datos: FormData) {
+  await exigirEdicion('carga');
   const cargaId = String(datos.get('carga_id'));
   await sql`
     update carga_lineas set
@@ -458,6 +477,7 @@ export async function guardarCierreLinea(datos: FormData) {
  * Qué movimientos salen de cada línea lo decide `movimientosDeCierre()`.
  */
 export async function cerrarCarga(datos: FormData) {
+  await exigirEdicion('carga');
   const cargaId = String(datos.get('id'));
   const ubicacionId = texto(datos.get('ubicacion_id'));
   const quien = texto(datos.get('quien'));
@@ -500,6 +520,7 @@ export async function cerrarCarga(datos: FormData) {
 }
 
 export async function borrarCarga(datos: FormData) {
+  await exigirEdicion('carga');
   await sql`delete from cargas where id = ${String(datos.get('id'))}`;
   revalidatePath('/carga');
   redirect('/carga');

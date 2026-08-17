@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
@@ -25,6 +26,7 @@ async function proyectoCerrado(proyectoId: string): Promise<boolean> {
  * fallar delante del usuario.
  */
 export async function crearProyecto(datos: FormData) {
+  await exigirEdicion('proyectos');
   const nombre = texto(datos.get('nombre'));
   if (!nombre) return;
 
@@ -81,6 +83,7 @@ export async function crearProyecto(datos: FormData) {
 }
 
 export async function crearLocalizacion(datos: FormData) {
+  await exigirEdicion('proyectos');
   const proyectoId = texto(datos.get('proyecto_id'));
   const nombre = texto(datos.get('nombre'));
   if (!proyectoId || !nombre) return;
@@ -94,6 +97,7 @@ export async function crearLocalizacion(datos: FormData) {
 }
 
 export async function renombrarLocalizacion(datos: FormData) {
+  await exigirEdicion('proyectos');
   const id = texto(datos.get('id'));
   const nombre = texto(datos.get('nombre'));
   if (!id || !nombre) return;
@@ -112,6 +116,7 @@ export async function renombrarLocalizacion(datos: FormData) {
  * localizaciones, que sin proyecto no significan nada.
  */
 export async function borrarProyecto(datos: FormData) {
+  await exigirEdicion('proyectos');
   const id = texto(datos.get('id'));
   if (!id) return;
   if (await proyectoCerrado(id)) return;
@@ -139,6 +144,7 @@ async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
 }
 
 export async function asignarSalaALocalizacion(datos: FormData) {
+  await exigirEdicion('proyectos');
   const salaId = texto(datos.get('sala_id'));
   if (!salaId) return;
   // La obra de origen también está cerrada de solo lectura: mover o soltar

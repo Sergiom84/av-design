@@ -11,6 +11,7 @@ import {
   type PatchPlano,
 } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
+import { exigirEdicion } from '@/lib/sesion-servidor';
 
 /**
  * El guardado del plano: una acción, una transacción, todo o nada.
@@ -199,6 +200,7 @@ const fallo = (motivo: GuardadoFallido['motivo']): GuardadoFallido => ({
 });
 
 export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoGuardado> {
+  await exigirEdicion('salas');
   const validado = esquemaPatch.safeParse(patch);
   if (!validado.success) return fallo('invalido');
   const p = validado.data;
@@ -554,6 +556,7 @@ export async function iniciarDiagramaDesdeCero(
   salaId: string,
   versionEsperada: number,
 ): Promise<ResultadoGuardado> {
+  await exigirEdicion('salas');
   return guardarDiagramaSala({
     sala_id: salaId,
     versionEsperada,
@@ -625,6 +628,7 @@ export async function aplicarPlantillaAlDiagrama(
   plantillaId: string,
   versionEsperada: number,
 ): Promise<ResultadoPlantilla> {
+  await exigirEdicion('salas');
   if (!esUuid(salaId) || !esUuid(plantillaId) || !Number.isInteger(versionEsperada)) {
     return { ok: false, motivo: 'invalido', detalle: MENSAJE.invalido };
   }

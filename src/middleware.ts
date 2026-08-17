@@ -3,10 +3,9 @@ import {
   COOKIE_SESION,
   esRutaLibre,
   estadoPuerta,
-  limpiarHuella,
+  leerSesion,
   limpiarSecreto,
   RUTA_ENTRADA,
-  sesionValida,
 } from '@/lib/sesion';
 
 /**
@@ -14,43 +13,39 @@ import {
  * que no hay forma de llegar a los datos sin pasar por aquí: ni por una
  * dirección adivinada ni por `/api/catalogo`.
  *
- * El criterio de quién pasa vive en `src/lib/sesion.ts`, que es lógica pura y
- * tiene pruebas. Aquí solo se lee la cookie y se redirige.
+ * Aquí solo se comprueba que **hay** sesión firmada y sin caducar. Quién es y
+ * qué puede ver se resuelve en `src/lib/sesion-servidor.ts`, que sí puede
+ * consultar la base: esto corre en el runtime de borde y allí no hay Postgres.
+ * Que sean dos capas no es una duplicidad, es la única división posible.
  */
 export async function middleware(peticion: NextRequest) {
   const ruta = peticion.nextUrl.pathname;
   if (esRutaLibre(ruta)) return NextResponse.next();
 
-  // Se leen con corchetes y no con punto a propósito. Con `process.env.X` el
-  // compilador incrusta el valor en el código, así que cambiar la clave en el
+  // Se lee con corchetes y no con punto a propósito. Con `process.env.X` el
+  // compilador incrusta el valor en el código, así que cambiar el secreto en el
   // servidor no cambia nada hasta que se vuelve a compilar entero. Costó una
-  // tarde descubrirlo: la clave nueva no entraba y la vieja tampoco, porque la
-  // aplicación seguía comparando contra la huella del despliegue anterior.
-  const puerta = estadoPuerta(
-    {
-      huellaClave: limpiarHuella(process.env['CLAVE_ACCESO_HASH']),
-      secreto: limpiarSecreto(process.env['SESION_SECRETO']),
-    },
-    process.env['NODE_ENV'] === 'production',
-  );
+  // tarde descubrirlo con la clave de departamento.
+  const secreto = limpiarSecreto(process.env['SESION_SECRETO']);
+  const puerta = estadoPuerta(secreto, process.env['NODE_ENV'] === 'production');
 
   if (puerta === 'abierta') return NextResponse.next();
 
-  // Producción sin clave configurada: no se pasa. Un despliegue al que se le
+  // Producción sin secreto configurado: no se pasa. Un despliegue al que se le
   // olvidó la variable es justo el caso en el que el inventario acaba abierto.
   if (puerta === 'sin_configurar') {
     return new NextResponse(
-      'Falta configurar CLAVE_ACCESO_HASH y SESION_SECRETO en el servidor.',
+      'Falta configurar SESION_SECRETO en el servidor.',
       { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } },
     );
   }
 
-  const vale = await sesionValida(
-    limpiarSecreto(process.env['SESION_SECRETO'])!,
+  const sesion = await leerSesion(
+    secreto!,
     peticion.cookies.get(COOKIE_SESION)?.value,
     Date.now(),
   );
-  if (vale) return NextResponse.next();
+  if (sesion) return NextResponse.next();
 
   // A dónde iba, para devolverlo ahí después de entrar. Solo rutas de esta
   // aplicación: un destino con dominio propio convertiría la entrada en un

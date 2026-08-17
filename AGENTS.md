@@ -252,18 +252,53 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   JavaScript. Cien filas editables a la vez pesaban más que el resto junto.
 - **Cada bloque de la interfaz vive en su propia carpeta de componente.** Nada
   de páginas monolíticas: `src/components/<bloque>/`.
-- **Se entra con una clave de departamento, no con usuario.** La aplicación
-  está en una dirección pública con el inventario dentro, así que hay puerta:
-  `src/middleware.ts` la vigila y el criterio vive en `src/lib/sesion.ts`, que
-  es lógica pura con pruebas. La clave no se guarda en ningún sitio, solo su
-  huella SHA-256 (`CLAVE_ACCESO_HASH`), y la cookie va firmada con
-  `SESION_SECRETO`. Sin las dos variables, en desarrollo se pasa y **en
-  producción no pasa nadie**: un despliegue al que se le olvidó la variable es
-  justo el caso en el que el inventario acaba abierto. **Cambiar la clave exige
-  redesplegar**: el proceso lee las variables al arrancar, y guardar la nueva
-  huella en Render sin redesplegar deja la aplicación comparando contra la
-  anterior. Saber quién tocó qué es
-  otro problema, y para eso ya está `rol_usuario` en el esquema.
+- **Se entra con usuario y contraseña.** Sustituye a la clave única de
+  departamento, no la extiende: aquella servía para que no entrara quien pasara
+  por la dirección, pero no distinguía a nadie ni permitía dar a cada uno lo
+  suyo. `CLAVE_ACCESO_HASH` ya no existe; `SESION_SECRETO` sigue firmando la
+  cookie, y sin él en desarrollo se pasa como administrador ficticio y **en
+  producción no pasa nadie**. **Cambiar el secreto exige redesplegar** y echa a
+  todo el mundo, que es justo lo que se quiere si alguien se ha colado.
+- **La puerta son dos capas porque el middleware no tiene base de datos.**
+  `src/middleware.ts` corre en el runtime de borde: solo comprueba que la
+  cookie está firmada por este servidor y no ha caducado (`src/lib/sesion.ts`,
+  lógica pura con pruebas). Quién eres y qué puedes ver lo resuelve
+  `src/lib/sesion-servidor.ts` **consultando la base en cada petición**, no
+  metiéndolo en la cookie: así retirar un permiso surte efecto en la petición
+  siguiente y no doce horas después. El identificador va dentro de lo firmado;
+  si fuera al lado, cualquiera cambiaría el suyo por el del administrador.
+- **Las contraseñas se guardan con PBKDF2, no con SHA-256.** Un secreto largo y
+  aleatorio aguanta un SHA-256 pelado; una contraseña que elige una persona se
+  prueba a miles de millones por segundo. `src/lib/contrasena.ts`: PBKDF2-SHA256,
+  600.000 iteraciones y sal por usuario, con el coste guardado dentro del propio
+  valor para poder subirlo sin invalidar lo de hoy. Web Crypto y ninguna
+  dependencia nueva: `bcrypt` y `argon2` son binarios nativos y no corren en
+  borde. El alta y la comprobación tardan lo mismo exista el usuario o no, con
+  una huella señuelo: si no, se averigua la plantilla probando códigos.
+- **El administrador da de alta; nadie se registra solo.** Escribe una
+  contraseña provisional y la entrega en mano —no se manda ningún correo, que se
+  queda ahí para siempre— y la persona está obligada a cambiarla: con
+  `debe_cambiar_clave` puesto no se llega a ningún dato, solo a `/cuenta`. Un
+  usuario no se borra, se apaga: borrarlo se lleva el rastro de quién entró. Y
+  no se puede dejar la aplicación sin administradores activos ni darse de baja
+  uno mismo, porque salir de ahí es entrar a la base a mano.
+- **El rol pone el defecto y la excepción por persona lo pisa.** Cinco roles
+  (`admin`, `tei`, `tecnico_avanzado`, `tecnico`, `lectura`) y once secciones
+  con tres estados: `oculto`, `ver`, `editar`. En `usuario_permisos` **solo se
+  guarda la diferencia** contra el rol, así que cambiar mañana el criterio de un
+  rol alcanza a todo el mundo salvo donde hay una excepción escrita a propósito.
+  Al administrador no se le puede quitar nada: un control que permite dejarte
+  fuera para siempre no es un control. `av` desapareció del vocabulario pero
+  sigue en el enum de Postgres, porque quitar un valor obliga a recrear el tipo
+  entero: la aplicación lo rechaza, que es donde importa.
+- **Esconder el botón no es la guarda.** Una acción de servidor es una dirección
+  pública a la que se puede llamar sin pasar por la pantalla que la esconde. Las
+  sesenta y seis acciones que escriben empiezan por `exigirEdicion(<sección>)`, y
+  que ninguna se olvide lo vigila un barrido
+  (`src/pruebas/guardas-acciones.test.ts`) que recorre el árbol y **comprueba que
+  ha encontrado ficheros**: una lista escrita a mano tendría el mismo problema
+  que evita. El menú oculta lo que no se puede abrir y cada sección se guarda en
+  su `layout.tsx`, para que una pantalla nueva nazca protegida.
 - **La app no revienta sin base de datos.** Si falta `DATABASE_URL` muestra
   `SinConfigurar` en vez de lanzar un error.
 - **Aspecto:** `design-system/MASTER.md` manda. Desde el 7-8-2026 el sistema es
@@ -277,12 +312,13 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 |---|---|
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Compilación de producción (también valida tipos) |
-| `npm test` | Pruebas de la lógica pura: cable, tabla de cables, croquis, plano, almacén, compras y carga |
+| `npm test` | Pruebas de la lógica pura: cable, tabla de cables, croquis, plano, almacén, compras, carga, sesión, contraseñas y permisos, más el barrido de guardas de las acciones |
 | `npm run test:diagrama` | Guardas del guardado del plano contra Postgres real |
 | `npm run test:plantillas` | Ida y vuelta sala ↔ plantilla contra Postgres real |
 | `npm run test:guardas-sala` | Guardas de «proyecto cerrado» contra Postgres real |
 | `npm run seed` | Regenera `db/seed.sql` desde los CSV de `data/` |
 | `npm run db:reset` | Levanta Postgres en Docker, migra y siembra |
+| `npm run usuarios:admin` | Crea o restablece el administrador. Paso manual del despliegue: el alta de usuarios vive dentro de la aplicación y a la aplicación se entra con un usuario. Contra una base que no sea local exige `--confirmo=<nombre_de_la_base>` |
 | `npm run typecheck` | Solo tipos (requiere haber compilado antes una vez) |
 
 ## Datos de partida

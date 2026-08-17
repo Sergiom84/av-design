@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test \"src/lib/*.test.ts\" \"src/pruebas/*.test.ts\" \"src/components/**/*.test.tsx\" \"scripts/*.test.mjs\"",
+    "test": "node --import tsx --test \"src/lib/*.test.ts\" \"src/pruebas/*.test.ts\" \"src/components/**/*.test.ts\" \"src/components/**/*.test.tsx\" \"scripts/*.test.mjs\"",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/generar-seed.mjs",
     "db:up": "docker compose up -d --wait",

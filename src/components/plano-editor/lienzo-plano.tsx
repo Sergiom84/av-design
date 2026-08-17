@@ -1,6 +1,10 @@
 'use client';
 
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { proyectar, type EscenaCroquis } from '@/lib/croquis';
 import { comoViewBox, type Seleccion, type Vista } from '@/lib/plano-editor';
 import {
@@ -44,6 +48,7 @@ export function LienzoPlano({
   rejilla,
   soloLectura,
   alSeleccionar,
+  alMenuContextual,
   alArrastrar,
   alSoltar,
   alDesplazarVista,
@@ -58,6 +63,15 @@ export function LienzoPlano({
   rejilla: boolean;
   soloLectura: boolean;
   alSeleccionar: (s: Seleccion) => void;
+  /**
+   * Botón derecho sobre un objeto. El punto llega en coordenadas de ventana
+   * porque el menú se ancla ahí, no dentro del SVG: un menú dibujado en el
+   * lienzo se recorta con el `viewBox` y se escala con el zoom.
+   *
+   * Es opcional a propósito: el lienzo tiene que seguir funcionando sin menú,
+   * porque el botón derecho nunca puede ser el único camino a una operación.
+   */
+  alMenuContextual?: (s: Exclude<Seleccion, null>, punto: { x: number; y: number }) => void;
   alArrastrar: (s: Exclude<Seleccion, null>, punto: PuntoMetros) => void;
   alSoltar: () => void;
   alDesplazarVista: (dx: number, dy: number) => void;
@@ -147,6 +161,27 @@ export function LienzoPlano({
     arrastre.current = null;
   };
 
+  /**
+   * El botón derecho sobre un objeto: lo selecciona y pide el menú.
+   *
+   * Selecciona antes de abrir porque el menú actúa sobre lo seleccionado, y
+   * porque quien pulsa con el derecho sobre una silla espera que el menú hable
+   * de esa silla y no de lo que hubiera antes. `preventDefault` quita el menú
+   * del navegador, que aquí no ofrece nada útil.
+   *
+   * Sin `alMenuContextual` no se intercepta nada: el navegador hace lo suyo y
+   * el lienzo se comporta como siempre.
+   */
+  const menuDe = (objetivo: Exclude<Seleccion, null>) =>
+    alMenuContextual
+      ? (ev: ReactMouseEvent) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          alSeleccionar(objetivo);
+          alMenuContextual(objetivo, { x: ev.clientX, y: ev.clientY });
+        }
+      : undefined;
+
   const seleccionado = (s: Exclude<Seleccion, null>) =>
     seleccion?.tipo === s.tipo &&
     ('id' in s ? 'id' in seleccion && seleccion.id === s.id : true);
@@ -228,6 +263,7 @@ export function LienzoPlano({
                 y_m: escena.mesa!.centro.y_m,
               })
             }
+            onContextMenu={menuDe({ tipo: 'mesa' })}
           />
         )}
 
@@ -245,6 +281,7 @@ export function LienzoPlano({
               onPointerDown={(ev) =>
                 empezarObjeto(ev, { tipo: 'mueble', id: m.id }, { x_m: m.x_m, y_m: m.y_m })
               }
+              onContextMenu={menuDe({ tipo: 'mueble', id: m.id })}
             />
           );
         })}
@@ -263,6 +300,7 @@ export function LienzoPlano({
               onPointerDown={(ev) =>
                 empezarObjeto(ev, { tipo: 'equipo', id: e.id }, { x_m: e.x_m, y_m: e.y_m })
               }
+              onContextMenu={menuDe({ tipo: 'equipo', id: e.id })}
             />
           );
         })}
@@ -278,6 +316,7 @@ export function LienzoPlano({
             onPointerDown={(ev) =>
               empezarObjeto(ev, { tipo: 'toma', id: t.id }, { x_m: t.x_m, y_m: t.y_m })
             }
+            onContextMenu={menuDe({ tipo: 'toma', id: t.id })}
           />
         ))}
       </g>
@@ -300,6 +339,7 @@ function Agarre({
   alto,
   giro,
   onPointerDown,
+  onContextMenu,
 }: {
   activo: boolean;
   x: number;
@@ -308,6 +348,7 @@ function Agarre({
   alto: number;
   giro?: string;
   onPointerDown: (ev: ReactPointerEvent) => void;
+  onContextMenu?: (ev: ReactMouseEvent) => void;
 }) {
   const margen = 3;
   return (
@@ -319,6 +360,7 @@ function Agarre({
         height={alto}
         fill="transparent"
         onPointerDown={onPointerDown}
+        onContextMenu={onContextMenu}
       />
       {activo && (
         <>

@@ -49,12 +49,13 @@ import { ANCHO_BASE_PX, LienzoPlano, type PuntoMetros } from './lienzo-plano';
 import { ListaObjetos } from './lista-objetos';
 import { BibliotecaElementos } from './biblioteca';
 import { GuardiaSalida } from './guardia-salida';
-import { InspectorSala } from './inspector-sala';
-import { InspectorMesa } from './inspector-mesa';
-import { InspectorEquipo } from './inspector-equipo';
-import { InspectorMueble } from './inspector-mueble';
-import { InspectorToma } from './inspector-toma';
 import { PanelMovil } from './panel-movil';
+import { InspectorSala } from './inspector-sala';
+import { PanelPropiedadesPlano, resumenDeSeleccion } from './panel-propiedades-plano';
+import { ControlesCapas } from './controles-capas';
+import { MenuContextualPlano, type MenuContextualAbierto } from './menu-contextual-plano';
+import { CAPAS_INICIALES, alternarCapa, escenaVisible, type CapaPlano } from './capas-plano';
+import { aplicarOperacion, type OperacionPlano } from './operaciones-plano';
 import type { EstadoGuardado } from './estado-guardado';
 
 /**
@@ -113,6 +114,13 @@ export function EditorPlanoSala({
   const [rejilla, setRejilla] = useState(true);
   const [ajuste, setAjuste] = useState(true);
   const [vista, setVista] = useState<Vista | null>(null);
+  /**
+   * Qué capas se están mirando. Estado de interfaz y nada más: no entra en el
+   * borrador, así que apagar el mobiliario no ensucia la pestaña ni escribe
+   * una decisión de vista como si fuera una medida de la sala.
+   */
+  const [capas, setCapas] = useState(CAPAS_INICIALES);
+  const [menu, setMenu] = useState<MenuContextualAbierto | null>(null);
   const [estado, setEstado] = useState<EstadoGuardado>('limpio');
   const [problema, setProblema] = useState<string | null>(null);
   /**
@@ -147,6 +155,15 @@ export function EditorPlanoSala({
 
   /** El SVG del lienzo, para convertir el puntero a metros al soltar. */
   const lienzo = useRef<SVGSVGElement | null>(null);
+
+  /**
+   * El panel de propiedades, para poder llevarle el foco.
+   *
+   * «Propiedades» desde el menú contextual tiene que dejar el foco donde está
+   * la ficha: si no, quien llegó con el teclado abre el panel y sigue con el
+   * foco en el lienzo, sin nada que tabular.
+   */
+  const propiedades = useRef<HTMLDivElement | null>(null);
 
   const soloLectura = cerrado;
 
@@ -202,6 +219,34 @@ export function EditorPlanoSala({
     [borrador, recargandoConflicto],
   );
 
+  /**
+   * El único camino de una operación al borrador.
+   *
+   * Lo llaman el menú contextual y la lista de objetos, y hace exactamente lo
+   * mismo que hace el inspector, porque por dentro es el mismo despachador
+   * puro. Si mañana girar cambia, cambia una vez.
+   *
+   * Compara por identidad antes de aplicar: `aplicarOperacion` devuelve el
+   * borrador de entrada cuando la operación no corresponde, y apilar eso en el
+   * historial dejaría pasos de deshacer que no deshacen nada.
+   */
+  const operar = useCallback(
+    (operacion: OperacionPlano) => {
+      const r = aplicarOperacion(borrador, seleccionValida, operacion);
+      if (r.borrador !== borrador) aplicar(r.borrador);
+      setSeleccion(r.seleccion);
+      if (r.enfocarPropiedades) propiedades.current?.focus();
+    },
+    [aplicar, borrador, seleccionValida],
+  );
+
+  const cerrarMenu = useCallback(() => setMenu(null), []);
+
+  const alternar = useCallback(
+    (capa: CapaPlano) => setCapas((c) => alternarCapa(c, capa)),
+    [],
+  );
+
   const escena = useMemo(
     () => construirEscena(entradaCroquisDe(borrador, sala, conexiones)),
     [borrador, sala, conexiones],
@@ -211,6 +256,11 @@ export function EditorPlanoSala({
     () => proyectar(escena, { ancho_px: ANCHO_BASE_PX }),
     [escena],
   );
+
+  // Lo que se pinta. La proyección se calcula sobre la escena entera a
+  // propósito: depende del rectángulo de la sala, así que apagar una capa no
+  // puede cambiar la escala ni dar un salto de encuadre.
+  const escenaPintada = useMemo(() => escenaVisible(escena, capas), [escena, capas]);
 
   const vistaEfectiva = vista ?? vistaCompleta(proyeccion.ancho_px, proyeccion.alto_px);
   const zoom = zoomDe(vistaEfectiva, proyeccion.ancho_px);
@@ -512,63 +562,17 @@ export function EditorPlanoSala({
   );
 
   const inspector = (
-    <>
-      {seleccionValida === null || seleccionValida.tipo === 'sala' ? (
-        <InspectorSala borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
-      ) : seleccionValida.tipo === 'mesa' ? (
-        <InspectorMesa borrador={borrador} alCambiar={aplicar} soloLectura={edicionBloqueada} />
-      ) : seleccionValida.tipo === 'equipo' ? (
-        (() => {
-          const e = borrador.equipos.find((x) => x.id === seleccionValida.id);
-          return e ? (
-            <InspectorEquipo
-              equipo={e}
-              borrador={borrador}
-              posicionDibujada={posicionesDibujadas.get(e.id) ?? null}
-              alCambiar={aplicar}
-              alQuitar={() => setSeleccion(null)}
-              soloLectura={edicionBloqueada}
-            />
-          ) : null;
-        })()
-      ) : seleccionValida.tipo === 'mueble' ? (
-        <InspectorMueble
-          borrador={borrador}
-          id={seleccionValida.id}
-          alCambiar={aplicar}
-          alQuitar={() => setSeleccion(null)}
-          soloLectura={edicionBloqueada}
-        />
-      ) : (
-        (() => {
-          const t = borrador.tomas.find((x) => x.id === seleccionValida.id);
-          return t ? (
-            <InspectorToma
-              toma={t}
-              borrador={borrador}
-              alCambiar={aplicar}
-              soloLectura={edicionBloqueada}
-            />
-          ) : null;
-        })()
-      )}
-    </>
+    <PanelPropiedadesPlano
+      seleccion={seleccionValida}
+      borrador={borrador}
+      posicionesDibujadas={posicionesDibujadas}
+      soloLectura={edicionBloqueada}
+      alCambiar={aplicar}
+      alQuitar={() => setSeleccion(null)}
+    />
   );
 
-  // El rótulo del panel móvil es lo único que dice de qué se está hablando
-  // cuando el inspector está plegado. La rama final no puede ser «Toma» a
-  // secas: con un mueble seleccionado el panel decía «Toma» y el inspector de
-  // debajo enseñaba una silla. Cada tipo dice su nombre.
-  const resumenSeleccion =
-    seleccionValida === null || seleccionValida.tipo === 'sala'
-      ? 'Medidas de la sala'
-      : seleccionValida.tipo === 'mesa'
-        ? 'Mesa principal'
-        : seleccionValida.tipo === 'equipo'
-          ? (borrador.equipos.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Equipo')
-          : seleccionValida.tipo === 'mueble'
-            ? (borrador.mobiliario.find((x) => x.id === seleccionValida.id)?.nombre ?? 'Mueble')
-            : `Toma ${borrador.tomas.find((x) => x.id === seleccionValida.id)?.codigo ?? ''}`.trim();
+  const resumenSeleccion = resumenDeSeleccion(seleccionValida, borrador);
 
   return (
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
@@ -678,16 +682,26 @@ export function EditorPlanoSala({
             soloLectura={edicionBloqueada}
           />
 
+          {/* Debajo de la barra y en su propia línea: son un filtro de vista,
+              no una herramienta de dibujo, y mezclarlas con zoom y rejilla las
+              hacía parecer parte de lo que se guarda. */}
+          <div className="px-4 py-2 border-b border-linea-suave">
+            <ControlesCapas capas={capas} alAlternar={alternar} />
+          </div>
+
           <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem] items-start">
             <div className="min-w-0 p-4 border-b lg:border-b-0 lg:border-r border-linea-suave">
               <LienzoPlano
-                escena={escena}
+                escena={escenaPintada}
                 vista={vistaEfectiva}
                 seleccion={seleccionValida}
                 herramienta={herramienta}
                 rejilla={rejilla}
                 soloLectura={edicionBloqueada}
                 alSeleccionar={setSeleccion}
+                alMenuContextual={(objetivo, punto) =>
+                  setMenu({ seleccion: objetivo, x: punto.x, y: punto.y })
+                }
                 alArrastrar={arrastrar}
                 alSoltar={soltar}
                 alDesplazarVista={(dx, dy) => setVista(desplazarVista(vistaEfectiva, dx, dy))}
@@ -746,7 +760,17 @@ export function EditorPlanoSala({
                 alSeleccionar={setSeleccion}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
-              <div className="p-4 border-t border-linea">{inspector}</div>
+              {/* `tabIndex={-1}`: no entra en el recorrido del tabulador —sería
+                  una parada vacía— pero se le puede llevar el foco a mano
+                  cuando alguien pide «Propiedades» desde el menú contextual. */}
+              <div
+                ref={propiedades}
+                tabIndex={-1}
+                aria-label="Propiedades de lo seleccionado"
+                className="p-4 border-t border-linea"
+              >
+                {inspector}
+              </div>
             </div>
           </div>
 
@@ -780,6 +804,16 @@ export function EditorPlanoSala({
           0,01 m. Escape quita la selección.
         </p>
       )}
+
+      {/* Fuera del SVG y con posición de ventana: dentro del lienzo se
+          recortaría con el `viewBox` y se escalaría con el zoom. */}
+      <MenuContextualPlano
+        abierto={menu}
+        borrador={borrador}
+        soloLectura={edicionBloqueada}
+        alOperar={operar}
+        alCerrar={cerrarMenu}
+      />
     </div>
   );
 }

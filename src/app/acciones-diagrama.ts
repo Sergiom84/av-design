@@ -307,9 +307,44 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
     };
     if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
-    // La misma guarda pura que usa el editor: una puerta medida no se sale de
-    // su pared, y una medida a medias no se guarda.
-    if (puertasFueraDePared([...p.puertas_alta, ...p.puertas_cambio], medidas).length > 0) {
+    // Se valida el estado FINAL, no solo las puertas que el navegador dice
+    // haber tocado. Reducir una sala puede dejar fuera una puerta persistida
+    // aunque el patch no la incluya. Las bajas y cambios se aplican primero en
+    // memoria para que reducir + quitar/recolocar en el mismo guardado sí sea
+    // una operación válida. Todo ocurre antes de la primera escritura: un
+    // `return fallo()` posterior resolvería `sql.begin` y confirmaría lo ya
+    // escrito.
+    const puertasPersistidas = await tx<
+      Array<{
+        id: string;
+        pared: 'norte' | 'sur' | 'este' | 'oeste';
+        posicion_m: string;
+        anchura_m: string | null;
+        altura_m: string | null;
+        orden: number;
+      }>
+    >`select id, pared, posicion_m, anchura_m, altura_m, orden
+      from puertas where sala_id = ${p.sala_id}`;
+    const puertasFinales = new Map(
+      puertasPersistidas.map((d) => [
+        d.id,
+        {
+          id: d.id,
+          pared: d.pared,
+          posicion_m: Number(d.posicion_m),
+          anchura_m: d.anchura_m == null ? null : Number(d.anchura_m),
+          altura_m: d.altura_m == null ? null : Number(d.altura_m),
+          orden: Number(d.orden),
+        },
+      ]),
+    );
+    const puertasTocadas = [...p.puertas_cambio.map((d) => d.id), ...p.puertas_baja];
+    if (puertasTocadas.some((id) => !puertasFinales.has(id))) return fallo('ajeno');
+    for (const id of p.puertas_baja) puertasFinales.delete(id);
+    for (const d of p.puertas_cambio) puertasFinales.set(d.id, d);
+    if (
+      puertasFueraDePared([...puertasFinales.values(), ...p.puertas_alta], medidas).length > 0
+    ) {
       return fallo('fuera');
     }
 
@@ -335,14 +370,6 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         select count(*)::text as cuantos from sala_mobiliario
         where sala_id = ${p.sala_id} and id in ${tx(mueblesTocados)}`;
       if (Number(cuantos) !== mueblesTocados.length) return fallo('ajeno');
-    }
-
-    const puertasTocadas = [...p.puertas_cambio.map((d) => d.id), ...p.puertas_baja];
-    if (puertasTocadas.length > 0) {
-      const [{ cuantos }] = await tx<Array<{ cuantos: string }>>`
-        select count(*)::text as cuantos from puertas
-        where sala_id = ${p.sala_id} and id in ${tx(puertasTocadas)}`;
-      if (Number(cuantos) !== puertasTocadas.length) return fallo('ajeno');
     }
 
     // ------------------------------------------------------------ catálogos

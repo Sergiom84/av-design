@@ -91,6 +91,8 @@ const articuloEquipoId = randomUUID();
 
 /** Donde se corre la carrera de verdad, con dos transacciones a la vez. */
 const salaCarreraId = randomUUID();
+const puertaCarreraId = randomUUID();
+const plantillaCarreraNombre = 'TEST concurrencia plantilla carrera';
 /** La obra que se cierra mientras alguien escribe en una de sus salas. */
 const proyectoCarreraId = randomUUID();
 const localizacionCarreraId = randomUUID();
@@ -101,6 +103,7 @@ async function limpiar() {
   // Por nombre además de por id: una ejecución anterior interrumpida deja filas
   // con OTROS identificadores, y el `unique` del nombre del proyecto tumbaba la
   // preparación de la siguiente con un error que no dice de qué va.
+  await sql`delete from plantillas_sala where nombre like 'TEST concurrencia plantilla carrera%'`;
   await sql`delete from salas where nombre like 'TEST concurrencia%'`;
   await sql`delete from proyectos where nombre in ('TEST-concurrencia', 'TEST-cierre-carrera')`;
   await sql`delete from tecnicos where nombre = 'TEST tecnico concurrencia'`;
@@ -136,6 +139,9 @@ async function preparar() {
   await sql`
     insert into salas (id, nombre, largo_m, ancho_m, alto_m, aforo, mesa_largo_m, mesa_ancho_m)
     values (${salaCarreraId}, 'TEST concurrencia carrera', 6, 4, 3, 8, 2.4, 1.2)`;
+  await sql`
+    insert into puertas (id, sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+    values (${puertaCarreraId}, ${salaCarreraId}, 'norte', 2, 0.9, 2.1, 0)`;
   await sql`
     insert into articulos (id, tipo, categoria, marca, modelo, activo)
     values (${articuloEquipoId}, 'equipo', 'PANTALLA', 'TESTMARCA', 'TEST-CONCURRENCIA', true)`;
@@ -919,6 +925,94 @@ try {
         (await versionDe(salaCarreraId)) === versionAlEmpezar + mutacionesEfectivas,
         `la versión sube exactamente una vez por mutación efectiva (${mutacionesEfectivas})`,
       );
+
+      // ------------------------ guardar plano delante de crear su plantilla
+      // Ambos caminos deben esperar el mismo cerrojo de sala. Sin el
+      // `for update` dentro de crearPlantillaDesdeSala, el segundo termina
+      // mientras el plano sigue bloqueado y congela la versión anterior.
+      {
+        const version = await versionDe(salaCarreraId);
+        const { pid, soltar, fin } = await tomarBarrera(salaCarreraId);
+        const pPlano = guardarPlano({
+          sala_id: salaCarreraId,
+          versionEsperada: version,
+          sala: {
+            largo_m: 8,
+            ancho_m: 4,
+            alto_m: 3,
+            aforo: 8,
+            mesa_largo_m: 2.4,
+            mesa_ancho_m: 1.2,
+            mesa_alto_cm: null,
+            mesa_x_m: null,
+            mesa_y_m: null,
+            mesa_rotacion_grados: 0,
+          },
+          equipos: [],
+          equipos_alta: [],
+          mobiliario_alta: [],
+          mobiliario_cambio: [],
+          mobiliario_baja: [],
+          tomas: [],
+          puertas_alta: [],
+          puertas_cambio: [
+            {
+              id: puertaCarreraId,
+              pared: 'norte',
+              posicion_m: 7,
+              anchura_m: 0.9,
+              altura_m: 2.1,
+              orden: 0,
+            },
+          ],
+          puertas_baja: [],
+          inicio_diagrama: null,
+          sillas_modo: null,
+        });
+        await esperarBloqueados(pid, 1);
+
+        const datosPlantilla = new FormData();
+        datosPlantilla.set('sala_id', salaCarreraId);
+        datosPlantilla.set('nombre', plantillaCarreraNombre);
+        const pPlantilla = invocar(acciones.crearPlantillaDesdeSala, datosPlantilla);
+        const aLaVez = await esperarBloqueados(pid, 2);
+        afirmar(
+          aLaVez.length >= 2,
+          'guardar el plano y crear su plantilla esperan a la vez el mismo cerrojo de sala',
+        );
+
+        soltar();
+        await fin;
+        const resultado = await resolver(
+          pPlano,
+          pPlantilla,
+          'guardar el plano delante de crear su plantilla',
+        );
+        afirmar(resultado?.[0]?.ok === true, 'el plano que iba delante termina íntegro');
+
+        const [plantilla] = await sql<
+          Array<{
+            largo_m: string;
+            ancho_m: string;
+            pared: string;
+            posicion_m: string;
+            anchura_m: string;
+            altura_m: string;
+          }>
+        >`select p.largo_m, p.ancho_m, d.pared, d.posicion_m, d.anchura_m, d.altura_m
+          from plantillas_sala p
+          join puertas d on d.plantilla_id = p.id
+          where p.nombre = ${plantillaCarreraNombre}`;
+        afirmar(
+          Number(plantilla.largo_m) === 8 &&
+            Number(plantilla.ancho_m) === 4 &&
+            plantilla.pared === 'norte' &&
+            Number(plantilla.posicion_m) === 7 &&
+            Number(plantilla.anchura_m) === 0.9 &&
+            Number(plantilla.altura_m) === 2.1,
+          'la plantilla copia una sola versión coherente y posterior: medidas y puerta nuevas',
+        );
+      }
 
       // ------------------------------------ Equipamiento primero, Diagrama detrás
       {

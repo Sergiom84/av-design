@@ -1476,6 +1476,69 @@ try {
       'puertas: más alta que la sala se rechaza',
     );
 
+    // El estado final completo manda también cuando el patch no menciona la
+    // puerta. Reducir la sala no puede dejar una fila persistida fuera.
+    const [salaAntesDeReducir] = await sql<
+      Array<{
+        largo_m: string;
+        ancho_m: string;
+        alto_m: string;
+        aforo: number | null;
+        mesa_largo_m: string | null;
+        mesa_ancho_m: string | null;
+        mesa_alto_cm: string | null;
+        mesa_x_m: string | null;
+        mesa_y_m: string | null;
+        mesa_rotacion_grados: string;
+      }>
+    >`select largo_m, ancho_m, alto_m, aforo, mesa_largo_m, mesa_ancho_m,
+             mesa_alto_cm, mesa_x_m, mesa_y_m, mesa_rotacion_grados
+      from salas where id = ${salaLegadoId}`;
+    const salaReducidaBase = {
+      largo_m: Number(salaAntesDeReducir.largo_m),
+      ancho_m: Number(salaAntesDeReducir.ancho_m),
+      alto_m: Number(salaAntesDeReducir.alto_m),
+      aforo: salaAntesDeReducir.aforo,
+      mesa_largo_m:
+        salaAntesDeReducir.mesa_largo_m == null ? null : Number(salaAntesDeReducir.mesa_largo_m),
+      mesa_ancho_m:
+        salaAntesDeReducir.mesa_ancho_m == null ? null : Number(salaAntesDeReducir.mesa_ancho_m),
+      mesa_alto_cm:
+        salaAntesDeReducir.mesa_alto_cm == null ? null : Number(salaAntesDeReducir.mesa_alto_cm),
+      mesa_x_m: salaAntesDeReducir.mesa_x_m == null ? null : Number(salaAntesDeReducir.mesa_x_m),
+      mesa_y_m: salaAntesDeReducir.mesa_y_m == null ? null : Number(salaAntesDeReducir.mesa_y_m),
+      mesa_rotacion_grados: Number(salaAntesDeReducir.mesa_rotacion_grados),
+    };
+    const versionReduccion = await versionDe(salaLegadoId);
+    const reducirAlto = await invocar({
+      ...patchBase(salaLegadoId, versionReduccion),
+      sala: { ...salaReducidaBase, alto_m: 2 },
+    });
+    afirmar(
+      !reducirAlto.ok && reducirAlto.motivo === 'fuera',
+      'puertas: reducir solo el alto rechaza una puerta persistida demasiado alta',
+    );
+    const reducirPared = await invocar({
+      ...patchBase(salaLegadoId, versionReduccion),
+      sala: { ...salaReducidaBase, largo_m: 1.8 },
+    });
+    afirmar(
+      !reducirPared.ok && reducirPared.motivo === 'fuera',
+      'puertas: reducir solo la pared rechaza una puerta persistida que deja de caber',
+    );
+    const [trasReduccionesRechazadas] = await sql<
+      Array<{ largo_m: string; alto_m: string; posicion_m: string; version: number }>
+    >`select s.largo_m, s.alto_m, p.posicion_m, s.diagrama_version as version
+      from salas s join puertas p on p.sala_id = s.id
+      where s.id = ${salaLegadoId} and p.id = ${puertaId}`;
+    afirmar(
+      Number(trasReduccionesRechazadas.largo_m) === salaReducidaBase.largo_m &&
+        Number(trasReduccionesRechazadas.alto_m) === salaReducidaBase.alto_m &&
+        Number(trasReduccionesRechazadas.posicion_m) === 1 &&
+        Number(trasReduccionesRechazadas.version) === versionReduccion,
+      'puertas: rechazar la reducción conserva medidas, puerta y versión',
+    );
+
     // Una puerta de otra sala no se toca desde aquí.
     const ajena = await invocar({
       ...patchBase(salaVecinaId, await versionDe(salaVecinaId)),
@@ -1540,12 +1603,19 @@ try {
       'puertas: cambiar y borrar la misma puerta se rechaza',
     );
 
-    // La baja de verdad, dentro de la transacción.
+    // La misma reducción sí entra si el estado final elimina la puerta que ya
+    // no cabe: se valida el resultado, no el estado anterior ni solo el patch.
+    const reducirYBorrar = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      sala: { ...salaReducidaBase, alto_m: 2 },
+      puertas_baja: [puertaId],
+    });
+    afirmar(reducirYBorrar.ok, 'puertas: reducir y borrar la puerta incompatible entra junto');
     const baja = await invocar({
       ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
-      puertas_baja: [puertaId, puerta2Id],
+      puertas_baja: [puerta2Id],
     });
-    afirmar(baja.ok, 'puertas: la baja entra');
+    afirmar(baja.ok, 'puertas: la baja restante entra');
     const [{ quedan }] = await sql<Array<{ quedan: string }>>`
       select count(*)::text as quedan from puertas where sala_id = ${salaLegadoId}`;
     afirmar(Number(quedan) === 0, 'puertas: y no queda ninguna');

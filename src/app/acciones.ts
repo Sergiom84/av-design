@@ -628,19 +628,22 @@ export async function crearSala(
  */
 export async function crearPlantillaDesdeSala(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
-
-  const [sala] = await sql<Array<Record<string, unknown>>>`
-    select * from salas where id = ${salaId}`;
-  if (!sala) return;
-
-  const base =
-    texto(datos.get('nombre')) ?? `${String(sala.nombre)} (plantilla)`;
+  const nombrePedido = texto(datos.get('nombre'));
   const medida = (v: unknown): number | null => {
     const n = v == null ? 0 : Number(v);
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
   const plantillaId = await sql.begin(async (tx) => {
+    // La cabecera y el montaje deben pertenecer a la misma versión de la sala.
+    // `guardarDiagramaSala` toma este mismo cerrojo antes de cambiar medidas o
+    // puertas: leer aquí dentro y con `for update` hace que la plantilla copie
+    // íntegramente el estado anterior o el posterior, nunca una mezcla.
+    const [sala] = await tx<Array<Record<string, unknown>>>`
+      select * from salas where id = ${salaId} for update`;
+    if (!sala) return null;
+
+    const base = nombrePedido ?? `${String(sala.nombre)} (plantilla)`;
     let id: string | undefined;
     for (let intento = 1; intento <= 50 && !id; intento++) {
       const nombre = intento === 1 ? base : `${base} (${intento})`;

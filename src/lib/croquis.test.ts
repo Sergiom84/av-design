@@ -178,9 +178,9 @@ describe('la mesa girada', () => {
 
   it('las medidas de la mesa girada se leen en las anotaciones', () => {
     assert.ok(
-      girada(30).anotaciones.some((a) => a === 'Mesa 2,40 × 1,21 m girada 30°'),
+      girada(30).anotaciones.some((a) => a.texto === 'Mesa 2,40 × 1,21 m girada 30°'),
     );
-    assert.ok(!girada(0).anotaciones.some((a) => a.includes('girada')));
+    assert.ok(!girada(0).anotaciones.some((a) => a.texto.includes('girada')));
   });
 
   it('las cotas de la sala no dependen del giro de la mesa', () => {
@@ -610,9 +610,9 @@ describe('la escena completa', () => {
       tomas: [],
     });
 
-    assert.ok(escena.anotaciones.some((a) => a.includes('73 cm')));
-    assert.ok(escena.anotaciones.some((a) => a.includes('74 cm')));
-    assert.ok(escena.anotaciones.some((a) => a.includes('Falso techo')));
+    assert.ok(escena.anotaciones.some((a) => a.texto.includes('73 cm')));
+    assert.ok(escena.anotaciones.some((a) => a.texto.includes('74 cm')));
+    assert.ok(escena.anotaciones.some((a) => a.texto.includes('Falso techo')));
   });
 
   it('la tirada lleva los metros calculados cuando los hay', () => {

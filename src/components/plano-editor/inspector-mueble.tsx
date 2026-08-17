@@ -5,10 +5,9 @@ import {
   colocarEnElCentro,
   editarMueble,
   estadoDelMueble,
-  girar,
-  quitarAlta,
   type BorradorPlano,
 } from '@/lib/plano-editor';
+import { aplicarOperacion } from './operaciones-plano';
 import { CampoMetros } from './campos-plano';
 import { ControlRotacion } from './control-rotacion';
 
@@ -113,7 +112,12 @@ export function InspectorMueble({
       <ControlRotacion
         grados={m.rotacion_grados}
         deshabilitado={soloLectura}
-        alGirar={(g) => alCambiar(girar(borrador, { tipo: 'mueble', id }, g))}
+        alGirar={(g) =>
+          alCambiar(
+            aplicarOperacion(borrador, { tipo: 'mueble', id }, { tipo: 'girar', grados: g })
+              .borrador,
+          )
+        }
         ayuda="Gira sobre su punto. No cambia X, Y ni Z."
       />
 
@@ -132,7 +136,9 @@ export function InspectorMueble({
           <Boton
             tipo="button"
             onClick={() => {
-              alCambiar(quitarAlta(borrador, { tipo: 'mueble', id }));
+              alCambiar(
+                aplicarOperacion(borrador, { tipo: 'mueble', id }, { tipo: 'eliminar' }).borrador,
+              );
               alQuitar();
             }}
           >

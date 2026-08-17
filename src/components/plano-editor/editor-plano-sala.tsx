@@ -54,7 +54,14 @@ import { InspectorSala } from './inspector-sala';
 import { PanelPropiedadesPlano, resumenDeSeleccion } from './panel-propiedades-plano';
 import { ControlesCapas } from './controles-capas';
 import { MenuContextualPlano, type MenuContextualAbierto } from './menu-contextual-plano';
-import { CAPAS_INICIALES, alternarCapa, escenaVisible, type CapaPlano } from './capas-plano';
+import {
+  CAPAS_INICIALES,
+  alternarCapa,
+  capaDeSeleccion,
+  escenaVisible,
+  seleccionOculta,
+  type CapaPlano,
+} from './capas-plano';
 import { aplicarOperacion, type OperacionPlano } from './operaciones-plano';
 import type { EstadoGuardado } from './estado-guardado';
 
@@ -219,6 +226,40 @@ export function EditorPlanoSala({
     [borrador, recargandoConflicto],
   );
 
+  const cerrarMenu = useCallback(() => setMenu(null), []);
+
+  /**
+   * Seleccionar algo que está en una capa apagada la vuelve a encender.
+   *
+   * La lista de objetos no se filtra por capas a propósito: es el recorrido
+   * accesible, y esconder ahí una silla la dejaría inalcanzable con teclado.
+   * Lo que no puede quedar es una selección invisible, porque el inspector la
+   * edita y las flechas la mueven sin que se vea nada. Entre filtrar la lista
+   * y encender la capa, encender la capa no quita ningún camino.
+   */
+  const seleccionar = useCallback((s: Seleccion) => {
+    const capa = capaDeSeleccion(s);
+    setSeleccion(s);
+    if (capa) setCapas((c) => (c[capa] ? c : { ...c, [capa]: true }));
+  }, []);
+
+  /**
+   * Apagar una capa suelta lo que hubiera seleccionado en ella.
+   *
+   * Sin esto, apagar Equipamiento con un equipo seleccionado dejaba el
+   * inspector editándolo y las flechas moviéndolo: se ensuciaba el borrador,
+   * se apilaba historial y cambiaban metros de cable, todo a partir de una
+   * acción que era solo de vista.
+   */
+  const alternar = useCallback(
+    (capa: CapaPlano) => {
+      const siguiente = alternarCapa(capas, capa);
+      setCapas(siguiente);
+      if (seleccionOculta(seleccion, siguiente)) setSeleccion(null);
+    },
+    [capas, seleccion],
+  );
+
   /**
    * El único camino de una operación al borrador.
    *
@@ -234,17 +275,10 @@ export function EditorPlanoSala({
     (operacion: OperacionPlano) => {
       const r = aplicarOperacion(borrador, seleccionValida, operacion);
       if (r.borrador !== borrador) aplicar(r.borrador);
-      setSeleccion(r.seleccion);
+      seleccionar(r.seleccion);
       if (r.enfocarPropiedades) propiedades.current?.focus();
     },
-    [aplicar, borrador, seleccionValida],
-  );
-
-  const cerrarMenu = useCallback(() => setMenu(null), []);
-
-  const alternar = useCallback(
-    (capa: CapaPlano) => setCapas((c) => alternarCapa(c, capa)),
-    [],
+    [aplicar, borrador, seleccionar, seleccionValida],
   );
 
   const escena = useMemo(
@@ -355,7 +389,7 @@ export function EditorPlanoSala({
       onPointerDown: (ev: React.PointerEvent) => {
         if (soloLectura) return;
         ev.preventDefault();
-        setSeleccion(objetivo);
+        seleccionar(objetivo);
         bandeja.current = objetivo;
         (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
       },
@@ -373,7 +407,7 @@ export function EditorPlanoSala({
       },
       onPointerCancel: cancelarBandeja,
     }),
-    [cancelarBandeja, colocar, enMetrosDesdePantalla, soloLectura],
+    [cancelarBandeja, colocar, enMetrosDesdePantalla, seleccionar, soloLectura],
   );
 
   // ------------------------------------------------------------------ altas
@@ -397,10 +431,10 @@ export function EditorPlanoSala({
         sillasDerivadas: escena.sillas,
       });
       if (r.borrador !== borrador) aplicar(r.borrador);
-      setSeleccion(r.seleccion);
+      seleccionar(r.seleccion);
       setAvisoAlta(r.aviso);
     },
-    [aplicar, borrador, escena.sillas],
+    [aplicar, borrador, escena.sillas, seleccionar],
   );
 
   const anadirEquipamiento = useCallback(
@@ -417,10 +451,10 @@ export function EditorPlanoSala({
           extremo: 'pared',
         }),
       );
-      setSeleccion({ tipo: 'equipo', id });
+      seleccionar({ tipo: 'equipo', id });
       setAvisoAlta(`${articulo.etiqueta} en la lista. Sin guardar todavía.`);
     },
-    [aplicar, borrador],
+    [aplicar, borrador, seleccionar],
   );
 
   // ---------------------------------------------------------------- teclado
@@ -698,7 +732,7 @@ export function EditorPlanoSala({
                 herramienta={herramienta}
                 rejilla={rejilla}
                 soloLectura={edicionBloqueada}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
                 alMenuContextual={(objetivo, punto) =>
                   setMenu({ seleccion: objetivo, x: punto.x, y: punto.y })
                 }
@@ -757,7 +791,7 @@ export function EditorPlanoSala({
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccionValida}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
               {/* `tabIndex={-1}`: no entra en el recorrido del tabulador —sería
@@ -787,7 +821,7 @@ export function EditorPlanoSala({
               <ListaObjetos
                 borrador={borrador}
                 seleccion={seleccionValida}
-                alSeleccionar={setSeleccion}
+                alSeleccionar={seleccionar}
                 arrastreDeBandeja={edicionBloqueada ? undefined : arrastreDeBandeja}
               />
               <div className="pt-4">{inspector}</div>

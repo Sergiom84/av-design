@@ -121,6 +121,18 @@ export interface CotaCroquis {
   lado: 'arriba' | 'abajo' | 'izquierda' | 'derecha';
 }
 
+/**
+ * Una nota al pie del croquis, con su procedencia.
+ *
+ * Lleva `clave` por lo mismo que la lleva `CotaCroquis`: para poder saber de
+ * qué habla sin leer el texto. Una vista que oculte el equipamiento tiene que
+ * poder retirar «Pantalla a 120 cm del suelo» sin ponerse a comparar cadenas.
+ */
+export interface AnotacionCroquis {
+  clave: string;
+  texto: string;
+}
+
 export interface EscenaCroquis {
   titulo: string;
   sala: Rectangulo;
@@ -136,7 +148,7 @@ export interface EscenaCroquis {
   tiradas: TiradaCroquis[];
   cotas: CotaCroquis[];
   /** Notas al pie: alturas y todo lo que no cabe en una planta. */
-  anotaciones: string[];
+  anotaciones: AnotacionCroquis[];
   /** Lo que falta por medir. Se enseña, no se inventa. */
   avisos: string[];
 }
@@ -783,24 +795,33 @@ function anotacionesDeLaEscena(
   sala: Sala,
   mesa: MesaCroquis | null,
   equipos: EquipoCroquis[],
-): string[] {
-  const notas: string[] = [];
+): AnotacionCroquis[] {
+  const notas: AnotacionCroquis[] = [];
 
-  if (sala.alto_m) notas.push(`Alto de la sala ${metros(sala.alto_m)} m`);
+  if (sala.alto_m) notas.push({ clave: 'sala_alto', texto: `Alto de la sala ${metros(sala.alto_m)} m` });
   if (sala.alto_falso_techo_m) {
-    notas.push(`Falso techo a ${metros(sala.alto_falso_techo_m)} m`);
+    notas.push({
+      clave: 'sala_falso_techo',
+      texto: `Falso techo a ${metros(sala.alto_falso_techo_m)} m`,
+    });
   }
-  if (sala.mesa_alto_cm) notas.push(`Altura de la mesa ${entero(sala.mesa_alto_cm)} cm`);
+  if (sala.mesa_alto_cm) {
+    notas.push({ clave: 'mesa_alto', texto: `Altura de la mesa ${entero(sala.mesa_alto_cm)} cm` });
+  }
   // Las cotas de la mesa girada no se dibujan; sus medidas se leen aquí.
   if (mesa && mesa.rotacion_grados) {
-    notas.push(
-      `Mesa ${metros(mesa.largo_m)} × ${metros(mesa.ancho_m)} m girada ${entero(mesa.rotacion_grados)}°`,
-    );
+    notas.push({
+      clave: 'mesa_girada',
+      texto: `Mesa ${metros(mesa.largo_m)} × ${metros(mesa.ancho_m)} m girada ${entero(mesa.rotacion_grados)}°`,
+    });
   }
 
   for (const e of equipos) {
     if (e.extremo === 'pantalla' && e.z_m > 0) {
-      notas.push(`${e.nombre} a ${entero(e.z_m * 100)} cm del suelo`);
+      notas.push({
+        clave: `equipo_altura:${e.id}`,
+        texto: `${e.nombre} a ${entero(e.z_m * 100)} cm del suelo`,
+      });
     }
   }
 

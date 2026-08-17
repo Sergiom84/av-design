@@ -83,7 +83,13 @@ export function operacionDisponible(
   seleccion: Seleccion,
   borrador: BorradorPlano,
 ): boolean {
-  if (seleccion === null) return false;
+  // Lo primero, que exista. Deshacer un alta, descartar o recargar hacen
+  // desaparecer la fila que estaba seleccionada, y sobre un id que ya no está
+  // `girar()` devuelve un borrador nuevo aunque idéntico: el editor lo apila
+  // como paso de deshacer y `Deshacer` deja de responder una vez por cada giro
+  // al aire. El coordinador ya filtra con `seleccionVigente`, pero una función
+  // pura no puede fiar su corrección a quién la llama.
+  if (!objetoVigente(seleccion, borrador)) return false;
   switch (clase) {
     case 'seleccionar':
     case 'propiedades':
@@ -91,13 +97,27 @@ export function operacionDisponible(
     case 'girar':
       return seleccion.tipo === 'mesa' || seleccion.tipo === 'equipo' || seleccion.tipo === 'mueble';
     case 'eliminar':
-      if (seleccion.tipo === 'mueble') {
-        return borrador.mobiliario.some((m) => m.id === seleccion.id);
-      }
+      if (seleccion.tipo === 'mueble') return true;
+      // Un equipo se quita del plano solo mientras sea un alta sin guardar.
       if (seleccion.tipo === 'equipo') {
         return borrador.equipos.some((e) => e.id === seleccion.id && e.es_nuevo);
       }
       return false;
+  }
+}
+
+/** Si lo seleccionado sigue estando en el borrador. La sala y la mesa siempre están. */
+function objetoVigente(seleccion: Seleccion, borrador: BorradorPlano): seleccion is Exclude<Seleccion, null> {
+  if (seleccion === null) return false;
+  switch (seleccion.tipo) {
+    case 'equipo':
+      return borrador.equipos.some((e) => e.id === seleccion.id);
+    case 'mueble':
+      return borrador.mobiliario.some((m) => m.id === seleccion.id);
+    case 'toma':
+      return borrador.tomas.some((t) => t.id === seleccion.id);
+    default:
+      return true;
   }
 }
 

@@ -103,6 +103,36 @@ describe('el despachador de operaciones del plano', () => {
         assert.equal(operacionDisponible(clase, null, BORRADOR), false);
       }
     });
+
+    it('sobre algo que ya no está en el borrador no hay ninguna operación', () => {
+      // Deshacer un alta, descartar o recargar borran la fila que estaba
+      // seleccionada. Sobre ese id, `girar()` devolvía un borrador nuevo
+      // aunque idéntico, y el editor lo apilaba como paso de deshacer.
+      const fantasmas = [
+        { tipo: 'equipo', id: 'no-existe' },
+        { tipo: 'mueble', id: 'no-existe' },
+        { tipo: 'toma', id: 'no-existe' },
+      ] as const;
+      for (const sel of fantasmas) {
+        for (const clase of ['seleccionar', 'propiedades', 'girar', 'eliminar'] as const) {
+          assert.equal(
+            operacionDisponible(clase, sel, BORRADOR),
+            false,
+            `${clase} sobre un ${sel.tipo} inexistente tiene que estar cerrada`,
+          );
+        }
+        assert.deepEqual(operacionesOfrecidas(sel, BORRADOR, { soloLectura: false }), []);
+      }
+    });
+
+    it('girar algo inexistente no toca el borrador ni apila historial', () => {
+      const sel = { tipo: 'equipo', id: 'no-existe' } as const;
+      const r = aplicarOperacion(BORRADOR, sel, { tipo: 'girar', grados: 90 });
+      // Por referencia: el coordinador decide por identidad si apila un paso
+      // de deshacer, así que una copia igual ya sería el fallo.
+      assert.equal(r.borrador, BORRADOR);
+      assert.equal(r.enfocarPropiedades, false);
+    });
   });
 
   describe('el mismo resultado que la operación pura', () => {

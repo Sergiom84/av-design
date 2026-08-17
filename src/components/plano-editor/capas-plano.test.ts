@@ -40,7 +40,11 @@ const ESCENA: EscenaCroquis = {
     { clave: 'mesa_largo', desde: { x_m: 1, y_m: 3 }, hasta: { x_m: 3, y_m: 3 }, texto: '2 m', lado: 'arriba' },
     { clave: 'pantalla_caja', desde: { x_m: 0, y_m: 2 }, hasta: { x_m: 3, y_m: 2 }, texto: '3 m', lado: 'abajo' },
   ],
-  anotaciones: ['Alto de la sala 3 m'],
+  anotaciones: [
+    { clave: 'sala_alto', texto: 'Alto de la sala 3 m' },
+    { clave: 'mesa_alto', texto: 'Altura de la mesa 73 cm' },
+    { clave: 'equipo_altura:e1', texto: 'Pantalla a 120 cm del suelo' },
+  ],
   avisos: [],
 };
 
@@ -90,12 +94,28 @@ describe('las capas del plano', () => {
     assert.equal(JSON.stringify(ESCENA), antes, 'el filtro escribió en la escena original');
   });
 
-  it('la sala, la mesa, las anotaciones y los avisos no son una capa', () => {
+  it('la sala, sus avisos y su título no son una capa', () => {
     const v = escenaVisible(ESCENA, { mobiliario: false, equipamiento: false });
     assert.deepEqual(v.sala, ESCENA.sala);
-    assert.deepEqual(v.anotaciones, ESCENA.anotaciones);
     assert.deepEqual(v.avisos, ESCENA.avisos);
     assert.equal(v.titulo, ESCENA.titulo);
+  });
+
+  it('apagar el equipamiento retira las anotaciones que hablan de un equipo', () => {
+    // La primera versión de esta prueba exigía que las anotaciones no se
+    // filtraran nunca, y con eso fijaba el error: «Pantalla a 120 cm del
+    // suelo» describe algo que ya no se ve. Las de la sala y la mesa se
+    // quedan, porque miden la sala y no lo que hay dentro.
+    const v = escenaVisible(ESCENA, { mobiliario: true, equipamiento: false });
+    assert.deepEqual(
+      v.anotaciones.map((a) => a.clave),
+      ['sala_alto', 'mesa_alto'],
+    );
+  });
+
+  it('con el equipamiento encendido no se retira ninguna anotación', () => {
+    const v = escenaVisible(ESCENA, { mobiliario: false, equipamiento: true });
+    assert.deepEqual(v.anotaciones, ESCENA.anotaciones);
   });
 
   it('alternar una capa no toca la otra', () => {

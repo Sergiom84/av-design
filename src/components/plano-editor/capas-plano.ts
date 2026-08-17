@@ -51,6 +51,21 @@ export function alternarCapa(capas: CapasPlano, capa: CapaPlano): CapasPlano {
  */
 const COTAS_DE_EQUIPAMIENTO: ReadonlySet<string> = new Set(['pantalla_caja']);
 
+/**
+ * Las anotaciones que hablan de un equipo concreto.
+ *
+ * «SAMSUNG QB65R-B a 74 cm del suelo» describe algo que con la capa apagada no
+ * se ve. Se reconocen por el prefijo de su `clave`, no por el texto: comparar
+ * cadenas de interfaz para decidir qué se oculta es exactamente lo que deja de
+ * funcionar el día que alguien corrige una palabra.
+ *
+ * Hoy el editor todavía no pinta las anotaciones —solo lo hace la tarjeta de
+ * Resumen, que no filtra por capas—, así que esto no arregla ninguna fuga
+ * visible: deja el contrato bien para cuando las acotaciones y las puertas sí
+ * las pinten.
+ */
+const PREFIJO_ANOTACION_EQUIPO = 'equipo_';
+
 /** A qué capa pertenece lo que está seleccionado. La sala y la mesa, a ninguna. */
 export function capaDeSeleccion(seleccion: Seleccion): CapaPlano | null {
   if (seleccion === null) return null;
@@ -95,5 +110,8 @@ export function escenaVisible(escena: EscenaCroquis, capas: CapasPlano): EscenaC
     cotas: capas.equipamiento
       ? escena.cotas
       : escena.cotas.filter((c) => !COTAS_DE_EQUIPAMIENTO.has(c.clave)),
+    anotaciones: capas.equipamiento
+      ? escena.anotaciones
+      : escena.anotaciones.filter((a) => !a.clave.startsWith(PREFIJO_ANOTACION_EQUIPO)),
   };
 }

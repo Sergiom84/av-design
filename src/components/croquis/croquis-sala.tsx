@@ -21,7 +21,9 @@ export function CroquisSala(entrada: EntradaCroquis) {
       acciones={
         <Enlace href={`/salas/${entrada.sala.id}/plano`}>Editar plano</Enlace>
       }
-      pie={escena.anotaciones.length > 0 ? escena.anotaciones.join(' · ') : undefined}
+      pie={escena.anotaciones.length > 0
+          ? escena.anotaciones.map((a) => a.texto).join(' · ')
+          : undefined}
     >
       {escena.avisos.length > 0 && (
         <div className="mb-4 space-y-2">

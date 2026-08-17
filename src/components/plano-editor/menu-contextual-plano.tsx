@@ -54,13 +54,56 @@ export function MenuContextualPlano({
   alCerrar: () => void;
 }) {
   const contenedor = useRef<HTMLDivElement>(null);
+  /**
+   * Dónde estaba el foco antes de abrir, para devolverlo al cerrar.
+   *
+   * Sin esto, Escape o un clic fuera dejaban el foco en el `body`: quien
+   * navega con teclado se quedaba sin punto de partida y tenía que tabular
+   * desde el principio de la página. Cerrar un menú tiene que devolver a donde
+   * se estaba, no expulsar.
+   */
+  const focoPrevio = useRef<HTMLElement | null>(null);
 
   // Al abrirse se lleva el foco a la primera opción: si no, el menú aparece y
   // el foco se queda en el lienzo, así que Escape y las flechas no van a
   // ninguna parte y el menú solo se puede usar con el ratón.
   useEffect(() => {
     if (!abierto) return;
-    contenedor.current?.querySelector('button')?.focus();
+    // El nodo se copia a una variable del efecto: en la limpieza,
+    // `contenedor.current` ya puede apuntar a otro sitio o a nada.
+    const caja = contenedor.current;
+    focoPrevio.current = document.activeElement as HTMLElement | null;
+    caja?.querySelector('button')?.focus();
+    return () => {
+      // Solo si el foco sigue dentro del menú que se va: si algo ya se lo
+      // llevó a otro sitio —«Propiedades» lo manda al inspector— devolverlo
+      // aquí sería arrebatárselo.
+      // React desmonta el menú antes de correr esta limpieza, así que cuando
+      // el foco estaba dentro ya se ha caído al `body`: comprobar solo
+      // `caja.contains(...)` daba siempre falso y no se restauraba nunca.
+      // El `body` con el foco es justamente la señal de que se perdió al
+      // desmontar. Si en cambio lo tiene otro elemento —«Propiedades» lo manda
+      // al inspector— no se toca, que sería arrebatárselo.
+      const eraNuestro =
+        caja?.contains(document.activeElement) || document.activeElement === document.body;
+      const previo = focoPrevio.current;
+      focoPrevio.current = null;
+      if (!eraNuestro) return;
+
+      // El menú se abre con el botón derecho sobre el SVG, y eso no da el foco
+      // a nada: lo normal es que el «foco previo» fuera el propio `body`.
+      // Devolverlo ahí es dejar a quien navega con teclado sin punto de
+      // partida, tabulando otra vez desde la cabecera de la página. El destino
+      // de reserva es el panel de propiedades, que ya es enfocable y habla
+      // justo del objeto sobre el que se abrió el menú.
+      if (previo?.isConnected && previo !== document.body) {
+        previo.focus();
+        return;
+      }
+      document
+        .querySelector<HTMLElement>('[aria-label="Propiedades de lo seleccionado"]')
+        ?.focus();
+    };
   }, [abierto]);
 
   // Cerrar al pulsar fuera y al hacer scroll. Un menú anclado a una posición

@@ -5,11 +5,10 @@ import { ETIQUETA_EXTREMO, type Extremo } from '@/lib/tipos';
 import {
   colocarEnElCentro,
   editarEquipo,
-  girar,
-  quitarAlta,
   type BorradorPlano,
   type EquipoBorrador,
 } from '@/lib/plano-editor';
+import { aplicarOperacion } from './operaciones-plano';
 import { CampoMetros } from './campos-plano';
 import { ControlRotacion } from './control-rotacion';
 
@@ -130,7 +129,14 @@ export function InspectorEquipo({
       <ControlRotacion
         grados={equipo.rotacion_grados}
         deshabilitado={soloLectura}
-        alGirar={(g) => alCambiar(girar(borrador, { tipo: 'equipo', id: equipo.id }, g))}
+        alGirar={(g) =>
+          alCambiar(
+            aplicarOperacion(borrador, { tipo: 'equipo', id: equipo.id }, {
+              tipo: 'girar',
+              grados: g,
+            }).borrador,
+          )
+        }
         ayuda="Gira sobre su punto. No cambia X, Y ni Z ni los metros de cable."
       />
 
@@ -166,7 +172,11 @@ export function InspectorEquipo({
             <Boton
               tipo="button"
               onClick={() => {
-                alCambiar(quitarAlta(borrador, { tipo: 'equipo', id: equipo.id }));
+                alCambiar(
+                  aplicarOperacion(borrador, { tipo: 'equipo', id: equipo.id }, {
+                    tipo: 'eliminar',
+                  }).borrador,
+                );
                 alQuitar();
               }}
             >

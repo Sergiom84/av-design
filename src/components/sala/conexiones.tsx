@@ -4,7 +4,6 @@ import { avisosDeConexion } from '@/lib/cable-schedule';
 import {
   ETIQUETA_RUTA,
   ETIQUETA_SENAL,
-  ETIQUETA_SENTIDO,
   type Articulo,
   type Conexion,
   type EquipoEnSala,
@@ -12,6 +11,7 @@ import {
   type Sala,
 } from '@/lib/tipos';
 import { FormularioConexion } from './formulario-conexion';
+import { SelectorBocaConexion } from './selector-boca-conexion';
 
 /**
  * Qué conecta con qué, y por qué puerto exactamente.
@@ -41,32 +41,6 @@ export function Conexiones({
   const puertosDeEquipo = (equipoId: string | undefined): Puerto[] => {
     const articulo = equipoId ? equiposPorId.get(equipoId)?.articulo_id : null;
     return articulo ? puertos.filter((p) => p.articulo_id === articulo) : [];
-  };
-
-  const selectorPuerto = (
-    conexionId: string,
-    lado: 'origen' | 'destino',
-    equipoId: string,
-    valor: string | null | undefined,
-  ) => {
-    const lista = puertosDeEquipo(equipoId);
-    return (
-      <select
-        form={`conexion-${conexionId}`}
-        name={`puerto_${lado}_id`}
-        defaultValue={valor ?? ''}
-        disabled={lista.length === 0}
-        aria-label={`Puerto de ${lado}`}
-        className="max-w-[11rem]"
-      >
-        <option value="">{lista.length === 0 ? '— sin puertos —' : '—'}</option>
-        {lista.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nombre} · {ETIQUETA_SENTIDO[p.sentido]}
-          </option>
-        ))}
-      </select>
-    );
   };
 
   return (
@@ -113,9 +87,9 @@ export function Conexiones({
                 return (
                   <tr key={c.id}>
                     <td>{equiposPorId.get(c.origen_id)?.nombre ?? '—'}</td>
-                    <td>{selectorPuerto(c.id, 'origen', c.origen_id, c.puerto_origen_id)}</td>
+                    <td><SelectorBocaConexion conexionId={c.id} lado="origen" puertos={puertosDeEquipo(c.origen_id)} puertoActual={c.puerto_origen_id} ordinalActual={c.puerto_origen_ordinal} /></td>
                     <td>{equiposPorId.get(c.destino_id)?.nombre ?? '—'}</td>
-                    <td>{selectorPuerto(c.id, 'destino', c.destino_id, c.puerto_destino_id)}</td>
+                    <td><SelectorBocaConexion conexionId={c.id} lado="destino" puertos={puertosDeEquipo(c.destino_id)} puertoActual={c.puerto_destino_id} ordinalActual={c.puerto_destino_ordinal} /></td>
                     <td>
                       <select
                         form={`conexion-${c.id}`}

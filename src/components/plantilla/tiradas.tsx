@@ -4,8 +4,10 @@ import {
   ETIQUETA_RUTA,
   ETIQUETA_SENAL,
   type LineaPlantilla,
+  type Puerto,
   type TiradaPlantilla,
 } from '@/lib/tipos';
+import { bocasDePuerto } from '@/lib/bocas-puerto';
 
 /**
  * Las tiradas tipo de la plantilla: qué va conectado con qué en la sala
@@ -19,10 +21,12 @@ export function TiradasDePlantilla({
   plantillaId,
   lineas,
   tiradas,
+  puertos,
 }: {
   plantillaId: string;
   lineas: LineaPlantilla[];
   tiradas: TiradaPlantilla[];
+  puertos: Puerto[];
 }) {
   if (lineas.length < 2) {
     return (
@@ -32,12 +36,16 @@ export function TiradasDePlantilla({
     );
   }
 
-  const opciones = lineas.map((l) => (
-    <option key={l.id} value={l.id}>
-      {l.modelo_texto ?? l.categoria}
-      {l.opcional ? ' (no en todas)' : ''}
-    </option>
-  ));
+  const opciones = lineas.flatMap((linea) => {
+    if (!linea.articulo_id || linea.cantidad !== 1) return [];
+    return puertos
+      .filter((puerto) => puerto.articulo_id === linea.articulo_id)
+      .flatMap((puerto) => bocasDePuerto(puerto, linea.id).map((boca) => (
+        <option key={`${linea.id}:${puerto.id}:${boca.ordinal}`} value={`${linea.id}:${puerto.id}:${boca.ordinal}`}>
+          {linea.modelo_texto ?? linea.categoria} · {boca.etiqueta}
+        </option>
+      )));
+  });
 
   return (
     <div>
@@ -85,13 +93,13 @@ export function TiradasDePlantilla({
       >
         <input type="hidden" name="plantilla_id" value={plantillaId} />
         <Campo etiqueta="Desde">
-          <select name="origen_linea_id" required>
+          <select name="boca_origen" required>
             <option value="">—</option>
             {opciones}
           </select>
         </Campo>
         <Campo etiqueta="Hasta">
-          <select name="destino_linea_id" required>
+          <select name="boca_destino" required>
             <option value="">—</option>
             {opciones}
           </select>

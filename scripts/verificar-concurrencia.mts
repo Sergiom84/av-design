@@ -88,6 +88,8 @@ const salaCroquisId = randomUUID();
  */
 const salaRackId = randomUUID();
 const articuloEquipoId = randomUUID();
+const puertoSalidaId = randomUUID();
+const puertoEntradaId = randomUUID();
 
 /** Donde se corre la carrera de verdad, con dos transacciones a la vez. */
 const salaCarreraId = randomUUID();
@@ -145,6 +147,9 @@ async function preparar() {
   await sql`
     insert into articulos (id, tipo, categoria, marca, modelo, activo)
     values (${articuloEquipoId}, 'equipo', 'PANTALLA', 'TESTMARCA', 'TEST-CONCURRENCIA', true)`;
+  await sql`insert into puertos (id, articulo_id, nombre, total, sentido, senal) values
+    (${puertoSalidaId}, ${articuloEquipoId}, 'OUTPUT', 1, 'salida', 'hdmi'),
+    (${puertoEntradaId}, ${articuloEquipoId}, 'INPUT', 1, 'entrada', 'hdmi')`;
 
   // La obra que se cierra a la vez que alguien escribe en una de sus salas.
   // Nace iniciada porque no se cierra lo que no empezó, y con un técnico con
@@ -385,6 +390,10 @@ try {
     d.set('origen_id', origen);
     d.set('destino_id', destino);
     d.set('senal', 'hdmi');
+    d.set('puerto_origen_id', puertoSalidaId);
+    d.set('puerto_origen_ordinal', '1');
+    d.set('puerto_destino_id', puertoEntradaId);
+    d.set('puerto_destino_ordinal', '1');
     await invocar(acciones.anadirConexion, d);
     const [cuantas] = await sql<Array<{ n: string }>>`
       select count(*)::text as n from conexiones where sala_id = ${salaId}`;

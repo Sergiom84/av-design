@@ -970,16 +970,26 @@ export async function aplicarPlantillaAlDiagrama(
 
       const tiradas = await tx<
         Array<{
+          id: string;
           origen_linea_id: string;
           destino_linea_id: string;
           articulo_cable_id: string | null;
           senal: string;
           ruta: string | null;
           notas: string | null;
+          puerto_origen_id: string | null;
+          ordinal_origen: number | null;
+          puerto_destino_id: string | null;
+          ordinal_destino: number | null;
         }>
-      >`select origen_linea_id, destino_linea_id, articulo_cable_id, senal, ruta, notas
-        from plantilla_conexiones where plantilla_id = ${plantillaId}
-        order by orden, creado_en`;
+      >`select c.id, c.origen_linea_id, c.destino_linea_id, c.articulo_cable_id, c.senal, c.ruta, c.notas,
+               bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
+               bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
+        from plantilla_conexiones c
+        left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = c.id and bo.lado = 'origen'
+        left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = c.id and bd.lado = 'destino'
+        where c.plantilla_id = ${plantillaId}
+        order by c.orden, c.creado_en`;
 
       // Una tirada cuyo equipo no se heredó —la línea estaba marcada «no en
       // todas»— se salta: insertarla apuntando a nada deja la sala con una
@@ -988,10 +998,21 @@ export async function aplicarPlantillaAlDiagrama(
         const origen = equipoDeLinea.get(t.origen_linea_id);
         const destino = equipoDeLinea.get(t.destino_linea_id);
         if (!origen || !destino) continue;
-        await tx`
+        if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
+          const puertosDetalle = [t.puerto_origen_id, t.puerto_destino_id].sort();
+          await tx`select id from puertos where id in ${tx(puertosDetalle)} order by id for update`;
+        }
+        const [conexion] = await tx<Array<{ id: string }>>`
           insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta, notas)
           values (${salaId}, ${origen}, ${destino}, ${t.articulo_cable_id},
-                  ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas})`;
+                  ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas}) returning id`;
+        if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
+          await tx`update conexiones set puerto_origen_id = ${t.puerto_origen_id},
+              puerto_destino_id = ${t.puerto_destino_id} where id = ${conexion.id}`;
+          await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+            (${conexion.id}, 'origen', ${origen}, ${t.puerto_origen_id}, ${t.ordinal_origen}),
+            (${conexion.id}, 'destino', ${destino}, ${t.puerto_destino_id}, ${t.ordinal_destino})`;
+        }
       }
 
       // ------------------------------------------------- la sala resultante

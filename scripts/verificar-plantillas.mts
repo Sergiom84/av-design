@@ -61,6 +61,9 @@ const NOMBRE_CARRERA = 'TEST plantillas carrera';
 const NOMBRE_ENCOGIDA = 'TEST plantillas encogida';
 /** Lo mismo pero con el equipo sin colocar: eso sí puede nacer. */
 const NOMBRE_SIN_COLOCAR = 'TEST plantillas sin colocar';
+const articuloBocasId = randomUUID();
+const puertoSalidaId = randomUUID();
+const puertoEntradaId = randomUUID();
 
 async function limpiar() {
   await sql`delete from salas where nombre in (${NOMBRE_SALA}, ${NOMBRE_RECREADA}, ${NOMBRE_SIN_ASIENTOS}, ${NOMBRE_MESA_PRINCIPAL}, ${NOMBRE_SIN_COLOCAR})`;
@@ -70,6 +73,7 @@ async function limpiar() {
     'drop trigger if exists test_mesa_tardia on sala_equipos; drop function if exists test_mesa_tardia();',
   );
   await sql`delete from plantillas_sala where nombre like ${NOMBRE_PLANTILLA + '%'}`;
+  await sql`delete from articulos where id = ${articuloBocasId}`;
 }
 
 /** La escena que se compara: todo lo que dibuja el croquis, sin ids. */
@@ -92,10 +96,14 @@ async function escenaDe(salaId: string) {
     from sala_mobiliario where sala_id = ${salaId} order by orden, nombre`;
 
   const tiradas = await sql<Array<Record<string, unknown>>>`
-    select o.nombre as origen, d.nombre as destino, c.senal, c.ruta, c.notas
+    select o.nombre as origen, d.nombre as destino, c.senal, c.ruta, c.notas,
+           bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
+           bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
     from conexiones c
     join sala_equipos o on o.id = c.origen_id
     join sala_equipos d on d.id = c.destino_id
+    left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
+    left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
     where c.sala_id = ${salaId}
     order by o.nombre, d.nombre, c.senal`;
 
@@ -153,8 +161,11 @@ try {
     values (${salaId}, ${NOMBRE_SALA}, 'SALA TP', 8, 6, 4, 3,
             2.4, 1.2, 73, 2.1, 1.4, 30)`;
 
-  const [articulo] = await sql<Array<{ id: string }>>`
-    select id from articulos where activo order by modelo limit 1`;
+  await sql`insert into articulos (id, tipo, categoria, modelo) values (${articuloBocasId}, 'equipo', 'TEST', 'TEST PLANTILLAS BOCAS')`;
+  await sql`insert into puertos (id, articulo_id, nombre, total, sentido, senal) values
+    (${puertoSalidaId}, ${articuloBocasId}, 'OUTPUT', 2, 'salida', 'hdmi'),
+    (${puertoEntradaId}, ${articuloBocasId}, 'INPUT', 2, 'entrada', 'hdmi')`;
+  const articulo = { id: articuloBocasId };
 
   const equipo = async (
     nombre: string,
@@ -200,9 +211,14 @@ try {
     'la coordenada tecleada en Equipamiento coloca el equipo',
   );
 
-  await sql`
+  const [conexionDetallada] = await sql<Array<{ id: string }>>`
     insert into conexiones (sala_id, origen_id, destino_id, senal, ruta, notas)
-    values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada')`;
+    values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada') returning id`;
+  await sql.begin(async (tx) => {
+    await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+      (${conexionDetallada.id}, 'origen', ${caja}, ${puertoSalidaId}, 2),
+      (${conexionDetallada.id}, 'destino', ${pantalla}, ${puertoEntradaId}, 1)`;
+  });
 
   // Dos sillas: una colocada y girada, otra sin colocar. Las dos tienen que
   // volver, y la segunda tiene que volver SIN colocar.

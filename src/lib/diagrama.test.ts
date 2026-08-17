@@ -240,6 +240,38 @@ describe('construirDiagrama', () => {
     assert.ok(escena.ancho > 0 && escena.alto > 0);
   });
 
+  it('ancla por instancia, puerto y ordinal cuando dos equipos comparten referencia', () => {
+    const salida = { ...puerto('p-out', 'a-matriz', 'OUTPUT', 'salida'), total: 2 };
+    const entrada = { ...puerto('p-in', 'a-tv', 'INPUT', 'entrada'), total: 2 };
+    const escena = construirDiagrama({
+      equipos: [
+        equipo('matriz-1', 'Matriz', 'a-matriz'),
+        equipo('matriz-2', 'Matriz', 'a-matriz'),
+        equipo('tv-1', 'Pantalla', 'a-tv'),
+        equipo('tv-2', 'Pantalla', 'a-tv'),
+      ],
+      puertosPorArticulo: new Map([['a-matriz', [salida]], ['a-tv', [entrada]]]),
+      conexiones: [
+        conexion('c1', 'matriz-1', 'tv-1', {
+          puerto_origen_id: salida.id, puerto_origen_ordinal: 1,
+          puerto_destino_id: entrada.id, puerto_destino_ordinal: 1,
+        }),
+        conexion('c2', 'matriz-2', 'tv-2', {
+          puerto_origen_id: salida.id, puerto_origen_ordinal: 2,
+          puerto_destino_id: entrada.id, puerto_destino_ordinal: 2,
+        }),
+      ],
+    });
+    const bloque = (id: string) => escena.bloques.find((b) => b.equipo_id === id)!;
+    const linea = (id: string) => escena.lineas.find((l) => l.conexion_id === id)!;
+
+    assert.equal(linea('c1').puntos[0].y, bloque('matriz-1').salidas[0].y);
+    assert.equal(linea('c1').puntos.at(-1)!.y, bloque('tv-1').entradas[0].y);
+    assert.equal(linea('c2').puntos[0].y, bloque('matriz-2').salidas[1].y);
+    assert.equal(linea('c2').puntos.at(-1)!.y, bloque('tv-2').entradas[1].y);
+    assert.equal(bloque('matriz-2').salidas[1].nombre, 'OUTPUT 2');
+  });
+
   it('un equipo sin puertos en el catálogo sigue teniendo bloque', () => {
     const entrada = entradaTipo();
     entrada.puertosPorArticulo.delete('a-caja');

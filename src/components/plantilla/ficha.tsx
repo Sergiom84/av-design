@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Tarjeta } from '@/components/ui';
-import type { LineaPlantilla, PlantillaSala, TiradaPlantilla } from '@/lib/tipos';
+import type { LineaPlantilla, PlantillaSala, Puerto, TiradaPlantilla } from '@/lib/tipos';
 import { EquipamientoDePlantilla } from './equipamiento';
 import { MedidasDePlantilla } from './medidas';
 import { TiradasDePlantilla } from './tiradas';
@@ -20,12 +20,14 @@ export function FichaDePlantilla({
   plantilla,
   lineas,
   tiradas,
+  puertos,
   orden,
   abierta,
 }: {
   plantilla: PlantillaSala & { lineas: LineaPlantilla[] };
   lineas: LineaPlantilla[];
   tiradas: TiradaPlantilla[];
+  puertos: Puerto[];
   orden: number;
   abierta: boolean;
 }) {
@@ -83,6 +85,7 @@ export function FichaDePlantilla({
                     plantillaId={p.id}
                     lineas={lineas}
                     tiradas={tiradas}
+                    puertos={puertos}
                   />
                 </div>
               </>

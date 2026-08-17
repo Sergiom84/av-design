@@ -157,10 +157,10 @@ function Bloque({ bloque }: { bloque: BloqueDiagrama }) {
       )}
 
       {bloque.entradas.map((f) => (
-        <Puerto key={f.puerto_id} fila={f} lado="izquierda" bloque={bloque} />
+        <Puerto key={`${f.puerto_id}:${f.ordinal}`} fila={f} lado="izquierda" bloque={bloque} />
       ))}
       {bloque.salidas.map((f) => (
-        <Puerto key={f.puerto_id} fila={f} lado="derecha" bloque={bloque} />
+        <Puerto key={`${f.puerto_id}:${f.ordinal}`} fila={f} lado="derecha" bloque={bloque} />
       ))}
     </g>
   );

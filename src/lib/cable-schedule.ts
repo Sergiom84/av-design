@@ -172,10 +172,14 @@ export function construirTablaCables(entrada: EntradaTablaCables): FilaCable[] {
       identificador: identificadores.get(c.id) ?? '—',
       conexion_id: c.id,
       origen: origen?.nombre ?? '—',
-      puerto_origen: pOrigen?.nombre ?? null,
+      puerto_origen: pOrigen
+        ? `${pOrigen.nombre}${c.puerto_origen_ordinal != null && pOrigen.total > 1 ? ` ${c.puerto_origen_ordinal}` : ''}`
+        : null,
       conector_origen: pOrigen?.conector ?? null,
       destino: destino?.nombre ?? '—',
-      puerto_destino: pDestino?.nombre ?? null,
+      puerto_destino: pDestino
+        ? `${pDestino.nombre}${c.puerto_destino_ordinal != null && pDestino.total > 1 ? ` ${c.puerto_destino_ordinal}` : ''}`
+        : null,
       conector_destino: pDestino?.conector ?? null,
       toma_red: describirTomas(
         origen?.toma_red_id ? tomas.get(origen.toma_red_id) : undefined,

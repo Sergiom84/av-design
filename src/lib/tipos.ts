@@ -64,6 +64,14 @@ export interface Puerto {
   fuente: 'csv' | 'app';
 }
 
+/** Una boca concreta de una fila de catálogo que puede representar varias. */
+export interface BocaPuerto {
+  equipo_id: string;
+  puerto_id: string;
+  /** Posición física 1-based dentro de `puertos.total`. */
+  ordinal: number;
+}
+
 export interface Punto {
   x_m: number;
   y_m: number;
@@ -478,6 +486,9 @@ export interface Conexion {
    */
   puerto_origen_id?: string | null;
   puerto_destino_id?: string | null;
+  /** Nulos = conexión histórica todavía sin boca física detallada. */
+  puerto_origen_ordinal?: number | null;
+  puerto_destino_ordinal?: number | null;
   /** Orden de alta. Es lo que fija el correlativo del identificador de cable. */
   creado_en?: string | null;
 }

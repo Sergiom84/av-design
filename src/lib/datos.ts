@@ -741,7 +741,15 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
 
   const [filasEquipos, filasConexiones, filasTomas, filasMuebles] = await Promise.all([
     sql<Fila[]>`select * from sala_equipos where sala_id = ${id} order by nombre`,
-    sql<Fila[]>`select * from conexiones where sala_id = ${id} order by creado_en, id`,
+    sql<Fila[]>`
+      select c.*,
+             bo.puerto_id as boca_puerto_origen_id, bo.ordinal as puerto_origen_ordinal,
+             bd.puerto_id as boca_puerto_destino_id, bd.ordinal as puerto_destino_ordinal
+      from conexiones c
+      left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
+      left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
+      where c.sala_id = ${id}
+      order by c.creado_en, c.id`,
     sql<Fila[]>`select * from tomas_red where sala_id = ${id} order by codigo`,
     // El mobiliario viene aquí y no solo en `datos-plano.ts` porque el croquis
     // de Resumen tiene que dibujar exactamente lo mismo que el editor. Sin
@@ -811,8 +819,10 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
       notas: s(f.notas),
-      puerto_origen_id: s(f.puerto_origen_id),
-      puerto_destino_id: s(f.puerto_destino_id),
+      puerto_origen_id: s(f.boca_puerto_origen_id) ?? s(f.puerto_origen_id),
+      puerto_destino_id: s(f.boca_puerto_destino_id) ?? s(f.puerto_destino_id),
+      puerto_origen_ordinal: n(f.puerto_origen_ordinal),
+      puerto_destino_ordinal: n(f.puerto_destino_ordinal),
       creado_en:
         f.creado_en instanceof Date ? f.creado_en.toISOString() : s(f.creado_en),
     })),

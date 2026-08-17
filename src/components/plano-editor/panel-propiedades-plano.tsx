@@ -6,6 +6,7 @@ import { InspectorMesa } from './inspector-mesa';
 import { InspectorEquipo } from './inspector-equipo';
 import { InspectorMueble } from './inspector-mueble';
 import { InspectorToma } from './inspector-toma';
+import { InspectorPuerta } from './inspector-puerta';
 
 /**
  * El inspector que toca según lo que esté seleccionado.
@@ -72,6 +73,20 @@ export function PanelPropiedadesPlano({
     );
   }
 
+  if (seleccion.tipo === 'puerta') {
+    const puerta = borrador.puertas.find((x) => x.id === seleccion.id);
+    if (!puerta) return null;
+    return (
+      <InspectorPuerta
+        puerta={puerta}
+        borrador={borrador}
+        alCambiar={alCambiar}
+        alQuitar={alQuitar}
+        soloLectura={soloLectura}
+      />
+    );
+  }
+
   const toma = borrador.tomas.find((x) => x.id === seleccion.id);
   if (!toma) return null;
   return (
@@ -95,5 +110,6 @@ export function resumenDeSeleccion(seleccion: Seleccion, borrador: BorradorPlano
   if (seleccion.tipo === 'mueble') {
     return borrador.mobiliario.find((x) => x.id === seleccion.id)?.nombre ?? 'Mueble';
   }
+  if (seleccion.tipo === 'puerta') return 'Puerta';
   return `Toma ${borrador.tomas.find((x) => x.id === seleccion.id)?.codigo ?? ''}`.trim();
 }

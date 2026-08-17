@@ -29,6 +29,15 @@ const ESCENA: EscenaCroquis = {
     { x_m: 2, y_m: 1, radio_m: 0.25 },
   ],
   muebles: [{ id: 'm1' } as EscenaCroquis['muebles'][number]],
+  puertas: [
+    {
+      id: 'p1',
+      pared: 'sur',
+      desde: { x_m: 2, y_m: 0 },
+      hasta: { x_m: 2.9, y_m: 0 },
+      medida: true,
+    },
+  ],
   equipos: [
     { id: 'e1', extremo: 'pantalla' } as EscenaCroquis['equipos'][number],
     { id: 'e2', extremo: 'caja_conexiones' } as EscenaCroquis['equipos'][number],
@@ -140,5 +149,20 @@ describe('las capas del plano', () => {
     assert.equal(seleccionOculta({ tipo: 'equipo', id: 'e1' }, sinMobiliario), false);
     assert.equal(seleccionOculta({ tipo: 'mesa' }, sinMobiliario), false);
     assert.equal(seleccionOculta(null, sinMobiliario), false);
+  });
+});
+
+describe('las puertas y las capas', () => {
+  it('la puerta no pertenece a ninguna capa: seleccionarla no reenciende nada', () => {
+    assert.equal(capaDeSeleccion({ tipo: 'puerta', id: 'p1' }), null);
+    assert.equal(
+      seleccionOculta({ tipo: 'puerta', id: 'p1' }, { mobiliario: false, equipamiento: false }),
+      false,
+    );
+  });
+
+  it('apagar las dos capas no esconde las puertas: son arquitectura', () => {
+    const v = escenaVisible(ESCENA, { mobiliario: false, equipamiento: false });
+    assert.deepEqual(v.puertas, ESCENA.puertas);
   });
 });

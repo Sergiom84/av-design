@@ -57,6 +57,7 @@ export default async function PlanoSala({ params }: PageProps<'/salas/[id]/plano
       conexiones={datos.conexiones}
       tomas={datos.tomas}
       muebles={datos.muebles}
+      puertas={datos.puertas}
       categoriasMobiliario={categorias}
       plantillaBase={plantilla}
       cerrado={datos.cerrado}

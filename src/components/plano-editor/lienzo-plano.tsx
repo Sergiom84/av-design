@@ -9,6 +9,7 @@ import { proyectar, type EscenaCroquis } from '@/lib/croquis';
 import { comoViewBox, type Seleccion, type Vista } from '@/lib/plano-editor';
 import {
   GeometriaPlano,
+  cajaDeLaPuerta,
   cajaDelEquipo,
   cajaDelMueble,
   giroEnPantalla,
@@ -301,6 +302,30 @@ export function LienzoPlano({
                 empezarObjeto(ev, { tipo: 'equipo', id: e.id }, { x_m: e.x_m, y_m: e.y_m })
               }
               onContextMenu={menuDe({ tipo: 'equipo', id: e.id })}
+            />
+          );
+        })}
+
+        {escena.puertas.map((puerta) => {
+          const caja = cajaDeLaPuerta(p, puerta);
+          // El ancla del arrastre es el centro del hueco: `posicionEnPared`
+          // vuelve a restar media anchura al colocar.
+          const centro = {
+            x_m: (puerta.desde.x_m + puerta.hasta.x_m) / 2,
+            y_m: (puerta.desde.y_m + puerta.hasta.y_m) / 2,
+          };
+          return (
+            <Agarre
+              key={puerta.id}
+              activo={seleccionado({ tipo: 'puerta', id: puerta.id })}
+              x={caja.x}
+              y={caja.y}
+              ancho={caja.ancho}
+              alto={caja.alto}
+              onPointerDown={(ev) =>
+                empezarObjeto(ev, { tipo: 'puerta', id: puerta.id }, centro)
+              }
+              onContextMenu={menuDe({ tipo: 'puerta', id: puerta.id })}
             />
           );
         })}

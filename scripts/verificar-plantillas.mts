@@ -99,7 +99,13 @@ async function escenaDe(salaId: string) {
     where c.sala_id = ${salaId}
     order by o.nombre, d.nombre, c.senal`;
 
-  return JSON.parse(JSON.stringify({ sala, equipos, muebles, tiradas }));
+  // Las puertas viajan en los dos sentidos, con su estado: una sin medir
+  // vuelve sin medir, no con una anchura inventada.
+  const puertas = await sql<Array<Record<string, unknown>>>`
+    select pared, posicion_m, anchura_m, altura_m
+    from puertas where sala_id = ${salaId} order by orden, pared`;
+
+  return JSON.parse(JSON.stringify({ sala, equipos, muebles, tiradas, puertas }));
 }
 
 try {
@@ -213,6 +219,15 @@ try {
       (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, orden)
     values (${salaId}, ${sillaCat.id}, 'Silla', 'circulo', 0.5, 0.5, 1)`;
 
+  // Dos puertas: una medida y una sin medir. Las dos tienen que viajar, y la
+  // segunda tiene que volver SIN medir.
+  await sql`
+    insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+    values (${salaId}, 'sur', 1.2, 0.9, 2.1, 1)`;
+  await sql`
+    insert into puertas (sala_id, pared, orden, posicion_m)
+    values (${salaId}, 'este', 2, 0.8)`;
+
   const antes = await escenaDe(salaId);
 
   // ------------------------------------------------- sala -> plantilla
@@ -297,6 +312,10 @@ try {
   afirmar(
     JSON.stringify(antes.muebles) === JSON.stringify(despues.muebles),
     'el mobiliario vuelve con sus medidas, su sitio y su giro, y lo no colocado sigue sin colocar',
+  );
+  afirmar(
+    JSON.stringify(antes.puertas) === JSON.stringify(despues.puertas),
+    'las puertas vuelven con su pared, su posición y su estado, y la sin medir sigue sin medir',
   );
 
   // Con mobiliario heredado no puede quedar la fuente derivada activa: el
@@ -560,6 +579,44 @@ try {
     Number(huellaEncogida.cuantos) === 0,
     'y no deja ni un equipo ni un mueble sueltos: o cabe todo o no nace nada',
   );
+
+  // La misma regla con una puerta: la plantilla la coloca cerca del final de
+  // su pared de 6 m, y una sala corregida a 4 deja el hueco en la calle. Es
+  // `puertasFueraDePared`, la misma guarda del guardado manual, y el rechazo
+  // es atómico: ni sala, ni puertas huérfanas.
+  const plantillaPuertaLejos = randomUUID();
+  await sql`
+    insert into plantillas_sala (id, nombre, tipologia, aforo, largo_m, ancho_m, alto_m)
+    values (${plantillaPuertaLejos}, ${NOMBRE_PLANTILLA + ' puerta lejos'}, 'TEST', 8, 6, 4, 3)`;
+  await sql`
+    insert into puertas (plantilla_id, pared, posicion_m, anchura_m, altura_m, orden)
+    values (${plantillaPuertaLejos}, 'sur', 4.8, 0.9, 2.1, 1)`;
+
+  const alSalaPuertaLejos = new FormData();
+  alSalaPuertaLejos.set('plantilla_id', plantillaPuertaLejos);
+  alSalaPuertaLejos.set('nombre', NOMBRE_ENCOGIDA + ' puerta');
+  alSalaPuertaLejos.set('tipologia', 'TEST');
+  alSalaPuertaLejos.set('aforo', '8');
+  alSalaPuertaLejos.set('largo_m', '4');
+  alSalaPuertaLejos.set('ancho_m', '3');
+  alSalaPuertaLejos.set('alto_m', '3');
+  const rechazoPuerta = await altaDeSala(alSalaPuertaLejos);
+
+  const [salasPuerta] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from salas where nombre = ${NOMBRE_ENCOGIDA + ' puerta'}`;
+  afirmar(
+    Number(salasPuerta.cuantas) === 0,
+    'una plantilla cuya puerta no cabe en las medidas corregidas no crea la sala',
+  );
+  afirmar(
+    Boolean(rechazoPuerta?.error),
+    'y el alta explica el rechazo de la puerta en vez de crearla a medias',
+  );
+  const [puertasHuerfanas] = await sql<Array<{ cuantas: string }>>`
+    select count(*)::text as cuantas from puertas p
+    join salas s on s.id = p.sala_id
+    where s.nombre = ${NOMBRE_ENCOGIDA + ' puerta'}`;
+  afirmar(Number(puertasHuerfanas.cuantas) === 0, 'y no queda ninguna puerta huérfana');
 
   // El control positivo, sin el cual la guarda podría estar rechazando siempre:
   // un equipo SIN colocar no tiene posición, así que no puede quedarse fuera de

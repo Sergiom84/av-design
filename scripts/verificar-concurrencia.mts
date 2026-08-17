@@ -460,6 +460,9 @@ try {
         mobiliario_cambio: [],
         mobiliario_baja: [],
         tomas: [],
+        puertas_alta: [],
+        puertas_cambio: [],
+        puertas_baja: [],
         inicio_diagrama: null,
         sillas_modo: null,
       });
@@ -944,6 +947,9 @@ try {
           mobiliario_cambio: [],
           mobiliario_baja: [],
           tomas: [],
+          puertas_alta: [],
+          puertas_cambio: [],
+          puertas_baja: [],
           inicio_diagrama: null,
           sillas_modo: null,
         });
@@ -992,6 +998,9 @@ try {
           mobiliario_cambio: [],
           mobiliario_baja: [],
           tomas: [],
+          puertas_alta: [],
+          puertas_cambio: [],
+          puertas_baja: [],
           inicio_diagrama: null,
           sillas_modo: null,
         });

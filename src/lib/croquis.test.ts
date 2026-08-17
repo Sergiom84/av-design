@@ -10,7 +10,7 @@ import {
   sillasAlrededor,
   type MesaCroquis,
 } from './croquis';
-import type { Conexion, EquipoEnSala, MuebleEnSala, Sala } from './tipos';
+import type { Conexion, EquipoEnSala, MuebleEnSala, PuertaEnSala, Sala } from './tipos';
 
 /**
  * La sala de referencia es la Sala de Batería 006, medida a mano por el
@@ -780,5 +780,87 @@ describe('el mobiliario del croquis', () => {
     });
     assert.equal(explicitas.sillas.length, 0, 'nunca las dos fuentes a la vez');
     assert.equal(explicitas.muebles.length, 2);
+  });
+});
+
+describe('las puertas del croquis', () => {
+  const puerta = (extra: Partial<PuertaEnSala>): PuertaEnSala => ({
+    id: 'p1',
+    sala_id: 's1',
+    pared: 'sur',
+    posicion_m: 1,
+    anchura_m: null,
+    altura_m: null,
+    orden: 1,
+    ...extra,
+  });
+
+  it('una puerta medida se resuelve a su hueco sobre la pared', () => {
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+      puertas: [puerta({ anchura_m: 0.9, altura_m: 2.1 })],
+    });
+    assert.equal(escena.puertas.length, 1);
+    const p = escena.puertas[0];
+    assert.deepEqual(p.desde, { x_m: 1, y_m: 0 });
+    assert.deepEqual(p.hasta, { x_m: 1.9, y_m: 0 });
+    assert.equal(p.medida, true);
+  });
+
+  it('cada pared coloca el hueco en su borde', () => {
+    const en = (pared: PuertaEnSala['pared']) =>
+      construirEscena({
+        sala: SALA_BATERIA,
+        equipos: [],
+        conexiones: [],
+        tomas: [],
+        puertas: [puerta({ pared, anchura_m: 0.8, altura_m: 2 })],
+      }).puertas[0];
+    assert.equal(en('norte').desde.y_m, SALA_BATERIA.ancho_m);
+    assert.equal(en('sur').desde.y_m, 0);
+    assert.equal(en('oeste').desde.x_m, 0);
+    assert.equal(en('este').desde.x_m, SALA_BATERIA.largo_m);
+  });
+
+  it('sin medir no se inventa anchura: los dos puntos coinciden y se avisa', () => {
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+      puertas: [puerta({})],
+    });
+    const p = escena.puertas[0];
+    assert.deepEqual(p.desde, p.hasta);
+    assert.equal(p.medida, false);
+    assert.ok(escena.avisos.some((a) => a.includes('sin medir')));
+  });
+
+  it('un dato que sobresale se recorta en el dibujo, no en el dato', () => {
+    const escena = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+      puertas: [puerta({ posicion_m: 4.5, anchura_m: 0.9, altura_m: 2.1 })],
+    });
+    assert.equal(escena.puertas[0].hasta.x_m, SALA_BATERIA.largo_m);
+  });
+
+  it('las puertas no tocan tiradas, equipos ni sillas', () => {
+    const sin = construirEscena({ sala: SALA_BATERIA, equipos: [], conexiones: [], tomas: [] });
+    const con = construirEscena({
+      sala: SALA_BATERIA,
+      equipos: [],
+      conexiones: [],
+      tomas: [],
+      puertas: [puerta({ anchura_m: 0.9, altura_m: 2.1 })],
+    });
+    assert.deepEqual(con.equipos, sin.equipos);
+    assert.deepEqual(con.tiradas, sin.tiradas);
+    assert.deepEqual(con.sillas, sin.sillas);
   });
 });

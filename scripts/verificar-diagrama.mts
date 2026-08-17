@@ -353,6 +353,9 @@ try {
     mobiliario_cambio: [],
     mobiliario_baja: [],
     tomas: [],
+    puertas_alta: [],
+    puertas_cambio: [],
+    puertas_baja: [],
     inicio_diagrama: null,
     sillas_modo: null,
   });
@@ -1389,6 +1392,163 @@ try {
         (select diagrama_version from salas where id = ${salaMuebleCorrienteId}) as version`;
     afirmar(Number(trasImposible.x_m) === 0, 'y el equipo no se movió: la transacción se deshizo');
     afirmar(Number(trasImposible.version) === versionImposible, 'ni subió la versión');
+  }
+
+  // ------------------------------------------------------------ 14 · puertas
+  {
+    // Alta, cambio y baja en el mismo flujo transaccional que el resto.
+    const version = await versionDe(salaLegadoId);
+    const tmp = randomUUID();
+    const alta = await invocar({
+      ...patchBase(salaLegadoId, version),
+      puertas_alta: [
+        { id: tmp, pared: 'sur', posicion_m: 1, anchura_m: 0.9, altura_m: 2.1, orden: 1 },
+      ],
+    });
+    afirmar(alta.ok, 'puertas: el alta entra');
+    const puertaId = alta.ok ? alta.ids[tmp] : '';
+    afirmar(Boolean(puertaId) && puertaId !== tmp, 'puertas: el id temporal no se escribe');
+
+    const [fila] = await sql<Array<{ anchura_m: string; sala_id: string }>>`
+      select anchura_m, sala_id from puertas where id = ${puertaId}`;
+    afirmar(Number(fila.anchura_m) === 0.9, 'puertas: la medida escrita es la medida');
+    afirmar(fila.sala_id === salaLegadoId, 'puertas: la fila es de su sala');
+
+    // Sin medir: nula la pareja entera, y el estado se conserva.
+    const tmp2 = randomUUID();
+    const sinMedir = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_alta: [
+        { id: tmp2, pared: 'este', posicion_m: 0.5, anchura_m: null, altura_m: null, orden: 2 },
+      ],
+    });
+    afirmar(sinMedir.ok, 'puertas: una puerta sin medir se guarda sin medir');
+    const puerta2Id = sinMedir.ok ? sinMedir.ids[tmp2] : '';
+    const [fila2] = await sql<Array<{ anchura_m: string | null; altura_m: string | null }>>`
+      select anchura_m, altura_m from puertas where id = ${puerta2Id}`;
+    afirmar(
+      fila2.anchura_m === null && fila2.altura_m === null,
+      'puertas: sin medir no se inventa ninguna dimensión',
+    );
+
+    // Una medida a medias no se guarda.
+    const aMedias = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_cambio: [
+        { id: puertaId, pared: 'sur', posicion_m: 1, anchura_m: 0.9, altura_m: null, orden: 1 },
+      ],
+    });
+    afirmar(
+      !aMedias.ok && aMedias.motivo === 'fuera',
+      'puertas: una anchura sin altura se rechaza entera',
+    );
+
+    // El hueco no puede salirse de la pared. Se leen las medidas reales de la
+    // sala en este punto, porque los escenarios anteriores las han ido
+    // cambiando y una posición escrita a mano dejaría de sobresalir.
+    const [medidasSala] = await sql<Array<{ largo_m: string; alto_m: string }>>`
+      select largo_m, alto_m from salas where id = ${salaLegadoId}`;
+    const largoSala = Number(medidasSala.largo_m);
+    const altoSala = Number(medidasSala.alto_m);
+    const excedida = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_cambio: [
+        { id: puertaId, pared: 'sur', posicion_m: largoSala - 0.5, anchura_m: 0.9, altura_m: 2.1, orden: 1 },
+      ],
+    });
+    afirmar(
+      !excedida.ok && excedida.motivo === 'fuera',
+      'puertas: el hueco que se sale de la pared se rechaza',
+    );
+    const [sinCambiar] = await sql<Array<{ posicion_m: string }>>`
+      select posicion_m from puertas where id = ${puertaId}`;
+    afirmar(Number(sinCambiar.posicion_m) === 1, 'puertas: y la fila no cambió');
+
+    // Más alta que la sala tampoco.
+    const altaDeMas = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_cambio: [
+        { id: puertaId, pared: 'sur', posicion_m: 1, anchura_m: 0.9, altura_m: altoSala + 0.1, orden: 1 },
+      ],
+    });
+    afirmar(
+      !altaDeMas.ok && altaDeMas.motivo === 'fuera',
+      'puertas: más alta que la sala se rechaza',
+    );
+
+    // Una puerta de otra sala no se toca desde aquí.
+    const ajena = await invocar({
+      ...patchBase(salaVecinaId, await versionDe(salaVecinaId)),
+      puertas_cambio: [
+        { id: puertaId, pared: 'sur', posicion_m: 1, anchura_m: 0.9, altura_m: 2.1, orden: 1 },
+      ],
+    });
+    afirmar(!ajena.ok && ajena.motivo === 'ajeno', 'puertas: la puerta ajena se rechaza');
+    const bajaAjena = await invocar({
+      ...patchBase(salaVecinaId, await versionDe(salaVecinaId)),
+      puertas_baja: [puertaId],
+    });
+    afirmar(!bajaAjena.ok && bajaAjena.motivo === 'ajeno', 'puertas: la baja ajena también');
+
+    // Rollback: un patch con una puerta buena y un equipo ajeno no deja nada.
+    const versionRollback = await versionDe(salaLegadoId);
+    const tmp3 = randomUUID();
+    const mezcla = await invocar({
+      ...patchBase(salaLegadoId, versionRollback),
+      puertas_alta: [
+        { id: tmp3, pared: 'norte', posicion_m: 2, anchura_m: 0.8, altura_m: 2, orden: 3 },
+      ],
+      equipos: [
+        { id: randomUUID(), x_m: 1, y_m: 1, z_m: 0, posicion_confirmada: true, rotacion_grados: 0 },
+      ],
+    });
+    afirmar(!mezcla.ok, 'puertas: el patch mixto con un equipo ajeno se rechaza');
+    const [{ cuantas }] = await sql<Array<{ cuantas: string }>>`
+      select count(*)::text as cuantas from puertas where sala_id = ${salaLegadoId}`;
+    afirmar(Number(cuantas) === 2, 'puertas: y no se escribió la puerta del patch rechazado');
+    afirmar(
+      (await versionDe(salaLegadoId)) === versionRollback,
+      'puertas: ni subió la versión',
+    );
+
+    // La versión obsoleta protege también a las puertas.
+    const obsoleta = await invocar({
+      ...patchBase(salaLegadoId, versionRollback - 1),
+      puertas_baja: [puertaId],
+    });
+    afirmar(!obsoleta.ok && obsoleta.motivo === 'conflicto', 'puertas: la versión obsoleta choca');
+
+    // La obra cerrada tampoco admite puertas.
+    const cerrada = await invocar({
+      ...patchBase(salaCerradaId, await versionDe(salaCerradaId)),
+      puertas_alta: [
+        { id: randomUUID(), pared: 'sur', posicion_m: 1, anchura_m: null, altura_m: null, orden: 1 },
+      ],
+    });
+    afirmar(!cerrada.ok && cerrada.motivo === 'cerrado', 'puertas: la obra cerrada no se toca');
+
+    // Cambiar y borrar la misma puerta en el mismo patch es un borrador roto.
+    const contradictorio = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_cambio: [
+        { id: puertaId, pared: 'sur', posicion_m: 2, anchura_m: 0.9, altura_m: 2.1, orden: 1 },
+      ],
+      puertas_baja: [puertaId],
+    });
+    afirmar(
+      !contradictorio.ok && contradictorio.motivo === 'ajeno',
+      'puertas: cambiar y borrar la misma puerta se rechaza',
+    );
+
+    // La baja de verdad, dentro de la transacción.
+    const baja = await invocar({
+      ...patchBase(salaLegadoId, await versionDe(salaLegadoId)),
+      puertas_baja: [puertaId, puerta2Id],
+    });
+    afirmar(baja.ok, 'puertas: la baja entra');
+    const [{ quedan }] = await sql<Array<{ quedan: string }>>`
+      select count(*)::text as quedan from puertas where sala_id = ${salaLegadoId}`;
+    afirmar(Number(quedan) === 0, 'puertas: y no queda ninguna');
   }
 } finally {
   await limpiar();

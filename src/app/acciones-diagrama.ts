@@ -8,6 +8,7 @@ import { normalizarGrados } from '@/lib/croquis';
 import {
   MAXIMO_MOBILIARIO_POR_PATCH,
   coordenadasFueraDeSala,
+  puertasFueraDePared,
   type PatchPlano,
 } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
@@ -117,6 +118,20 @@ const esquemaMuebleAlta = esquemaMueble.extend({
   forma: z.enum(['rectangulo', 'circulo']),
 });
 
+/**
+ * Una puerta del patch. Sin medida por defecto en ningún sitio: la anchura y
+ * la altura son nulas hasta que alguien las mide, y la pareja entera o
+ * ninguna la exige `puertasFueraDePared`, la misma guarda que usa el editor.
+ */
+const esquemaPuerta = z.object({
+  id: z.string().refine(esUuid, 'id no es un uuid'),
+  pared: z.enum(['norte', 'sur', 'este', 'oeste']),
+  posicion_m: z.number().finite().min(0).max(1000),
+  anchura_m: z.number().finite().positive().max(100).nullable(),
+  altura_m: z.number().finite().positive().max(100).nullable(),
+  orden: z.number().int().min(0).max(10000),
+});
+
 const esquemaPatch = z.object({
   sala_id: z.string().refine(esUuid, 'sala_id no es un uuid'),
   versionEsperada: z.number().int().min(0),
@@ -130,6 +145,9 @@ const esquemaPatch = z.object({
   mobiliario_cambio: z.array(esquemaMueble).max(500),
   mobiliario_baja: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(500),
   tomas: z.array(esquemaToma).max(500),
+  puertas_alta: z.array(esquemaPuerta).max(100),
+  puertas_cambio: z.array(esquemaPuerta).max(100),
+  puertas_baja: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(100),
   inicio_diagrama: z
     .object({
       origen: z.enum(['desde_cero', 'plantilla']),
@@ -217,13 +235,17 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
   // sí y distintos de los que ya existen: un id repetido en las altas dejaría
   // dos sillas compartiendo entrada en el mapa de vuelta, y el editor movería
   // una creyendo mover la otra.
-  const temporales = [...p.equipos_alta, ...p.mobiliario_alta].map((x) => x.id);
+  const temporales = [...p.equipos_alta, ...p.mobiliario_alta, ...p.puertas_alta].map(
+    (x) => x.id,
+  );
   if (new Set(temporales).size !== temporales.length) return fallo('ajeno');
 
   const persistidos = [
     ...p.equipos.map((e) => e.id),
     ...p.mobiliario_cambio.map((m) => m.id),
     ...p.mobiliario_baja,
+    ...p.puertas_cambio.map((d) => d.id),
+    ...p.puertas_baja,
   ];
   if (temporales.some((id) => persistidos.includes(id))) return fallo('ajeno');
   if (new Set(p.mobiliario_cambio.map((m) => m.id)).size !== p.mobiliario_cambio.length) {
@@ -233,6 +255,13 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
   // Cambiar y borrar el mismo mueble en el mismo guardado no es una intención,
   // es un borrador roto.
   if (p.mobiliario_cambio.some((m) => p.mobiliario_baja.includes(m.id))) return fallo('ajeno');
+
+  // Mismas reglas para las puertas: sin repetidos y sin cambiar lo que se borra.
+  if (new Set(p.puertas_cambio.map((d) => d.id)).size !== p.puertas_cambio.length) {
+    return fallo('ajeno');
+  }
+  if (new Set(p.puertas_baja).size !== p.puertas_baja.length) return fallo('ajeno');
+  if (p.puertas_cambio.some((d) => p.puertas_baja.includes(d.id))) return fallo('ajeno');
 
   const transaccion = sql.begin(async (tx): Promise<ResultadoGuardado> => {
     // `for update` bloquea la fila hasta el commit: dos guardados simultáneos
@@ -278,6 +307,11 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
     };
     if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
+    // La misma guarda pura que usa el editor: una puerta medida no se sale de
+    // su pared, y una medida a medias no se guarda.
+    if (puertasFueraDePared([...p.puertas_alta, ...p.puertas_cambio], medidas).length > 0) {
+      return fallo('fuera');
+    }
 
     // Pertenencia: se cuenta contra la base, no contra lo que dice el patch.
     if (p.equipos.length > 0) {
@@ -301,6 +335,14 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         select count(*)::text as cuantos from sala_mobiliario
         where sala_id = ${p.sala_id} and id in ${tx(mueblesTocados)}`;
       if (Number(cuantos) !== mueblesTocados.length) return fallo('ajeno');
+    }
+
+    const puertasTocadas = [...p.puertas_cambio.map((d) => d.id), ...p.puertas_baja];
+    if (puertasTocadas.length > 0) {
+      const [{ cuantos }] = await tx<Array<{ cuantos: string }>>`
+        select count(*)::text as cuantos from puertas
+        where sala_id = ${p.sala_id} and id in ${tx(puertasTocadas)}`;
+      if (Number(cuantos) !== puertasTocadas.length) return fallo('ajeno');
     }
 
     // ------------------------------------------------------------ catálogos
@@ -443,6 +485,34 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         where id = ${m.id} and sala_id = ${p.sala_id}`;
     }
 
+    for (const d of p.puertas_alta) {
+      // Una puerta no tiene catálogo: no hay nada que releer. El id temporal
+      // sigue sin escribirse, como en el resto de altas.
+      const [fila] = await tx<Array<{ id: string }>>`
+        insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+        values (${p.sala_id}, ${d.pared}, ${d.posicion_m}, ${d.anchura_m},
+                ${d.altura_m}, ${d.orden})
+        returning id`;
+      ids[d.id] = fila.id;
+    }
+
+    for (const d of p.puertas_cambio) {
+      await tx`
+        update puertas set
+          pared = ${d.pared}, posicion_m = ${d.posicion_m},
+          anchura_m = ${d.anchura_m}, altura_m = ${d.altura_m},
+          orden = ${d.orden}, actualizado_en = now()
+        where id = ${d.id} and sala_id = ${p.sala_id}`;
+    }
+
+    if (p.puertas_baja.length > 0) {
+      // Una puerta no es extremo de ninguna tirada ni material de la sala:
+      // la baja no deja nada colgando, así que alcanza a las persistidas.
+      await tx`
+        delete from puertas
+        where sala_id = ${p.sala_id} and id in ${tx(p.puertas_baja)}`;
+    }
+
     if (p.mobiliario_baja.length > 0) {
       // Un mueble no es extremo de ninguna tirada, así que borrarlo no deja
       // conexiones colgando. Por eso sí se puede quitar desde el plano y un
@@ -564,6 +634,9 @@ export async function iniciarDiagramaDesdeCero(
     mobiliario_cambio: [],
     mobiliario_baja: [],
     tomas: [],
+    puertas_alta: [],
+    puertas_cambio: [],
+    puertas_baja: [],
     inicio_diagrama: { origen: 'desde_cero', plantilla_id: null },
     sillas_modo: null,
   });
@@ -683,18 +756,29 @@ export async function aplicarPlantillaAlDiagrama(
     // aceptaba una plantilla de 4 × 4 y la roseta se quedaba fuera del plano
     // sin que nadie la moviera.
     const [ocupacion] = await tx<
-      Array<{ equipos: string; conexiones: string; muebles: string; tomas: string }>
+      Array<{
+        equipos: string;
+        conexiones: string;
+        muebles: string;
+        tomas: string;
+        puertas: string;
+      }>
     >`
       select
         (select count(*) from sala_equipos    where sala_id = ${salaId})::text as equipos,
         (select count(*) from conexiones      where sala_id = ${salaId})::text as conexiones,
         (select count(*) from sala_mobiliario where sala_id = ${salaId})::text as muebles,
-        (select count(*) from tomas_red       where sala_id = ${salaId})::text as tomas`;
+        (select count(*) from tomas_red       where sala_id = ${salaId})::text as tomas,
+        (select count(*) from puertas         where sala_id = ${salaId})::text as puertas`;
     const vacia =
       Number(ocupacion.equipos) === 0 &&
       Number(ocupacion.conexiones) === 0 &&
       Number(ocupacion.muebles) === 0 &&
-      Number(ocupacion.tomas) === 0;
+      Number(ocupacion.tomas) === 0 &&
+      // Las puertas cuentan como ocupación por lo mismo que las rosetas:
+      // alguien las situó en una pared, y aplicar una plantilla sustituye las
+      // medidas de esa pared.
+      Number(ocupacion.puertas) === 0;
 
     // La sala que nació de esta misma plantilla ya la tiene aplicada, se mire
     // por `plantilla_id` (el alta) o por `diagrama_plantilla_id` (una
@@ -821,6 +905,15 @@ export async function aplicarPlantillaAlDiagrama(
         from plantilla_mobiliario pm
         where pm.plantilla_id = ${plantillaId}`;
 
+      // Las puertas de la plantilla, con su estado tal cual: una puerta sin
+      // medir en la plantilla llega sin medir a la sala. La ausencia se
+      // propaga como ausencia.
+      await tx`
+        insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+        select ${salaId}, pp.pared, pp.posicion_m, pp.anchura_m, pp.altura_m, pp.orden
+        from puertas pp
+        where pp.plantilla_id = ${plantillaId}`;
+
       // ------------------------------------- postcondición: una sola mesa
       //
       // La comprobación previa mira `plantilla_mobiliario` ANTES de copiarlo,
@@ -931,6 +1024,32 @@ export async function aplicarPlantillaAlDiagrama(
           })),
         },
         medidas,
+      );
+
+      // Las puertas copiadas se juzgan con la misma guarda que el guardado
+      // manual: si la plantilla trae una puerta que no cabe en sus propias
+      // medidas, no se aplica.
+      const puertasCopiadas = await tx<
+        Array<{
+          id: string;
+          pared: string;
+          posicion_m: string;
+          anchura_m: string | null;
+          altura_m: string | null;
+        }>
+      >`select id, pared, posicion_m, anchura_m, altura_m from puertas where sala_id = ${salaId}`;
+
+      problemas.push(
+        ...puertasFueraDePared(
+          puertasCopiadas.map((d) => ({
+            id: d.id,
+            pared: d.pared as 'norte' | 'sur' | 'este' | 'oeste',
+            posicion_m: Number(d.posicion_m),
+            anchura_m: num(d.anchura_m),
+            altura_m: num(d.altura_m),
+          })),
+          medidas,
+        ),
       );
 
       if (problemas.length > 0) {

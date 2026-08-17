@@ -6,7 +6,7 @@ import type postgres from 'postgres';
 import { sql } from '@/lib/db';
 import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
-import { coordenadasFueraDeSala } from '@/lib/plano-editor';
+import { coordenadasFueraDeSala, puertasFueraDePared } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
 
 /**
@@ -404,6 +404,15 @@ export async function crearSala(
           from plantilla_mobiliario pm
           where pm.plantilla_id = ${plantillaId}`;
 
+        // Las puertas de la plantilla viajan con el resto del montaje. Una
+        // puerta sin medir en la plantilla llega sin medir: la ausencia se
+        // propaga como ausencia.
+        await tx`
+          insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
+          select ${sala.id}, pp.pared, pp.posicion_m, pp.anchura_m, pp.altura_m, pp.orden
+          from puertas pp
+          where pp.plantilla_id = ${plantillaId}`;
+
         // --------------------------------- postcondición: una sola mesa
         //
         // La comprobación previa mira la plantilla ANTES de abrir la
@@ -490,6 +499,36 @@ export async function crearSala(
               ancho_m: comun.ancho_m,
               alto_m: comun.alto_m > 0 ? comun.alto_m : Number.POSITIVE_INFINITY,
             },
+          );
+
+          // Las puertas copiadas se juzgan con su propia guarda, la misma del
+          // guardado manual: un hueco que no cabe en la pared del formulario
+          // no se hereda en silencio.
+          const puertasCopiadas = await tx<
+            Array<{
+              id: string;
+              pared: string;
+              posicion_m: string;
+              anchura_m: string | null;
+              altura_m: string | null;
+            }>
+          >`select id, pared, posicion_m, anchura_m, altura_m
+            from puertas where sala_id = ${sala.id}`;
+          problemas.push(
+            ...puertasFueraDePared(
+              puertasCopiadas.map((d) => ({
+                id: d.id,
+                pared: d.pared as 'norte' | 'sur' | 'este' | 'oeste',
+                posicion_m: Number(d.posicion_m),
+                anchura_m: num(d.anchura_m),
+                altura_m: num(d.altura_m),
+              })),
+              {
+                largo_m: comun.largo_m,
+                ancho_m: comun.ancho_m,
+                alto_m: comun.alto_m > 0 ? comun.alto_m : Number.POSITIVE_INFINITY,
+              },
+            ),
           );
 
           if (problemas.length > 0) {
@@ -698,6 +737,15 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
       from sala_mobiliario sm
       where sm.sala_id = ${salaId}
       order by sm.orden, sm.creado_en`;
+
+    // Las puertas de la sala pasan a ser las puertas tipo. El estado viaja tal
+    // cual: una puerta sin medir da una puerta tipo sin medir.
+    await tx`
+      insert into puertas (plantilla_id, pared, posicion_m, anchura_m, altura_m, orden)
+      select ${id}, ps.pared, ps.posicion_m, ps.anchura_m, ps.altura_m, ps.orden
+      from puertas ps
+      where ps.sala_id = ${salaId}
+      order by ps.orden, ps.creado_en`;
 
     // Las tiradas de la sala pasan a ser las tiradas tipo de la plantilla.
     const conexiones = await tx<

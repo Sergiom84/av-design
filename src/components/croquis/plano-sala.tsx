@@ -62,6 +62,7 @@ export function GeometriaPlano({ p, escena }: { p: Proyeccion; escena: EscenaCro
   return (
     <>
       <Paredes p={p} escena={escena} />
+      <Puertas p={p} escena={escena} />
       <Mesa p={p} escena={escena} />
       <Sillas p={p} escena={escena} />
       <Muebles p={p} escena={escena} />
@@ -271,6 +272,141 @@ function Equipos({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
             >
               {e.nombre}
             </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Hacia dónde está el interior de la sala desde cada pared, en píxeles de
+ * pantalla. La proyección invierte la y: el interior de la pared sur (y = 0)
+ * está hacia arriba en pantalla.
+ */
+function interiorEnPantalla(pared: EscenaCroquis['puertas'][number]['pared']): {
+  dx: number;
+  dy: number;
+} {
+  switch (pared) {
+    case 'sur':
+      return { dx: 0, dy: -1 };
+    case 'norte':
+      return { dx: 0, dy: 1 };
+    case 'oeste':
+      return { dx: 1, dy: 0 };
+    case 'este':
+      return { dx: -1, dy: 0 };
+  }
+}
+
+/**
+ * La zona que ocupa una puerta en pantalla, para el agarre del editor.
+ *
+ * Una puerta sin medir no tiene hueco: su zona es un cuadrado alrededor de la
+ * marca, para que se pueda agarrar igual.
+ */
+export function cajaDeLaPuerta(
+  p: Proyeccion,
+  puerta: EscenaCroquis['puertas'][number],
+): { x: number; y: number; ancho: number; alto: number } {
+  const ax = p.x(puerta.desde.x_m);
+  const ay = p.y(puerta.desde.y_m);
+  const bx = p.x(puerta.hasta.x_m);
+  const by = p.y(puerta.hasta.y_m);
+  const margen = 9;
+  return {
+    x: Math.min(ax, bx) - margen,
+    y: Math.min(ay, by) - margen,
+    ancho: Math.abs(bx - ax) + margen * 2,
+    alto: Math.abs(by - ay) + margen * 2,
+  };
+}
+
+/**
+ * Las puertas: el hueco abierto en la pared y la hoja barriendo hacia dentro.
+ *
+ * Una puerta sin medir no inventa anchura: se marca el punto con un rombo
+ * discontinuo y el rótulo dice «Sin medir», igual que un mueble sin medidas no
+ * se dibuja con unas inventadas.
+ */
+function Puertas({ p, escena }: { p: Proyeccion; escena: EscenaCroquis }) {
+  return (
+    <g>
+      {escena.puertas.map((puerta) => {
+        const ax = p.x(puerta.desde.x_m);
+        const ay = p.y(puerta.desde.y_m);
+        const bx = p.x(puerta.hasta.x_m);
+        const by = p.y(puerta.hasta.y_m);
+
+        if (!puerta.medida) {
+          return (
+            <g key={puerta.id}>
+              <rect
+                x={ax - 5}
+                y={ay - 5}
+                width={10}
+                height={10}
+                transform={`rotate(45 ${ax} ${ay})`}
+                fill="var(--fondo)"
+                stroke="var(--tinta)"
+                strokeWidth={1.25}
+                strokeDasharray="3 2"
+              />
+              <text
+                x={ax}
+                y={ay - 10}
+                textAnchor="middle"
+                fill="var(--tinta-tenue)"
+                fontSize={9}
+              >
+                Puerta · Sin medir
+              </text>
+            </g>
+          );
+        }
+
+        const largo = Math.hypot(bx - ax, by - ay);
+        const interior = interiorEnPantalla(puerta.pared);
+        // La hoja abatida: del arranque hacia dentro de la sala.
+        const cx = ax + interior.dx * largo;
+        const cy = ay + interior.dy * largo;
+        // El barrido gira del extremo del hueco a la punta de la hoja; el
+        // sentido correcto depende de la pared, y se elige el que deja el
+        // arco dentro de la sala.
+        const barrido =
+          puerta.pared === 'sur' || puerta.pared === 'este' ? 1 : 0;
+
+        return (
+          <g key={puerta.id}>
+            {/* El hueco: se abre la pared pintando encima con el fondo. */}
+            <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--fondo)" strokeWidth={4} />
+            {/* Las jambas, para que el hueco no parezca una pared borrada. */}
+            <line
+              x1={ax + interior.dx * -3}
+              y1={ay + interior.dy * -3}
+              x2={ax + interior.dx * 3}
+              y2={ay + interior.dy * 3}
+              stroke="var(--tinta)"
+              strokeWidth={2}
+            />
+            <line
+              x1={bx + interior.dx * -3}
+              y1={by + interior.dy * -3}
+              x2={bx + interior.dx * 3}
+              y2={by + interior.dy * 3}
+              stroke="var(--tinta)"
+              strokeWidth={2}
+            />
+            {/* La hoja y su barrido. */}
+            <line x1={ax} y1={ay} x2={cx} y2={cy} stroke="var(--tinta)" strokeWidth={1.5} />
+            <path
+              d={`M ${bx} ${by} A ${largo} ${largo} 0 0 ${barrido} ${cx} ${cy}`}
+              fill="none"
+              stroke="var(--tinta-tenue)"
+              strokeWidth={1}
+              strokeDasharray="3 2"
+            />
           </g>
         );
       })}

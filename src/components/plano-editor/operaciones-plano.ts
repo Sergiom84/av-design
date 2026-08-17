@@ -98,6 +98,9 @@ export function operacionDisponible(
       return seleccion.tipo === 'mesa' || seleccion.tipo === 'equipo' || seleccion.tipo === 'mueble';
     case 'eliminar':
       if (seleccion.tipo === 'mueble') return true;
+      // Una puerta se quita siempre: no es extremo de ninguna tirada ni
+      // material de la sala, así que la baja no deja nada colgando.
+      if (seleccion.tipo === 'puerta') return true;
       // Un equipo se quita del plano solo mientras sea un alta sin guardar.
       if (seleccion.tipo === 'equipo') {
         return borrador.equipos.some((e) => e.id === seleccion.id && e.es_nuevo);
@@ -116,6 +119,8 @@ function objetoVigente(seleccion: Seleccion, borrador: BorradorPlano): seleccion
       return borrador.mobiliario.some((m) => m.id === seleccion.id);
     case 'toma':
       return borrador.tomas.some((t) => t.id === seleccion.id);
+    case 'puerta':
+      return borrador.puertas.some((p) => p.id === seleccion.id);
     default:
       return true;
   }

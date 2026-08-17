@@ -74,6 +74,7 @@ const BORRADOR: BorradorPlano = {
   equipos: [EQUIPO_GUARDADO, EQUIPO_NUEVO],
   mobiliario: [MUEBLE],
   tomas: [{ id: 't1', codigo: 'R-01', ubicacion: null, x_m: 1, y_m: 1, z_m: null, notas: null }],
+  puertas: [],
   sillas_modo: 'manuales',
   inicio: null,
 };
@@ -246,5 +247,46 @@ describe('el despachador de operaciones del plano', () => {
     it('sin selección no ofrece nada', () => {
       assert.deepEqual(operacionesOfrecidas(null, BORRADOR, { soloLectura: false }), []);
     });
+  });
+});
+
+describe('las puertas en el despachador', () => {
+  const PUERTA = {
+    id: 'p1',
+    pared: 'sur' as const,
+    posicion_m: 1,
+    anchura_m: null,
+    altura_m: null,
+    orden: 1,
+    es_nuevo: false,
+  };
+  const CON_PUERTA: BorradorPlano = { ...BORRADOR, puertas: [PUERTA] };
+  const SELECCION = { tipo: 'puerta', id: 'p1' } as const;
+
+  it('una puerta no gira: el control no se ofrece y la operación no hace nada', () => {
+    assert.equal(operacionDisponible('girar', SELECCION, CON_PUERTA), false);
+    const r = aplicarOperacion(CON_PUERTA, SELECCION, { tipo: 'girar', grados: 90 });
+    assert.equal(r.borrador, CON_PUERTA);
+  });
+
+  it('eliminar alcanza a la puerta persistida y suelta la selección', () => {
+    assert.equal(operacionDisponible('eliminar', SELECCION, CON_PUERTA), true);
+    const r = aplicarOperacion(CON_PUERTA, SELECCION, { tipo: 'eliminar' });
+    assert.equal(r.borrador.puertas.length, 0);
+    assert.equal(r.seleccion, null);
+  });
+
+  it('el menú ofrece propiedades y eliminar, y en solo lectura solo propiedades', () => {
+    assert.deepEqual(operacionesOfrecidas(SELECCION, CON_PUERTA, { soloLectura: false }), [
+      'propiedades',
+      'eliminar',
+    ]);
+    assert.deepEqual(operacionesOfrecidas(SELECCION, CON_PUERTA, { soloLectura: true }), [
+      'propiedades',
+    ]);
+  });
+
+  it('una puerta que ya no está en el borrador no admite ninguna operación', () => {
+    assert.equal(operacionDisponible('eliminar', SELECCION, BORRADOR), false);
   });
 });

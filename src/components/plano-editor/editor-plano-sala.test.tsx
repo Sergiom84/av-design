@@ -134,6 +134,7 @@ async function editor(
           equipos: [],
           conexiones: [],
           tomas: [],
+          puertas: [],
           muebles: [MUEBLE],
           categoriasMobiliario: ['Sillas'],
           plantillaBase: null,

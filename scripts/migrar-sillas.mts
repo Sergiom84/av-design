@@ -257,6 +257,7 @@ function prepararMaterializacion(
     equipos: [],
     mobiliario,
     tomas: [],
+    puertas: [],
     sillas_modo: 'derivadas',
     inicio: null,
   };

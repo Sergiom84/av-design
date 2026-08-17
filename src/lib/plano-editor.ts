@@ -27,6 +27,7 @@ import {
   type EntradaCroquis,
   type SillaCroquis,
 } from './croquis';
+import { puertaMedida } from './tipos';
 import type {
   Conexion,
   Extremo,
@@ -34,6 +35,8 @@ import type {
   MuebleCatalogo,
   MuebleEnSala,
   OrigenDiagrama,
+  ParedSala,
+  PuertaEnSala,
   Punto,
   Sala,
   SillasModo,
@@ -131,6 +134,47 @@ export function estadoDelMueble(
   return 'colocado';
 }
 
+/**
+ * Una puerta del borrador. Vive EN una pared: no tiene x/y libres, solo la
+ * pared y los metros desde el origen de esa pared al arranque del hueco.
+ *
+ * La anchura y la altura nacen nulas y se presentan como «Sin medir»: no hay
+ * medida por defecto en ningún sitio, porque inventar la anchura de una puerta
+ * es dar por medido lo que nadie ha medido. Se miden las dos juntas o ninguna.
+ */
+export interface PuertaBorrador {
+  id: string;
+  pared: ParedSala;
+  posicion_m: number;
+  anchura_m: number | null;
+  altura_m: number | null;
+  orden: number;
+  es_nuevo: boolean;
+}
+
+/**
+ * Qué le falta a la puerta. `a_medias` es una anchura sin altura o al revés:
+ * el borrador lo tolera mientras se teclea, pero no se guarda.
+ */
+export function estadoDeLaPuerta(
+  p: Pick<PuertaBorrador, 'anchura_m' | 'altura_m'>,
+): 'sin_medir' | 'a_medias' | 'medida' {
+  if (p.anchura_m == null && p.altura_m == null) return 'sin_medir';
+  if (p.anchura_m == null || p.altura_m == null) return 'a_medias';
+  return 'medida';
+}
+
+/**
+ * Cuánto mide la pared donde vive la puerta: las paredes norte y sur van a lo
+ * largo de x, la este y la oeste a lo ancho de y.
+ */
+export function longitudDePared(
+  pared: ParedSala,
+  sala: { largo_m: number; ancho_m: number },
+): number {
+  return pared === 'norte' || pared === 'sur' ? sala.largo_m : sala.ancho_m;
+}
+
 export interface TomaBorrador {
   id: string;
   codigo: string;
@@ -157,6 +201,7 @@ export interface BorradorPlano {
   equipos: EquipoBorrador[];
   mobiliario: MuebleBorrador[];
   tomas: TomaBorrador[];
+  puertas: PuertaBorrador[];
   /** Quién manda sobre las sillas. Nunca las dos fuentes a la vez. */
   sillas_modo: SillasModo;
   /**
@@ -172,6 +217,7 @@ export type Seleccion =
   | { tipo: 'equipo'; id: string }
   | { tipo: 'mueble'; id: string }
   | { tipo: 'toma'; id: string }
+  | { tipo: 'puerta'; id: string }
   | null;
 
 /**
@@ -184,7 +230,7 @@ export type Seleccion =
  */
 export function seleccionVigente(
   seleccion: Seleccion,
-  borrador: Pick<BorradorPlano, 'equipos' | 'mobiliario' | 'tomas'>,
+  borrador: Pick<BorradorPlano, 'equipos' | 'mobiliario' | 'tomas' | 'puertas'>,
 ): Seleccion {
   if (seleccion === null) return null;
   switch (seleccion.tipo) {
@@ -194,6 +240,8 @@ export function seleccionVigente(
       return borrador.equipos.some((e) => e.id === seleccion.id) ? seleccion : null;
     case 'toma':
       return borrador.tomas.some((t) => t.id === seleccion.id) ? seleccion : null;
+    case 'puerta':
+      return borrador.puertas.some((p) => p.id === seleccion.id) ? seleccion : null;
     default:
       return seleccion;
   }
@@ -224,6 +272,7 @@ export function borradorDesde(
   equipos: EquipoEnSala[],
   tomas: TomaRed[],
   muebles: MuebleEnSala[] = [],
+  puertas: PuertaEnSala[] = [],
 ): BorradorPlano {
   return {
     largo_m: sala.largo_m,
@@ -285,6 +334,20 @@ export function borradorDesde(
         notas: t.notas,
       };
     }),
+    puertas: puertas.map((p) => {
+      // Una medida a medias no viene de la base —la restricción lo impide—
+      // pero si viniera, se lee como «sin medir» en vez de propagarse.
+      const medida = puertaMedida(p);
+      return {
+        id: p.id,
+        pared: p.pared,
+        posicion_m: p.posicion_m,
+        anchura_m: medida ? p.anchura_m : null,
+        altura_m: medida ? p.altura_m : null,
+        orden: p.orden,
+        es_nuevo: false,
+      };
+    }),
   };
 }
 
@@ -343,6 +406,15 @@ export function entradaCroquisDe(
       rotacion_grados: m.rotacion_grados,
       posicion_confirmada: m.posicion_confirmada,
       orden: m.orden,
+    })),
+    puertas: borrador.puertas.map((p) => ({
+      id: p.id,
+      sala_id: sala.id,
+      pared: p.pared,
+      posicion_m: p.posicion_m,
+      anchura_m: p.anchura_m,
+      altura_m: p.altura_m,
+      orden: p.orden,
     })),
     conexiones,
     tomas: borrador.tomas.map((t) => ({
@@ -878,6 +950,112 @@ export function anadirDelCatalogo(
 }
 
 /**
+ * Da de alta una puerta en una pared.
+ *
+ * Nace en mitad de la pared y «Sin medir»: la posición es una colocación que
+ * se ajusta después, pero la anchura y la altura no se inventan. El id lo pone
+ * quien llama, como en el resto de altas.
+ */
+export function anadirPuerta(
+  borrador: BorradorPlano,
+  id: string,
+  pared: ParedSala,
+): BorradorPlano {
+  const longitud = longitudDePared(pared, borrador);
+  const posicion = longitud > 0 ? alCentimetro(longitud / 2) : 0;
+  return {
+    ...borrador,
+    puertas: [
+      ...borrador.puertas,
+      {
+        id,
+        pared,
+        posicion_m: posicion,
+        anchura_m: null,
+        altura_m: null,
+        orden: borrador.puertas.length + 1,
+        es_nuevo: true,
+      },
+    ],
+  };
+}
+
+/**
+ * Mueve una puerta A LO LARGO de su pared. No hay más eje: una puerta fuera de
+ * una pared no existe. Con anchura medida, el hueco entero tiene que caber; sin
+ * medir, se recorta solo el arranque.
+ */
+export function moverPuerta(
+  borrador: BorradorPlano,
+  id: string,
+  posicion_m: number,
+  { ajustar = true, paso = PASO_REJILLA_M }: { ajustar?: boolean; paso?: number } = {},
+): BorradorPlano {
+  let tocado = false;
+  const puertas = borrador.puertas.map((p) => {
+    if (p.id !== id) return p;
+    tocado = true;
+    const bruto = ajustar ? ajustarARejilla(posicion_m, paso) : alCentimetro(posicion_m);
+    const longitud = longitudDePared(p.pared, borrador);
+    const tope =
+      longitud > 0 ? Math.max(0, longitud - (p.anchura_m ?? 0)) : Number.POSITIVE_INFINITY;
+    return { ...p, posicion_m: alCentimetro(limitar(bruto, 0, tope)) };
+  });
+  return tocado ? { ...borrador, puertas } : borrador;
+}
+
+/** Desplaza una puerta por su pared, que es lo que hacen las flechas. */
+export function desplazarPuerta(
+  borrador: BorradorPlano,
+  id: string,
+  paso: { dx_m: number; dy_m: number },
+  opciones?: { ajustar?: boolean; paso?: number },
+): BorradorPlano {
+  const p = borrador.puertas.find((x) => x.id === id);
+  if (!p) return borrador;
+  // La pared solo tiene un eje: en norte/sur mandan las flechas horizontales,
+  // en este/oeste las verticales. La flecha del otro eje no hace nada.
+  const delta =
+    p.pared === 'norte' || p.pared === 'sur' ? paso.dx_m : paso.dy_m;
+  if (delta === 0) return borrador;
+  const bruto =
+    opciones?.ajustar === false
+      ? p.posicion_m + delta
+      : ajustarARejilla(p.posicion_m + delta, opciones?.paso ?? PASO_REJILLA_M);
+  return moverPuerta(borrador, id, bruto, { ajustar: false });
+}
+
+/**
+ * Edita una puerta desde el inspector. Cambiar de pared conserva la posición
+ * y la recorta contra la pared nueva; borrar una medida deja la puerta
+ * `a_medias`, que el borrador tolera pero el guardado no.
+ */
+export function editarPuerta(
+  borrador: BorradorPlano,
+  id: string,
+  cambios: Partial<Pick<PuertaBorrador, 'pared' | 'posicion_m' | 'anchura_m' | 'altura_m'>>,
+): BorradorPlano {
+  const puertas = borrador.puertas.map((p) => {
+    if (p.id !== id) return p;
+    const combinado = { ...p, ...cambios };
+    const medida = (v: number | null): number | null =>
+      v == null || !Number.isFinite(v) || v <= 0 ? null : alCentimetro(v);
+    combinado.anchura_m = medida(combinado.anchura_m);
+    combinado.altura_m = medida(combinado.altura_m);
+    const longitud = longitudDePared(combinado.pared, borrador);
+    const tope =
+      longitud > 0
+        ? Math.max(0, longitud - (combinado.anchura_m ?? 0))
+        : Number.POSITIVE_INFINITY;
+    combinado.posicion_m = alCentimetro(
+      limitar(Number.isFinite(combinado.posicion_m) ? combinado.posicion_m : 0, 0, tope),
+    );
+    return combinado;
+  });
+  return { ...borrador, puertas };
+}
+
+/**
  * Da de alta un equipo del catálogo AV.
  *
  * Se guardan el `articulo_id` y lo que hace falta para pintarlo, pero el
@@ -930,6 +1108,12 @@ export function quitarAlta(borrador: BorradorPlano, seleccion: Seleccion): Borra
       ...borrador,
       mobiliario: borrador.mobiliario.filter((x) => x.id !== seleccion.id),
     };
+  }
+  // Una puerta se quita siempre, esté guardada o no: no es extremo de ninguna
+  // tirada ni material de la sala, así que la baja no deja nada colgando.
+  if (seleccion?.tipo === 'puerta') {
+    if (!borrador.puertas.some((x) => x.id === seleccion.id)) return borrador;
+    return { ...borrador, puertas: borrador.puertas.filter((x) => x.id !== seleccion.id) };
   }
   return borrador;
 }
@@ -1060,6 +1244,17 @@ export function colocarEnElCentro(
   if (seleccion?.tipo === 'mueble') return moverMueble(borrador, seleccion.id, centro);
   if (seleccion?.tipo === 'toma') return moverToma(borrador, seleccion.id, centro);
   if (seleccion?.tipo === 'mesa') return moverMesa(borrador, centro);
+  if (seleccion?.tipo === 'puerta') {
+    // El centro de una puerta es el de su pared, no el de la sala: una puerta
+    // en mitad de la sala no existe.
+    const p = borrador.puertas.find((x) => x.id === seleccion.id);
+    if (!p) return borrador;
+    const longitud = longitudDePared(p.pared, borrador);
+    if (!(longitud > 0)) return borrador;
+    return moverPuerta(borrador, seleccion.id, (longitud - (p.anchura_m ?? 0)) / 2, {
+      ajustar: false,
+    });
+  }
   return borrador;
 }
 
@@ -1137,6 +1332,9 @@ export function aplicarIdsReales(
     mobiliario: borrador.mobiliario.map((m) =>
       ids[m.id] ? { ...m, id: ids[m.id], es_nuevo: false } : m,
     ),
+    puertas: borrador.puertas.map((p) =>
+      ids[p.id] ? { ...p, id: ids[p.id], es_nuevo: false } : p,
+    ),
     // El inicio ya está escrito: mandarlo otra vez no lo cambiaría, pero
     // dejaría el botón de guardar encendido para siempre.
     inicio: null,
@@ -1184,6 +1382,14 @@ export function cambiarMedidasSala(
         ? t
         : { ...t, ...limitarALaSala({ x_m: t.x_m, y_m: t.y_m, z_m: t.z_m ?? 0 }, base) },
     ),
+    // Encoger la sala acorta sus paredes: la puerta se arrastra para que el
+    // hueco siga cabiendo, igual que un equipo no se queda en la calle.
+    puertas: base.puertas.map((p) => {
+      const longitud = longitudDePared(p.pared, base);
+      if (!(longitud > 0)) return p;
+      const tope = Math.max(0, longitud - (p.anchura_m ?? 0));
+      return p.posicion_m > tope ? { ...p, posicion_m: alCentimetro(tope) } : p;
+    }),
     mesa_x_m:
       base.mesa_x_m == null
         ? null
@@ -1254,6 +1460,26 @@ export function avisosDelBorrador(borrador: BorradorPlano): string[] {
     );
   }
 
+  const aMedias = borrador.puertas.filter((p) => estadoDeLaPuerta(p) === 'a_medias').length;
+  if (aMedias > 0) {
+    avisos.push(
+      aMedias === 1
+        ? 'Una puerta tiene una medida sin la otra: se guarda entera o sin medir.'
+        : `${aMedias} puertas tienen una medida sin la otra: se guardan enteras o sin medir.`,
+    );
+  }
+
+  const sinMedirPuertas = borrador.puertas.filter(
+    (p) => estadoDeLaPuerta(p) === 'sin_medir',
+  ).length;
+  if (sinMedirPuertas > 0) {
+    avisos.push(
+      sinMedirPuertas === 1
+        ? 'Una puerta sigue sin medir.'
+        : `${sinMedirPuertas} puertas siguen sin medir.`,
+    );
+  }
+
   return avisos;
 }
 
@@ -1314,6 +1540,20 @@ export interface PatchTomaPlano {
   z_m: number | null;
 }
 
+/**
+ * Una puerta del patch. Alta y cambio llevan lo mismo —la puerta no tiene
+ * catálogo del que releer nada—, pero van en listas distintas por la misma
+ * regla que el resto: el navegador no elige la sentencia SQL.
+ */
+export interface PatchPuertaPlano {
+  id: string;
+  pared: ParedSala;
+  posicion_m: number;
+  anchura_m: number | null;
+  altura_m: number | null;
+  orden: number;
+}
+
 export interface PatchPlano {
   sala_id: string;
   versionEsperada: number;
@@ -1343,6 +1583,9 @@ export interface PatchPlano {
   /** Solo ids: para borrar no hace falta nada más, y así no se puede colar otra cosa. */
   mobiliario_baja: string[];
   tomas: PatchTomaPlano[];
+  puertas_alta: PatchPuertaPlano[];
+  puertas_cambio: PatchPuertaPlano[];
+  puertas_baja: string[];
   /** Se decide una vez. Nulo = el diagrama ya estaba iniciado. */
   inicio_diagrama: { origen: OrigenDiagrama; plantilla_id: string | null } | null;
   /** Nulo = las sillas siguen como estaban. Solo se manda al materializarlas. */
@@ -1453,6 +1696,36 @@ export function construirPatch(
     .filter((m) => !vivos.has(m.id))
     .map((m) => m.id);
 
+  const geometriaPuerta = (p: PuertaBorrador): PatchPuertaPlano => ({
+    id: p.id,
+    pared: p.pared,
+    posicion_m: p.posicion_m,
+    anchura_m: p.anchura_m,
+    altura_m: p.altura_m,
+    orden: p.orden,
+  });
+
+  const puertasAntes = new Map(original.puertas.map((p) => [p.id, p]));
+  const puertas_alta = borrador.puertas.filter((p) => p.es_nuevo).map(geometriaPuerta);
+  const puertas_cambio = borrador.puertas
+    .filter((p) => {
+      if (p.es_nuevo) return false;
+      const a = puertasAntes.get(p.id);
+      if (!a) return true;
+      return (
+        a.pared !== p.pared ||
+        a.posicion_m !== p.posicion_m ||
+        a.anchura_m !== p.anchura_m ||
+        a.altura_m !== p.altura_m ||
+        a.orden !== p.orden
+      );
+    })
+    .map(geometriaPuerta);
+  const puertasVivas = new Set(borrador.puertas.map((p) => p.id));
+  const puertas_baja = original.puertas
+    .filter((p) => !puertasVivas.has(p.id))
+    .map((p) => p.id);
+
   const tomasAntes = new Map(original.tomas.map((t) => [t.id, t]));
   const tomas = borrador.tomas
     .filter((t) => {
@@ -1484,6 +1757,9 @@ export function construirPatch(
     mobiliario_cambio,
     mobiliario_baja,
     tomas,
+    puertas_alta,
+    puertas_cambio,
+    puertas_baja,
     inicio_diagrama: borrador.inicio,
     sillas_modo: original.sillas_modo !== borrador.sillas_modo ? borrador.sillas_modo : null,
   };
@@ -1649,6 +1925,66 @@ export function coordenadasFueraDeSala(
   return problemas;
 }
 
+/**
+ * Qué puertas del patch no se pueden guardar. Lista vacía = todo entra.
+ *
+ * Es la misma guarda en los dos lados, como `coordenadasFueraDeSala`: el
+ * editor recorta por comodidad, y el servidor rechaza con esto mismo lo que
+ * llegue por una petición hecha a mano. Se valida contra las medidas
+ * EFECTIVAS: si el mismo patch ensancha la sala, la puerta se juzga contra la
+ * pared nueva.
+ */
+export function puertasFueraDePared(
+  puertas: readonly Pick<
+    PuertaBorrador,
+    'id' | 'pared' | 'posicion_m' | 'anchura_m' | 'altura_m'
+  >[],
+  medidas: MedidasSala,
+): string[] {
+  const problemas: string[] = [];
+  for (const p of puertas) {
+    if (!Number.isFinite(p.posicion_m) || p.posicion_m < -EPSILON_M) {
+      problemas.push(`La puerta ${p.id} tiene una posición inválida.`);
+      continue;
+    }
+    const estado = estadoDeLaPuerta(p);
+    if (estado === 'a_medias') {
+      problemas.push(
+        `La puerta ${p.id} tiene una medida sin la otra: se guarda entera o sin medir.`,
+      );
+      continue;
+    }
+    if (
+      estado === 'medida' &&
+      (!Number.isFinite(p.anchura_m as number) ||
+        (p.anchura_m as number) <= 0 ||
+        !Number.isFinite(p.altura_m as number) ||
+        (p.altura_m as number) <= 0)
+    ) {
+      problemas.push(`La puerta ${p.id} tiene medidas que no son positivas.`);
+      continue;
+    }
+    if (sinMedir(medidas)) {
+      problemas.push(`La puerta ${p.id} se sitúa en una sala sin medir.`);
+      continue;
+    }
+    const longitud = longitudDePared(p.pared, medidas);
+    const huecoHasta = p.posicion_m + (p.anchura_m ?? 0);
+    if (huecoHasta > longitud + EPSILON_M) {
+      problemas.push(`La puerta ${p.id} se sale de su pared.`);
+      continue;
+    }
+    if (
+      p.altura_m != null &&
+      medidas.alto_m > 0 &&
+      p.altura_m > medidas.alto_m + EPSILON_M
+    ) {
+      problemas.push(`La puerta ${p.id} es más alta que la sala.`);
+    }
+  }
+  return problemas;
+}
+
 /** ¿Hay algo que guardar? Es lo que enciende el botón y la advertencia al salir. */
 export function hayCambios(patch: PatchPlano): boolean {
   return (
@@ -1659,6 +1995,9 @@ export function hayCambios(patch: PatchPlano): boolean {
     patch.mobiliario_cambio.length > 0 ||
     patch.mobiliario_baja.length > 0 ||
     patch.tomas.length > 0 ||
+    patch.puertas_alta.length > 0 ||
+    patch.puertas_cambio.length > 0 ||
+    patch.puertas_baja.length > 0 ||
     patch.inicio_diagrama !== null ||
     patch.sillas_modo !== null
   );

@@ -25,6 +25,8 @@ import type {
   Extremo,
   FormaMueble,
   MuebleEnSala,
+  ParedSala,
+  PuertaEnSala,
   Sala,
   Senal,
   TomaRed,
@@ -111,6 +113,22 @@ export interface TomaCroquis {
   y_m: number;
 }
 
+/**
+ * Una puerta sobre una pared, ya resuelta a dos puntos.
+ *
+ * `desde` es el arranque del hueco y `hasta` su fin. Sin medir, los dos
+ * puntos coinciden: el dibujo marca dónde está y el rótulo dice «Sin medir»,
+ * porque inventar una anchura para que el símbolo quede bonito es dar por
+ * medido lo que nadie ha medido.
+ */
+export interface PuertaCroquis {
+  id: string;
+  pared: ParedSala;
+  desde: { x_m: number; y_m: number };
+  hasta: { x_m: number; y_m: number };
+  medida: boolean;
+}
+
 /** Una cota acotada entre dos puntos, con su texto ya formateado. */
 export interface CotaCroquis {
   clave: string;
@@ -146,6 +164,8 @@ export interface EscenaCroquis {
   equipos: EquipoCroquis[];
   tomas: TomaCroquis[];
   tiradas: TiradaCroquis[];
+  /** Arquitectura de la sala: no pertenecen a ninguna capa apagable. */
+  puertas: PuertaCroquis[];
   cotas: CotaCroquis[];
   /** Notas al pie: alturas y todo lo que no cabe en una planta. */
   anotaciones: AnotacionCroquis[];
@@ -510,6 +530,7 @@ export interface EntradaCroquis {
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles?: MuebleEnSala[];
+  puertas?: PuertaEnSala[];
   /** Metros por conexión, ya calculados. Lo que devuelve `calcularConexion()`. */
   metrosPorConexion?: Map<string, number>;
 }
@@ -525,6 +546,7 @@ export function construirEscena({
   conexiones,
   tomas,
   muebles = [],
+  puertas = [],
   metrosPorConexion,
 }: EntradaCroquis): EscenaCroquis {
   const avisos: string[] = [];
@@ -656,6 +678,19 @@ export function construirEscena({
     .filter((t) => t.x_m != null && t.y_m != null)
     .map((t) => ({ id: t.id, codigo: t.codigo, x_m: t.x_m!, y_m: t.y_m! }));
 
+  const puertasDibujadas: PuertaCroquis[] = puertas.map((p) =>
+    puertaSobrePared(p, rectSala),
+  );
+
+  const sinMedirPuertas = puertasDibujadas.filter((p) => !p.medida).length;
+  if (sinMedirPuertas > 0) {
+    avisos.push(
+      sinMedirPuertas === 1
+        ? 'Una puerta sigue sin medir.'
+        : `${sinMedirPuertas} puertas siguen sin medir.`,
+    );
+  }
+
   return {
     titulo: sala.nombre,
     sala: rectSala,
@@ -665,9 +700,51 @@ export function construirEscena({
     equipos: dibujados,
     tomas: tomasDibujadas,
     tiradas,
+    puertas: puertasDibujadas,
     cotas: cotasDeLaEscena(sala, rectSala, mesa, dibujados),
     anotaciones: anotacionesDeLaEscena(sala, mesa, dibujados),
     avisos,
+  };
+}
+
+/**
+ * Resuelve una puerta a sus dos puntos sobre la pared.
+ *
+ * El arranque se recorta a la pared para que un dato viejo —una puerta medida
+ * antes de encoger la sala— no dibuje fuera del rectángulo: el dato no se
+ * toca, se recorta el dibujo, como hace `plano-sala.tsx` con los símbolos.
+ * En una sala sin medir no se recorta nada, que es el criterio de
+ * `limitarALaSala`.
+ */
+function puertaSobrePared(p: PuertaEnSala, sala: Rectangulo): PuertaCroquis {
+  const medida = p.anchura_m != null && p.altura_m != null;
+  const horizontal = p.pared === 'norte' || p.pared === 'sur';
+  const longitud = horizontal ? sala.largo_m : sala.ancho_m;
+
+  const recortar = (v: number) =>
+    longitud > 0 ? Math.min(Math.max(v, 0), longitud) : Math.max(v, 0);
+  const desde_m = recortar(p.posicion_m);
+  const hasta_m = medida ? recortar(p.posicion_m + (p.anchura_m as number)) : desde_m;
+
+  const enPared = (a_lo_largo: number): { x_m: number; y_m: number } => {
+    switch (p.pared) {
+      case 'sur':
+        return { x_m: redondear(a_lo_largo), y_m: 0 };
+      case 'norte':
+        return { x_m: redondear(a_lo_largo), y_m: sala.ancho_m };
+      case 'oeste':
+        return { x_m: 0, y_m: redondear(a_lo_largo) };
+      case 'este':
+        return { x_m: sala.largo_m, y_m: redondear(a_lo_largo) };
+    }
+  };
+
+  return {
+    id: p.id,
+    pared: p.pared,
+    desde: enPared(desde_m),
+    hasta: enPared(hasta_m),
+    medida,
   };
 }
 

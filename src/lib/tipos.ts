@@ -416,6 +416,51 @@ export interface MuebleEnSala {
   orden: number;
 }
 
+/**
+ * En qué pared de la sala está una puerta. Mismo sistema de ejes que el
+ * croquis: `sur` es y = 0 (a lo largo de x), `norte` es y = ancho, `oeste` es
+ * x = 0 (a lo largo de y) y `este` es x = largo.
+ */
+export type ParedSala = 'norte' | 'sur' | 'este' | 'oeste';
+
+export const PAREDES_SALA: readonly ParedSala[] = ['norte', 'sur', 'este', 'oeste'];
+
+/** Cómo se llama cada pared mirando el plano: el norte es el fondo. */
+export const ETIQUETA_PARED: Record<ParedSala, string> = {
+  norte: 'Norte (fondo)',
+  sur: 'Sur (frente)',
+  este: 'Este (derecha)',
+  oeste: 'Oeste (izquierda)',
+};
+
+/**
+ * Una puerta del plano. Arquitectura de la sala, no catálogo AV: no se pide a
+ * un proveedor, no tiene puertos y no entra en ninguna tirada.
+ *
+ * `posicion_m` son los metros desde el origen de la pared al arranque del
+ * hueco. La anchura y la altura nacen nulas y se presentan como «Sin medir»:
+ * no existe medida por defecto en ningún sitio, y se miden las dos juntas o
+ * ninguna. La misma forma sirve a la sala y a la plantilla; el propietario lo
+ * dice la fila de la base, no el tipo.
+ */
+export interface PuertaEnSala {
+  id: string;
+  sala_id: string;
+  pared: ParedSala;
+  posicion_m: number;
+  anchura_m: number | null;
+  altura_m: number | null;
+  orden: number;
+}
+
+/** Una puerta medida tiene sus dos dimensiones; con una sola no hay medida. */
+export function puertaMedida(p: {
+  anchura_m: number | null;
+  altura_m: number | null;
+}): boolean {
+  return p.anchura_m != null && p.altura_m != null;
+}
+
 export interface Conexion {
   id: string;
   sala_id: string;

@@ -9,36 +9,31 @@ import {
   avisosDelBorrador,
   anadirDelCatalogo,
   anadirEquipo,
+  anadirPuerta,
   aplicarIdsReales,
   borradorDesde,
   confirmarEstimadas,
   construirPatch,
   desplazamientoDeTecla,
-  desplazarEquipo,
-  desplazarMesa,
-  desplazarMueble,
-  desplazarToma,
   desplazarVista,
   PASO_REJILLA_M,
   entradaCroquisDe,
   hayCambios as tieneCambios,
   seleccionVigente,
-  moverEquipo,
-  moverMesa,
-  moverMueble,
-  moverToma,
   vistaCompleta,
   zoomDe,
   type BorradorPlano,
   type Seleccion,
   type Vista,
 } from '@/lib/plano-editor';
+import { desplazarSeleccion, moverSeleccion } from './interacciones-plano';
 import type {
   ArticuloElegible,
   Conexion,
   EquipoEnSala,
   MuebleCatalogo,
   MuebleEnSala,
+  PuertaEnSala,
   Sala,
   TomaRed,
 } from '@/lib/tipos';
@@ -83,6 +78,7 @@ export function EditorPlanoSala({
   conexiones,
   tomas,
   muebles,
+  puertas,
   categoriasMobiliario,
   plantillaBase,
   cerrado,
@@ -97,6 +93,7 @@ export function EditorPlanoSala({
   conexiones: Conexion[];
   tomas: TomaRed[];
   muebles: MuebleEnSala[];
+  puertas: PuertaEnSala[];
   categoriasMobiliario: string[];
   /** Nombre de la plantilla de la que salió el plano, para el rótulo `Base:`. */
   plantillaBase: string | null;
@@ -107,8 +104,8 @@ export function EditorPlanoSala({
   const [guardando, empezarGuardado] = useTransition();
 
   const desdeServidor = useMemo(
-    () => borradorDesde(sala, equipos, tomas, muebles),
-    [sala, equipos, tomas, muebles],
+    () => borradorDesde(sala, equipos, tomas, muebles, puertas),
+    [sala, equipos, tomas, muebles, puertas],
   );
 
   const [original, setOriginal] = useState(desdeServidor);
@@ -308,16 +305,7 @@ export function EditorPlanoSala({
       if (soloLectura) return;
       const agrupar = arrastrando.current;
       arrastrando.current = true;
-      const opciones = { ajustar: ajuste };
-      if (objetivo.tipo === 'equipo') {
-        aplicar(moverEquipo(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'toma') {
-        aplicar(moverToma(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'mueble') {
-        aplicar(moverMueble(borrador, objetivo.id, punto, opciones), { agrupar });
-      } else if (objetivo.tipo === 'mesa') {
-        aplicar(moverMesa(borrador, punto, opciones), { agrupar });
-      }
+      aplicar(moverSeleccion(borrador, objetivo, punto, { ajustar: ajuste }), { agrupar });
     },
     [aplicar, ajuste, borrador, soloLectura],
   );
@@ -372,14 +360,7 @@ export function EditorPlanoSala({
 
   const colocar = useCallback(
     (objetivo: Exclude<Seleccion, null>, punto: PuntoMetros) => {
-      const opciones = { ajustar: ajuste };
-      if (objetivo.tipo === 'mueble') {
-        aplicar(moverMueble(borrador, objetivo.id, punto, opciones));
-      } else if (objetivo.tipo === 'equipo') {
-        aplicar(moverEquipo(borrador, objetivo.id, punto, opciones));
-      } else if (objetivo.tipo === 'toma') {
-        aplicar(moverToma(borrador, objetivo.id, punto, opciones));
-      }
+      aplicar(moverSeleccion(borrador, objetivo, punto, { ajustar: ajuste }));
     },
     [ajuste, aplicar, borrador],
   );
@@ -457,6 +438,16 @@ export function EditorPlanoSala({
     [aplicar, borrador, seleccionar],
   );
 
+  const anadirPuertaNueva = useCallback(
+    (pared: Parameters<typeof anadirPuerta>[2]) => {
+      const id = crypto.randomUUID();
+      aplicar(anadirPuerta(borrador, id, pared));
+      seleccionar({ tipo: 'puerta', id });
+      setAvisoAlta('Puerta en la lista, sin medir. La anchura y la altura se escriben en Propiedades. Sin guardar todavía.');
+    },
+    [aplicar, borrador, seleccionar],
+  );
+
   // ---------------------------------------------------------------- teclado
 
   const alPulsarTecla = (ev: React.KeyboardEvent) => {
@@ -481,15 +472,7 @@ export function EditorPlanoSala({
     // Con Mayúsculas el paso es fino y el ajuste a rejilla estorbaría: se
     // pulsa Mayúsculas justo para salirse de la rejilla.
     const opciones = { ajustar: ajuste && !ev.shiftKey, paso: PASO_REJILLA_M };
-    if (seleccionValida.tipo === 'equipo') {
-      aplicar(desplazarEquipo(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'toma') {
-      aplicar(desplazarToma(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'mueble') {
-      aplicar(desplazarMueble(borrador, seleccionValida.id, paso, opciones));
-    } else if (seleccionValida.tipo === 'mesa') {
-      aplicar(desplazarMesa(borrador, paso, opciones));
-    }
+    aplicar(desplazarSeleccion(borrador, seleccionValida, paso, opciones));
   };
 
   // ---------------------------------------------------------------- guardado
@@ -785,6 +768,7 @@ export function EditorPlanoSala({
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  alAnadirPuerta={anadirPuertaNueva}
                   aviso={avisoAlta}
                 />
               )}
@@ -815,6 +799,7 @@ export function EditorPlanoSala({
                   categorias={categoriasMobiliario}
                   alAnadirMuebles={anadirMobiliario}
                   alAnadirEquipo={anadirEquipamiento}
+                  alAnadirPuerta={anadirPuertaNueva}
                   aviso={avisoAlta}
                 />
               )}

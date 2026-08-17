@@ -75,6 +75,10 @@ export function capaDeSeleccion(seleccion: Seleccion): CapaPlano | null {
     case 'equipo':
     case 'toma':
       return 'equipamiento';
+    // La puerta es arquitectura, como la sala y la mesa: no hay capa que la
+    // apague, así que seleccionarla nunca reenciende nada.
+    case 'puerta':
+      return null;
     default:
       return null;
   }

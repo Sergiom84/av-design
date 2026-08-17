@@ -724,6 +724,262 @@ function revalidarLaFicha() {
   revalidatePath('/');
 }
 
+// =====================================================================
+// Editor de conexiones
+//
+// `/cableado` conserva por ahora sus acciones de formulario en `acciones.ts`.
+// Esta acción es el guardado atómico del editor visual: no crea otro dominio,
+// escribe las mismas `conexiones` y `conexion_bocas` y comparte con Plano el
+// contador optimista de la sala.
+
+const senalConexion = z.enum([
+  'hdmi',
+  'red',
+  'usb',
+  'audio_linea',
+  'audio_altavoz',
+  'microfono',
+  'alimentacion',
+  'control',
+  'otro',
+]);
+const rutaConexion = z.enum(['falso_techo', 'canaleta', 'suelo_tecnico', 'directo']);
+const uuidNullable = z.string().refine(esUuid, 'id no es un uuid').nullable();
+
+const extremosConexion = z.object({
+  origen_id: z.string().refine(esUuid, 'origen_id no es un uuid'),
+  destino_id: z.string().refine(esUuid, 'destino_id no es un uuid'),
+  puerto_origen_id: z.string().refine(esUuid, 'puerto_origen_id no es un uuid'),
+  puerto_origen_ordinal: z.number().int().min(1).max(10000),
+  puerto_destino_id: z.string().refine(esUuid, 'puerto_destino_id no es un uuid'),
+  puerto_destino_ordinal: z.number().int().min(1).max(10000),
+  senal: senalConexion,
+  articulo_cable_id: uuidNullable,
+  ruta: rutaConexion.nullable(),
+});
+
+const esquemaEditorConexiones = z.object({
+  sala_id: z.string().refine(esUuid, 'sala_id no es un uuid'),
+  versionEsperada: z.number().int().min(0),
+  altas: z.array(extremosConexion.extend({ temporal_id: z.string().min(1).max(120) })).max(500),
+  cambios: z
+    .array(extremosConexion.extend({ id: z.string().refine(esUuid, 'id no es un uuid') }))
+    .max(500),
+  bajas: z.array(z.string().refine(esUuid, 'id no es un uuid')).max(500),
+});
+
+export type PatchEditorConexiones = z.input<typeof esquemaEditorConexiones>;
+export type ResultadoEditorConexiones =
+  | { ok: true; version: number; ids: Record<string, string> }
+  | {
+      ok: false;
+      motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno';
+      detalle: string;
+    };
+
+const MENSAJE_CONEXIONES: Record<Extract<ResultadoEditorConexiones, { ok: false }>['motivo'], string> = {
+  invalido: 'Hay datos de conexiones que no se pueden guardar.',
+  no_existe: 'La sala ya no existe.',
+  cerrado: 'La obra está cerrada: sus conexiones no se pueden modificar.',
+  conflicto: 'La sala cambió en otra pestaña.',
+  ajeno: 'Alguna conexión, equipo o boca no pertenece a esta sala.',
+};
+
+function falloConexiones(
+  motivo: Extract<ResultadoEditorConexiones, { ok: false }>['motivo'],
+): Extract<ResultadoEditorConexiones, { ok: false }> {
+  return { ok: false, motivo, detalle: MENSAJE_CONEXIONES[motivo] };
+}
+
+type ConexionEditorValidada = z.infer<typeof extremosConexion>;
+
+/**
+ * Guarda un lote completo del editor de conexiones.
+ *
+ * Orden único de cerrojos: sala -> conexiones -> equipos -> puertos. Las
+ * listas se ordenan por UUID antes de bloquearlas. Dos altas que pretenden la
+ * misma boca no tienen aún una conexión común que bloquear; el cerrojo del
+ * puerto las serializa y la segunda ve la ocupación que dejó la primera.
+ */
+export async function guardarEditorConexiones(
+  patch: PatchEditorConexiones,
+): Promise<ResultadoEditorConexiones> {
+  const validado = esquemaEditorConexiones.safeParse(patch);
+  if (!validado.success) return falloConexiones('invalido');
+  const p = validado.data;
+
+  const temporales = p.altas.map((c) => c.temporal_id);
+  const cambios = p.cambios.map((c) => c.id);
+  if (
+    new Set(temporales).size !== temporales.length ||
+    new Set(cambios).size !== cambios.length ||
+    new Set(p.bajas).size !== p.bajas.length ||
+    cambios.some((id) => p.bajas.includes(id)) ||
+    [...p.altas, ...p.cambios].some((c) => c.origen_id === c.destino_id)
+  ) {
+    return falloConexiones('invalido');
+  }
+
+  const mutaciones = [...p.cambios, ...p.altas];
+  // Una boca solo puede aparecer una vez incluso dentro del mismo lote. Esta
+  // comprobación da un error de dominio antes de depender del UNIQUE diferido.
+  const bocasPedidas = mutaciones.flatMap((c) => [
+    `${c.origen_id}:${c.puerto_origen_id}:${c.puerto_origen_ordinal}`,
+    `${c.destino_id}:${c.puerto_destino_id}:${c.puerto_destino_ordinal}`,
+  ]);
+  if (new Set(bocasPedidas).size !== bocasPedidas.length) return falloConexiones('invalido');
+
+  try {
+    const resultado = await sql.begin(async (tx): Promise<ResultadoEditorConexiones> => {
+      const [sala] = await tx<
+        Array<{ id: string; diagrama_version: number; localizacion_id: string | null }>
+      >`select id, diagrama_version, localizacion_id
+        from salas where id = ${p.sala_id} for update`;
+      if (!sala) return falloConexiones('no_existe');
+
+      const [cierre] = await tx<Array<{ cerrado: boolean }>>`
+        select exists (
+          select 1 from hitos_proyecto h
+          join localizaciones l on l.proyecto_id = h.proyecto_id
+          where l.id = ${sala.localizacion_id} and h.tipo = 'cierre'
+        ) as cerrado`;
+      if (cierre?.cerrado) return falloConexiones('cerrado');
+      if (Number(sala.diagrama_version) !== p.versionEsperada) {
+        return falloConexiones('conflicto');
+      }
+
+      const idsPersistidos = [...new Set([...cambios, ...p.bajas])].sort();
+      if (idsPersistidos.length > 0) {
+        const propias = await tx<Array<{ id: string }>>`
+          select id from conexiones
+          where sala_id = ${p.sala_id} and id in ${tx(idsPersistidos)}
+          order by id for update`;
+        if (propias.length !== idsPersistidos.length) return falloConexiones('ajeno');
+      }
+
+      const equiposIds = [...new Set(mutaciones.flatMap((c) => [c.origen_id, c.destino_id]))].sort();
+      const equipos = equiposIds.length
+        ? await tx<Array<{ id: string; sala_id: string; articulo_id: string | null; cantidad: number }>>`
+            select id, sala_id, articulo_id, cantidad from sala_equipos
+            where id in ${tx(equiposIds)} order by id for update`
+        : [];
+      if (equipos.length !== equiposIds.length || equipos.some((e) => e.sala_id !== p.sala_id)) {
+        return falloConexiones('ajeno');
+      }
+      const equipoPorId = new Map(equipos.map((e) => [e.id, e]));
+
+      const puertosIds = [
+        ...new Set(mutaciones.flatMap((c) => [c.puerto_origen_id, c.puerto_destino_id])),
+      ].sort();
+      const puertos = puertosIds.length
+        ? await tx<Array<{ id: string; articulo_id: string; total: number }>>`
+            select id, articulo_id, total from puertos
+            where id in ${tx(puertosIds)} order by id for update`
+        : [];
+      if (puertos.length !== puertosIds.length) return falloConexiones('ajeno');
+      const puertoPorId = new Map(puertos.map((puerto) => [puerto.id, puerto]));
+
+      for (const c of mutaciones) {
+        const origen = equipoPorId.get(c.origen_id)!;
+        const destino = equipoPorId.get(c.destino_id)!;
+        const puertoOrigen = puertoPorId.get(c.puerto_origen_id)!;
+        const puertoDestino = puertoPorId.get(c.puerto_destino_id)!;
+        if (
+          origen.cantidad !== 1 ||
+          destino.cantidad !== 1 ||
+          !origen.articulo_id ||
+          !destino.articulo_id ||
+          puertoOrigen.articulo_id !== origen.articulo_id ||
+          puertoDestino.articulo_id !== destino.articulo_id ||
+          c.puerto_origen_ordinal > Number(puertoOrigen.total) ||
+          c.puerto_destino_ordinal > Number(puertoDestino.total)
+        ) {
+          return falloConexiones('invalido');
+        }
+      }
+
+      const cablesIds = [
+        ...new Set(mutaciones.map((c) => c.articulo_cable_id).filter((id): id is string => id !== null)),
+      ];
+      if (cablesIds.length > 0) {
+        const cables = await tx<Array<{ id: string }>>`
+          select id from articulos where id in ${tx(cablesIds)} and activo and tipo = 'cable'`;
+        if (cables.length !== cablesIds.length) return falloConexiones('invalido');
+      }
+
+      // Se excluyen del test las conexiones que el mismo lote sustituye o
+      // borra. El cerrojo previo de puertos hace que esta lectura sea válida
+      // también frente a otra alta concurrente sobre la misma boca.
+      if (bocasPedidas.length > 0) {
+        const reemplazadas = [...new Set([...cambios, ...p.bajas])];
+        const ocupadas = await tx<Array<{ equipo_id: string; puerto_id: string; ordinal: number }>>`
+          select b.equipo_id, b.puerto_id, b.ordinal
+          from conexion_bocas b
+          where ${reemplazadas.length ? tx`b.conexion_id not in ${tx(reemplazadas)}` : tx`true`}
+            and b.equipo_id in ${tx(equiposIds)}
+            and b.puerto_id in ${tx(puertosIds)}`;
+        if (
+          ocupadas.some((b) =>
+            bocasPedidas.includes(`${b.equipo_id}:${b.puerto_id}:${Number(b.ordinal)}`),
+          )
+        ) {
+          return falloConexiones('invalido');
+        }
+      }
+
+      if (p.bajas.length > 0) {
+        await tx`delete from conexiones where sala_id = ${p.sala_id} and id in ${tx(p.bajas)}`;
+      }
+
+      const escribir = async (id: string, c: ConexionEditorValidada) => {
+        // Actualizar las columnas legacy dispara su invalidación de bocas. Se
+        // escribe después la pareja explícita en la misma transacción.
+        await tx`update conexiones set
+          origen_id = ${c.origen_id}, destino_id = ${c.destino_id},
+          puerto_origen_id = ${c.puerto_origen_id},
+          puerto_destino_id = ${c.puerto_destino_id},
+          senal = ${c.senal}::senal, articulo_cable_id = ${c.articulo_cable_id},
+          ruta = ${c.ruta}::ruta_cable
+          where id = ${id} and sala_id = ${p.sala_id}`;
+        await tx`delete from conexion_bocas where conexion_id = ${id}`;
+        await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
+          (${id}, 'origen', ${c.origen_id}, ${c.puerto_origen_id}, ${c.puerto_origen_ordinal}),
+          (${id}, 'destino', ${c.destino_id}, ${c.puerto_destino_id}, ${c.puerto_destino_ordinal})`;
+      };
+
+      for (const c of p.cambios) await escribir(c.id, c);
+
+      const ids: Record<string, string> = {};
+      for (const c of p.altas) {
+        const [nueva] = await tx<Array<{ id: string }>>`
+          insert into conexiones
+            (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta,
+             puerto_origen_id, puerto_destino_id)
+          values (${p.sala_id}, ${c.origen_id}, ${c.destino_id}, ${c.articulo_cable_id},
+                  ${c.senal}::senal, ${c.ruta}::ruta_cable,
+                  ${c.puerto_origen_id}, ${c.puerto_destino_id})
+          returning id`;
+        await escribir(nueva.id, c);
+        ids[c.temporal_id] = nueva.id;
+      }
+
+      const [nuevaVersion] = await tx<Array<{ diagrama_version: number }>>`
+        update salas set diagrama_version = diagrama_version + 1
+        where id = ${p.sala_id} returning diagrama_version`;
+      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids };
+    });
+
+    if (resultado.ok) revalidarLaFicha();
+    return resultado;
+  } catch (error) {
+    const postgresError = error as { code?: string; constraint_name?: string };
+    if (['23503', '23505', '23514', '22P02'].includes(postgresError.code ?? '')) {
+      return falloConexiones('invalido');
+    }
+    throw error;
+  }
+}
+
 /**
  * Declarar que el plano se prepara desde cero.
  *

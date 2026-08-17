@@ -13,10 +13,10 @@
  *    otra superficie: el aviso de conflicto no saltaba porque el número no se
  *    había movido. Se reproduce la carrera entera, no solo el incremento.
  *
- *    Y el contraejemplo: lo que no puede pisar el plano —la cantidad de un
- *    equipo, una tirada— NO sube la versión. Sin esta mitad, la regla se
- *    cumpliría subiéndola en cada escritura de la aplicación, y cada «+» de
- *    Equipamiento tumbaría un borrador del plano a medio medir.
+ *    El contraejemplo sigue siendo la cantidad de un equipo, que ningún editor
+ *    visual escribe y NO sube la versión. Las tiradas sí la suben desde que
+ *    `/diagrama` edita el mismo dominio que `/cableado`: de lo contrario una
+ *    pestaña abierta podría pisar un cambio legacy sin recibir conflicto.
  *
  * 2. **Escribir una coordenada en Equipamiento es colocar el equipo.** Se
  *    guardaban `x_m`, `y_m` y `z_m` sin tocar `posicion_confirmada`, así que el
@@ -380,7 +380,7 @@ try {
     );
   }
 
-  // ----------------------------------------------- Cableado (contraejemplo)
+  // ----------------------------------------------------- Cableado compartido
   {
     const origen = await nuevoEquipo(salaId, 'TEST origen', 'caja_conexiones');
     const destino = await nuevoEquipo(salaId, 'TEST destino', 'pantalla');
@@ -399,8 +399,8 @@ try {
       select count(*)::text as n from conexiones where sala_id = ${salaId}`;
     afirmar(Number(cuantas.n) === 1, 'la tirada se da de alta');
     afirmar(
-      (await versionDe(salaId)) === antes,
-      'una tirada NO sube la versión: el editor del plano no la escribe, así que no la puede pisar',
+      (await versionDe(salaId)) === antes + 1,
+      'una tirada sube la versión: Diagrama y Cableado escriben el mismo dominio',
     );
   }
 

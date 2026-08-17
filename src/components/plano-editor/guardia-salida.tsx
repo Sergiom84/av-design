@@ -28,7 +28,13 @@ import { destinoDeSalida, type IntentoSalida } from '@/lib/guardia-salida';
  * Lo que NO cubre: un `<form>` que navegue, un `router.push` llamado desde otro
  * componente, y salir a otro dominio o recargar, que eso es `beforeunload`.
  */
-export function GuardiaSalida({ activo }: { activo: boolean }) {
+export function GuardiaSalida({
+  activo,
+  superficie = 'plano',
+}: {
+  activo: boolean;
+  superficie?: 'plano' | 'diagrama';
+}) {
   const router = useRouter();
   const [intento, setIntento] = useState<IntentoSalida | null>(null);
 
@@ -224,7 +230,7 @@ export function GuardiaSalida({ activo }: { activo: boolean }) {
         className="tarjeta w-full max-w-md p-4"
       >
         <h2 id={idTitulo} className="t-subtitulo mb-2">
-          Hay cambios sin guardar en el plano
+          Hay cambios sin guardar en el {superficie}
         </h2>
         <p className="mb-4 text-tinta-tenue">
           {intento.tipo === 'atras'

@@ -1084,11 +1084,10 @@ export async function borrarToma(datos: FormData) {
 
 // ---------------------------------------------------------------- conexiones
 //
-// Ninguna de las tres sube `diagrama_version`, y es deliberado. La tirada se
-// dibuja en el croquis, pero el editor de plano no la escribe nunca: no viaja
-// en el patch, así que ni la pisa ni la pisan. Lo único que cambiaría es que
-// detallar un cable en Cableado tumbaría el borrador a medio medir de una
-// pestaña de Diagrama abierta, y eso cuesta trabajo real a cambio de nada.
+// Las tres suben `diagrama_version`. Plano no escribe estas filas, pero el
+// editor visual de `/diagrama` sí: mientras `/cableado` siga vivo, sus acciones
+// legacy tienen que invalidar un borrador abierto para que no las pise con una
+// versión que ya no representa el mismo esquema de conexiones.
 
 type DetalleBocasFormulario = {
   puertoOrigenId: string;
@@ -1164,6 +1163,7 @@ export async function anadirConexion(datos: FormData) {
       returning id`;
     if (!conexion) return;
     await guardarDetalleBocas(tx, conexion.id, origen, destino, detalle);
+    await subirVersionDelPlano(tx, salaId);
   });
   revalidatePath('/salas/[id]', 'layout');
 }
@@ -1216,6 +1216,7 @@ export async function guardarConexion(datos: FormData) {
         longitud_manual_m = ${numero(datos.get('longitud_manual_m'))}
       where id = ${id}`;
     await guardarDetalleBocas(tx, id, conexion.origen_id, conexion.destino_id, detalle);
+    await subirVersionDelPlano(tx, salaId);
   });
   revalidatePath('/salas/[id]', 'layout');
 }
@@ -1229,6 +1230,7 @@ export async function borrarConexion(datos: FormData) {
       select id from conexiones where id = ${id} and sala_id = ${salaId} for update`;
     if (!conexion) return;
     await tx`delete from conexiones where id = ${id}`;
+    await subirVersionDelPlano(tx, salaId);
   });
   revalidatePath('/salas/[id]', 'layout');
 }

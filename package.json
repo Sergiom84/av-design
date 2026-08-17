@@ -22,6 +22,7 @@
     "test:rutas-cable": "tsx scripts/verificar-rutas-cable.mts",
     "test:concurrencia": "tsx scripts/verificar-concurrencia.mts",
     "test:bocas": "tsx scripts/verificar-bocas-puerto.mts",
+    "test:editor-conexiones": "tsx scripts/verificar-editor-conexiones.mts",
     "test:mutaciones:bocas": "node scripts/verificar-mutaciones-bocas.mjs",
     "test:plantillas": "tsx scripts/verificar-plantillas.mts",
     "test:migracion": "tsx scripts/verificar-migracion-rol.mts",

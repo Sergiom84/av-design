@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { TransactionSql } from 'postgres';
 
 import { sql } from '@/lib/db';
 import { cifrarClave, motivoClaveInvalida } from '@/lib/contrasena';
@@ -44,13 +45,37 @@ function irA(ruta: string): never {
 
 const ERROR = (mensaje: string) => `/usuarios?error=${encodeURIComponent(mensaje)}`;
 
-async function administradoresActivos(exceptoId?: string): Promise<number> {
-  const filas = await sql<{ n: string }[]>`
-    select count(*)::text as n
+/**
+ * Coge todos los administradores activos en un orden único.
+ *
+ * Cambiar el rol o dar de baja a uno es un cambio del conjunto entero de
+ * administradores, no solo de su fila. Sin estos cerrojos, dos peticiones que
+ * quitan dos administradores distintos pueden ver ambas que «queda otro» y
+ * dejar la aplicación sin nadie que pueda recuperarla. El orden por id evita
+ * que dos peticiones que afectan a personas distintas se esperen en cruz.
+ */
+async function bloquearAdministradores(tx: TransactionSql): Promise<void> {
+  await tx`
+    select id
       from usuarios
-     where activo and rol = 'admin' and id <> ${exceptoId ?? '00000000-0000-0000-0000-000000000000'}
+     where activo and rol = 'admin'
+     order by id
+     for update
   `;
-  return Number(filas[0]?.n ?? 0);
+}
+
+/** Dentro de los cerrojos, dice si quitar a esta persona deja cero admins. */
+async function esElUltimoAdmin(tx: TransactionSql, id: string): Promise<boolean> {
+  const filas = await tx<{ rol: string; activo: boolean }[]>`
+    select rol::text as rol, activo from usuarios where id = ${id}
+  `;
+  const fila = filas[0];
+  if (!fila || fila.rol !== 'admin' || !fila.activo) return false;
+
+  const administradores = await tx<{ n: string }[]>`
+    select count(*)::text as n from usuarios where activo and rol = 'admin'
+  `;
+  return Number(administradores[0]?.n ?? 0) === 1;
 }
 
 /**
@@ -113,17 +138,20 @@ export async function cambiarRolUsuario(datos: FormData) {
   if (id === yo.id && rol !== 'admin') {
     irA(ERROR('No puedes quitarte a ti mismo el rol de administrador.'));
   }
-  if (rol !== 'admin' && (await esElUltimoAdmin(id))) {
-    irA(ERROR('Es el único administrador activo. Nombra otro antes de cambiarle el rol.'));
-  }
+  await sql.begin(async (tx) => {
+    await bloquearAdministradores(tx);
+    if (rol !== 'admin' && (await esElUltimoAdmin(tx, id))) {
+      irA(ERROR('Es el único administrador activo. Nombra otro antes de cambiarle el rol.'));
+    }
 
-  await sql`update usuarios set rol = ${rol}::rol_usuario where id = ${id}`;
+    await tx`update usuarios set rol = ${rol}::rol_usuario where id = ${id}`;
 
-  // Las excepciones se guardan como diferencia contra el rol. Al cambiar de
-  // rol, una excepción que antes decía algo distinto puede haber pasado a
-  // coincidir con el nuevo defecto: se limpia lo que ya no es excepción para
-  // que la ficha no enseñe ajustes a mano que no ajustan nada.
-  await limpiarExcepcionesRedundantes(id, rol);
+    // Las excepciones se guardan como diferencia contra el rol. Al cambiar de
+    // rol, una excepción que antes decía algo distinto puede haber pasado a
+    // coincidir con el nuevo defecto: se limpia lo que ya no es excepción para
+    // que la ficha no enseñe ajustes a mano que no ajustan nada.
+    await limpiarExcepcionesRedundantes(tx, id, rol);
+  });
 
   revalidatePath('/usuarios');
   irA(`/usuarios/${id}`);
@@ -216,12 +244,16 @@ export async function cambiarActivoUsuario(datos: FormData) {
 
   if (!activo) {
     if (id === yo.id) irA(ERROR('No puedes darte de baja a ti mismo.'));
-    if (await esElUltimoAdmin(id)) {
-      irA(ERROR('Es el único administrador activo. Nombra otro antes de darlo de baja.'));
-    }
+    await sql.begin(async (tx) => {
+      await bloquearAdministradores(tx);
+      if (await esElUltimoAdmin(tx, id)) {
+        irA(ERROR('Es el único administrador activo. Nombra otro antes de darlo de baja.'));
+      }
+      await tx`update usuarios set activo = false where id = ${id}`;
+    });
+  } else {
+    await sql`update usuarios set activo = true where id = ${id}`;
   }
-
-  await sql`update usuarios set activo = ${activo} where id = ${id}`;
 
   revalidatePath('/usuarios');
   irA(`/usuarios/${id}`);
@@ -247,17 +279,12 @@ export async function guardarFichaUsuario(datos: FormData) {
   irA(`/usuarios/${id}?hecho=1`);
 }
 
-async function esElUltimoAdmin(id: string): Promise<boolean> {
-  const filas = await sql<{ rol: string; activo: boolean }[]>`
-    select rol::text as rol, activo from usuarios where id = ${id}
-  `;
-  const fila = filas[0];
-  if (!fila || fila.rol !== 'admin' || !fila.activo) return false;
-  return (await administradoresActivos(id)) === 0;
-}
-
-async function limpiarExcepcionesRedundantes(id: string, rol: Rol): Promise<void> {
-  const filas = await sql<{ seccion: string; acceso: string }[]>`
+async function limpiarExcepcionesRedundantes(
+  tx: TransactionSql,
+  id: string,
+  rol: Rol,
+): Promise<void> {
+  const filas = await tx<{ seccion: string; acceso: string }[]>`
     select seccion, acceso from usuario_permisos where usuario_id = ${id}
   `;
 
@@ -272,9 +299,9 @@ async function limpiarExcepcionesRedundantes(id: string, rol: Rol): Promise<void
     .filter((s) => !(s in utiles));
 
   if (sobran.length > 0) {
-    await sql`
+    await tx`
       delete from usuario_permisos
-       where usuario_id = ${id} and seccion in ${sql(sobran)}
+       where usuario_id = ${id} and seccion in ${tx(sobran)}
     `;
   }
 }

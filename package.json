@@ -24,6 +24,7 @@
     "test:plantillas": "tsx scripts/verificar-plantillas.mts",
     "test:migracion": "tsx scripts/verificar-migracion-rol.mts",
     "test:backfill-sillas": "tsx scripts/verificar-backfill-sillas.mts",
+    "test:usuarios": "tsx scripts/verificar-usuarios.mts",
     "test:e2e:diagrama": "node scripts/ejecutar-e2e-diagrama.mjs",
     "test:mutaciones-aislamiento": "node scripts/verificar-aislamiento-mutaciones.mjs"
   },

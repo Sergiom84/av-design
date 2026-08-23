@@ -3,8 +3,10 @@ import { hayConfiguracion } from '@/lib/db';
 import { listarSalasConEstado } from '@/lib/datos';
 import { tablasDeCicloListas } from '@/lib/datos-ciclo';
 import { esUuid } from '@/lib/uuid';
+import { listarProyectos } from '@/lib/datos-proyectos';
 import { SinConfigurar } from '@/components/sin-configurar';
-import { Cabecera, Enlace } from '@/components/ui';
+import { Cabecera } from '@/components/ui';
+import { FiltroDeProyecto } from '@/components/sala/filtro-proyecto';
 import { ListaDeSalas } from '@/components/sala/lista';
 
 export const dynamic = 'force-dynamic';
@@ -16,11 +18,16 @@ export default async function Salas({ searchParams }: PageProps<'/salas'>) {
   const proyectoId =
     typeof proyecto === 'string' && esUuid(proyecto) ? proyecto : undefined;
 
-  const [salas, cicloListo] = await Promise.all([
+  const [salas, proyectos, cicloListo] = await Promise.all([
     listarSalasConEstado(proyectoId),
+    listarProyectos(),
     tablasDeCicloListas(),
   ]);
-  const nombreProyecto = proyectoId ? salas[0]?.proyecto : undefined;
+  // Del listado de obras, no de la primera sala: un proyecto sin salas
+  // todavía tiene nombre y antes se quedaba en "elegido".
+  const nombreProyecto = proyectoId
+    ? proyectos.find((p) => p.id === proyectoId)?.nombre
+    : undefined;
 
   return (
     <>
@@ -33,7 +40,7 @@ export default async function Salas({ searchParams }: PageProps<'/salas'>) {
         }
         acciones={
           <>
-            {proyectoId && <Enlace href="/salas">Quitar filtro</Enlace>}
+            <FiltroDeProyecto proyectos={proyectos} elegido={proyectoId} />
             <Link href="/salas/nueva" className="boton boton-principal">
               Nueva sala
             </Link>

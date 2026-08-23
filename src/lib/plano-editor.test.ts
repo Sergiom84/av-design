@@ -111,8 +111,6 @@ const SALA: Sala = {
   id: 'sala-1',
   sede_id: null,
   localizacion_id: null,
-  edificio: null,
-  nivel: null,
   codigo: 'BAT-006',
   nombre: 'Sala de Batería 006',
   tipologia: 'SALA TP',

@@ -66,8 +66,6 @@ function aSala(f: Fila): Sala {
     localizacion: s(f.localizacion),
     proyecto_id: s(f.proyecto_id),
     proyecto: s(f.proyecto),
-    edificio: s(f.edificio),
-    nivel: s(f.nivel),
     codigo: s(f.codigo),
     nombre: String(f.nombre),
     tipologia: s(f.tipologia),

@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { hayConfiguracion } from '@/lib/db';
-import { listarProyectos, contarSalasSinProyecto } from '@/lib/datos-proyectos';
+import {
+  contarSalasSinProyecto,
+  listarCodigosDeProyecto,
+  listarProyectos,
+} from '@/lib/datos-proyectos';
+import { codigoSugeridoProyecto } from '@/lib/nombres-proyecto';
 import { listarSedes } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera, Enlace } from '@/components/ui';
@@ -21,10 +26,11 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
   const { nueva } = await searchParams;
   const abrirAlta = nueva === '1';
 
-  const [proyectos, salasSinProyecto, sedes, cicloListo] = await Promise.all([
+  const [proyectos, salasSinProyecto, sedes, codigos, cicloListo] = await Promise.all([
     listarProyectos(),
     contarSalasSinProyecto(),
     abrirAlta ? listarSedes() : Promise.resolve([]),
+    abrirAlta ? listarCodigosDeProyecto() : Promise.resolve([]),
     tablasDeCicloListas(),
   ]);
 
@@ -52,7 +58,12 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
             entonces los estados salen como &quot;sin iniciar&quot;.
           </Aviso>
         )}
-        {abrirAlta && <AltaDeProyecto sedes={sedes} />}
+        {abrirAlta && (
+          <AltaDeProyecto
+            sedes={sedes}
+            codigoSugerido={codigoSugeridoProyecto(new Date(), codigos)}
+          />
+        )}
         <ListaDeProyectos proyectos={proyectos} salasSinProyecto={salasSinProyecto} />
       </div>
     </>

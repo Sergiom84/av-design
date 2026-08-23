@@ -33,14 +33,7 @@ export default async function LayoutSala({
     <>
       <Cabecera
         titulo={sala.nombre}
-        descripcion={[
-          sala.proyecto,
-          sala.localizacion,
-          sala.sede,
-          sala.edificio,
-          sala.nivel,
-          sala.tipologia,
-        ]
+        descripcion={[sala.proyecto, sala.localizacion, sala.sede, sala.tipologia]
           .filter(Boolean)
           .join(' · ')}
       />

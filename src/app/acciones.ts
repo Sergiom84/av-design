@@ -275,8 +275,6 @@ export async function crearSala(
   const comun = {
     sede_id: sede,
     localizacion_id: localizacionId,
-    edificio: texto(datos.get('edificio')),
-    nivel: texto(datos.get('nivel')),
     plantilla_id: plantillaId,
     tipologia: texto(datos.get('tipologia')),
     aforo: numero(datos.get('aforo')),
@@ -851,8 +849,6 @@ export async function guardarSala(datos: FormData) {
       nombre               = ${texto(datos.get('nombre')) ?? 'Sala sin nombre'},
       sede_id              = ${sede},
       tipologia            = ${texto(datos.get('tipologia'))},
-      edificio             = ${texto(datos.get('edificio'))},
-      nivel                = ${texto(datos.get('nivel'))},
       codigo               = ${texto(datos.get('codigo'))},
       aforo                = ${numero(datos.get('aforo'))},
       largo_m              = ${numero(datos.get('largo_m')) ?? 0},

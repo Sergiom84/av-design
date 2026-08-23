@@ -90,8 +90,13 @@ Criterios que entran en módulos ya planificados:
 
 Para `Después`: nota libre por cable en `conexiones`; export XLS de la tabla
 de cables; "guardar sala como plantilla" (el camino inverso ya existe a
-medias) y "duplicar sala" para gemelas; `edificio`/`planta` en salas para
-agrupar; ordenar el buscador de artículo por frecuencia de uso real.
+medias) y "duplicar sala" para gemelas; ordenar el buscador de artículo por
+frecuencia de uso real.
+
+`edificio`/`planta` en salas para agrupar sale de esta lista: lo cumple la
+jerarquía Proyecto → Localización → Sala, que llegó después de escribirla.
+Las dos columnas que había en `salas` las retira
+`db/migraciones/2026-08-retirar-edificio-nivel.sql`.
 
 Para `Experimental`: aprobación humana explícita, submittals compilados,
 export DXF del croquis, fichaje de horas de campo.

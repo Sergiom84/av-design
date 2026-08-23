@@ -81,6 +81,72 @@ export function agruparSalasPorLocalizacion(
   });
 }
 
+/**
+ * Los pasos que van de una obra recién creada a una obra medida. No son un
+ * asistente: el alta sigue siendo un solo formulario, y esto se **deriva** de
+ * lo que ya hay —localizaciones, salas y medidas—, igual que el estado de la
+ * obra sale de sus hitos. Un asistente por pasos obligaría a dejar proyectos
+ * creados a medias si alguien lo abandona a la mitad.
+ */
+export type ClavePasoProyecto = 'localizaciones' | 'salas' | 'medidas';
+
+export const ETIQUETA_PASO_PROYECTO: Record<ClavePasoProyecto, string> = {
+  localizaciones: 'Localizaciones',
+  salas: 'Salas',
+  medidas: 'Medidas',
+};
+
+export interface PasoProyecto {
+  clave: ClavePasoProyecto;
+  hecho: boolean;
+  /** El primero sin hacer: es lo único que hay que mirar ahora. */
+  actual: boolean;
+  /** Qué falta, con número cuando lo hay. */
+  detalle: string;
+}
+
+export function pasosDeProyecto(entrada: {
+  localizaciones: Array<{ nombre: string }>;
+  salas: SalaDePortada[];
+}): PasoProyecto[] {
+  // "Sin asignar" la crea el propio nacimiento del proyecto: contarla como
+  // paso hecho daría por definida una estructura que nadie ha definido.
+  const propias = entrada.localizaciones.filter(
+    (l) => l.nombre !== LOCALIZACION_SIN_ASIGNAR,
+  );
+  const sinMedidas = entrada.salas.filter(
+    (s) => estadoDeSalaEnPortada(s) === 'sin_medidas',
+  ).length;
+
+  const hechos = [
+    propias.length > 0,
+    entrada.salas.length > 0,
+    entrada.salas.length > 0 && sinMedidas === 0,
+  ];
+  const primeroPendiente = hechos.indexOf(false);
+
+  const detalles = [
+    propias.length > 0
+      ? `${propias.length} ${propias.length === 1 ? 'definida' : 'definidas'}`
+      : 'Edificio y planta de la obra',
+    entrada.salas.length > 0
+      ? `${entrada.salas.length} ${entrada.salas.length === 1 ? 'sala' : 'salas'}`
+      : 'Ninguna todavía',
+    entrada.salas.length === 0
+      ? 'Después de crear las salas'
+      : sinMedidas > 0
+        ? `${sinMedidas} sin medir`
+        : 'Todas medidas',
+  ];
+
+  return (['localizaciones', 'salas', 'medidas'] as const).map((clave, i) => ({
+    clave,
+    hecho: hechos[i],
+    actual: i === primeroPendiente,
+    detalle: detalles[i],
+  }));
+}
+
 export interface ResumenProyecto {
   salas: number;
   sin_medidas: number;

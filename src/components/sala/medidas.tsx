@@ -38,7 +38,9 @@ export function Medidas({
         <ListaClaveValor
           items={[
             { clave: 'Sede', valor: sala.sede || '—' },
-            { clave: 'Edificio · Nivel', valor: [sala.edificio, sala.nivel].filter(Boolean).join(' · ') || '—' },
+            // El edificio y la planta son la localización de la obra. Una
+            // sala sin obra todavía no los tiene: se sitúa por su sede.
+            { clave: 'Localización', valor: sala.localizacion || '—' },
             { clave: 'Tipología', valor: sala.tipologia || '—' },
             { clave: 'Aforo', valor: sala.aforo ?? '—' },
             {
@@ -65,12 +67,6 @@ export function Medidas({
         <div className="grid grid-cols-2 gap-2">
           <Campo etiqueta="Sede">
             <input name="sede" defaultValue={sala.sede ?? ''} className="w-full" />
-          </Campo>
-          <Campo etiqueta="Edificio">
-            <input name="edificio" defaultValue={sala.edificio ?? ''} className="w-full" />
-          </Campo>
-          <Campo etiqueta="Nivel">
-            <input name="nivel" defaultValue={sala.nivel ?? ''} className="w-full" />
           </Campo>
           <Campo etiqueta="Código">
             <input name="codigo" defaultValue={sala.codigo ?? ''} className="w-full" />

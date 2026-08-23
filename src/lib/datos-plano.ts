@@ -87,8 +87,6 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     localizacion: s(fila.localizacion),
     proyecto_id: s(fila.proyecto_id),
     proyecto: s(fila.proyecto),
-    edificio: s(fila.edificio),
-    nivel: s(fila.nivel),
     codigo: s(fila.codigo),
     nombre: String(fila.nombre),
     tipologia: s(fila.tipologia),

@@ -128,8 +128,6 @@ async function escenaDe(db: postgres.Sql, salaId: string): Promise<EscenaCroquis
     id: String(f.id),
     sede_id: null,
     localizacion_id: null,
-    edificio: null,
-    nivel: null,
     codigo: null,
     nombre: String(f.nombre),
     tipologia: null,

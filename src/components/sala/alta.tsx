@@ -126,6 +126,9 @@ export function AltaDeSala({
 
   const sinMedidas = !borrador.largo_m || !borrador.ancho_m || !borrador.alto_m;
   const serie = serieDeNombres(nombre || 'Sala sin nombre', copias);
+  // El código también se numera, y sin verlo antes de crear parecía copiado
+  // igual en todas las salas de la serie.
+  const codigos = codigo ? serieDeNombres(codigo, copias) : [];
 
   const cambiarPlantilla = (id: string) => {
     setPlantillaId(id);
@@ -238,8 +241,8 @@ export function AltaDeSala({
                     etiqueta="Localización"
                     ayuda={
                       copias > 1
-                        ? 'Las salas de la serie caen todas en esta localización.'
-                        : undefined
+                        ? 'Edificio y planta. Las salas de la serie caen todas en esta localización.'
+                        : 'El edificio y la planta dentro de la sede de la obra.'
                     }
                   >
                     <select
@@ -281,7 +284,14 @@ export function AltaDeSala({
                 className="w-full"
               />
             </Campo>
-            <Campo etiqueta="Código">
+            <Campo
+              etiqueta="Código"
+              ayuda={
+                copias > 1
+                  ? 'Patrón de la serie, igual que el nombre: AFR-## da AFR-01, AFR-02…'
+                  : undefined
+              }
+            >
               <input
                 name="codigo"
                 value={codigo}
@@ -290,8 +300,13 @@ export function AltaDeSala({
                 className="w-full"
               />
             </Campo>
+            {/*
+              La geografía tiene dos niveles y solo dos: la sede, que pone la
+              obra, y la localización, que es el edificio y la planta. Una
+              sala sin obra se sitúa por su sede y afina cuando la adopten.
+            */}
             {proyecto ? (
-              <Campo etiqueta="Sede" ayuda="Heredada del proyecto.">
+              <Campo etiqueta="Sede" ayuda="La instalación, heredada de la obra.">
                 <input
                   value={proyecto.sede ?? '—'}
                   readOnly
@@ -300,7 +315,7 @@ export function AltaDeSala({
                 />
               </Campo>
             ) : (
-              <Campo etiqueta="Sede">
+              <Campo etiqueta="Sede" ayuda="La instalación: Madrid, Canarias.">
                 <input
                   name="sede"
                   list="sedes-conocidas"
@@ -314,12 +329,6 @@ export function AltaDeSala({
                 </datalist>
               </Campo>
             )}
-            <Campo etiqueta="Edificio">
-              <input name="edificio" className="w-full" />
-            </Campo>
-            <Campo etiqueta="Nivel">
-              <input name="nivel" placeholder="Planta 3" className="w-full" />
-            </Campo>
             <Campo etiqueta="Tipología">
               <input
                 name="tipologia"
@@ -445,9 +454,14 @@ export function AltaDeSala({
             ]}
           />
 
-          <p className="mt-3 pt-3 border-t border-linea text-tinta-tenue break-words">
-            {resumirSerie(serie)}
-          </p>
+          <div className="mt-3 pt-3 border-t border-linea text-tinta-tenue break-words">
+            <p>{resumirSerie(serie)}</p>
+            {codigos.length > 0 && (
+              <p className="mt-1">
+                <span className="t-etiqueta">Códigos</span> {resumirSerie(codigos)}
+              </p>
+            )}
+          </div>
 
           <div className="mt-4">
             <Boton disabled={enviando}>

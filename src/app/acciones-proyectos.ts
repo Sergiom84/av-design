@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
 import { exigirEdicion } from '@/lib/sesion-servidor';
+import { codigoLibreDeProyecto } from '@/lib/nombres-proyecto';
 
 const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
@@ -43,9 +44,19 @@ export async function crearProyecto(datos: FormData) {
         )[0].id
       : null;
 
+    // El formulario propone el correlativo del día, pero entre que se pinta y
+    // se envía puede haberse creado otra obra: el número se vuelve a resolver
+    // aquí, contra lo que hay escrito ahora mismo.
+    const codigosEscritos = await tx<Array<{ codigo: string }>>`
+      select codigo from proyectos where codigo is not null`;
+    const codigo = codigoLibreDeProyecto(
+      texto(datos.get('codigo')),
+      codigosEscritos.map((f) => f.codigo),
+    );
+
     const [p] = await tx<Array<{ id: string }>>`
       insert into proyectos (nombre, codigo, sede_id, notas)
-      values (${nombre}, ${texto(datos.get('codigo'))}, ${sede},
+      values (${nombre}, ${codigo}, ${sede},
               ${texto(datos.get('notas'))})
       on conflict (nombre) do update set nombre = excluded.nombre
       returning id`;

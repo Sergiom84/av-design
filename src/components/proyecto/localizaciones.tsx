@@ -78,7 +78,11 @@ export function LocalizacionesDelProyecto({
       ))}
 
       {!cerrado && (
-        <Tarjeta titulo="Nueva localización">
+        <Tarjeta
+          id="nueva-localizacion"
+          titulo="Nueva localización"
+          pie="El edificio y la planta dentro de la sede de la obra. La sala no vuelve a preguntarlos."
+        >
           <form action={crearLocalizacion} className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="proyecto_id" value={proyectoId} />
             <Campo etiqueta="Nombre">

@@ -92,6 +92,13 @@ const salaLegadoId = randomUUID();
 // el señuelo que necesitan).
 const salaCerradaBorrarId = randomUUID();
 const salaLegadoBorrarId = randomUUID();
+// Obra abierta con su localización: es el único escenario donde el
+// formulario de medidas deja de mandar `edificio` y `nivel`, porque la
+// planta ya la dice la localización. La obra de arriba está cerrada y no
+// sirve: su guarda rechaza la escritura antes de llegar al UPDATE.
+const proyectoAbiertoId = randomUUID();
+const localizacionAbiertaId = randomUUID();
+const salaEnObraId = randomUUID();
 const articuloBocasId = randomUUID();
 const puertoSalidaId = randomUUID();
 const puertoEntradaId = randomUUID();
@@ -100,11 +107,12 @@ async function limpiar() {
   // `sala_equipos` tiene `on delete cascade` desde `salas` (db/schema.sql):
   // borrar las salas ya limpia sus equipos, altas incluidas.
   await sql`delete from salas where id in (
-    ${salaCerradaId}, ${salaLegadoId}, ${salaCerradaBorrarId}, ${salaLegadoBorrarId}
+    ${salaCerradaId}, ${salaLegadoId}, ${salaCerradaBorrarId}, ${salaLegadoBorrarId},
+    ${salaEnObraId}
   )`;
   await sql`delete from hitos_proyecto where proyecto_id = ${proyectoId}`;
-  await sql`delete from localizaciones where id = ${localizacionId}`;
-  await sql`delete from proyectos where id = ${proyectoId}`;
+  await sql`delete from localizaciones where id in (${localizacionId}, ${localizacionAbiertaId})`;
+  await sql`delete from proyectos where id in (${proyectoId}, ${proyectoAbiertoId})`;
   await sql`delete from articulos where id = ${articuloBocasId}`;
 }
 
@@ -132,6 +140,15 @@ async function preparar() {
             values (${salaCerradaBorrarId}, 'TEST sala cerrada (borrar)', ${localizacionId}, 3, 3, 3)`;
   await sql`insert into salas (id, nombre, largo_m, ancho_m, alto_m)
             values (${salaLegadoBorrarId}, 'TEST sala legado (borrar)', 3, 3, 3)`;
+
+  // Sala adoptada por una obra abierta, con el edificio y el nivel que traía
+  // de antes de la jerarquía: son el dato que no puede evaporarse al guardar.
+  await sql`insert into proyectos (id, nombre) values (${proyectoAbiertoId}, 'TEST-guarda-abierta')`;
+  await sql`insert into localizaciones (id, proyecto_id, nombre)
+            values (${localizacionAbiertaId}, ${proyectoAbiertoId}, 'TEST Edificio A · Planta 1')`;
+  await sql`insert into salas (id, nombre, localizacion_id, edificio, nivel, largo_m, ancho_m, alto_m)
+            values (${salaEnObraId}, 'TEST sala en obra', ${localizacionAbiertaId},
+                    'ÁFRICA', 'NIVEL 0', 3, 3, 3)`;
 }
 
 /**
@@ -211,8 +228,14 @@ try {
   };
 
   const filaSala = async (id: string) => {
-    const [f] = await sql<Array<{ nombre: string; largo_m: string }>>`
-      select nombre, largo_m from salas where id = ${id}`;
+    const [f] = await sql<
+      Array<{
+        nombre: string;
+        largo_m: string;
+        edificio: string | null;
+        nivel: string | null;
+      }>
+    >`select nombre, largo_m, edificio, nivel from salas where id = ${id}`;
     return f;
   };
   const filaEquipo = async (id: string) => {
@@ -272,6 +295,44 @@ try {
     afirmar(
       tras.largo_m === '9.99' && tras.largo_m !== antes.largo_m,
       `sala legado: sí escribe (largo_m "${antes.largo_m}" → "${tras.largo_m}")`,
+    );
+  }
+  // El formulario de medidas de una sala con localización no manda `edificio`
+  // ni `nivel` (`components/sala/medidas.tsx`): la planta ya la dice la obra.
+  // Esa ausencia no puede leerse como "bórralos", o adoptar una sala legado y
+  // volver a guardarla vaciaría en silencio el dato que traía.
+  {
+    const antes = await filaSala(salaEnObraId);
+    const fd = new FormData();
+    fd.set('id', salaEnObraId);
+    fd.set('nombre', antes.nombre);
+    fd.set('largo_m', '7.77');
+    await invocar(guardarSala, fd);
+    const tras = await filaSala(salaEnObraId);
+    afirmar(
+      tras.largo_m === '7.77',
+      `sala en obra: el guardado se ejecuta (largo_m "${antes.largo_m}" → "${tras.largo_m}")`,
+    );
+    afirmar(
+      tras.edificio === antes.edificio && tras.nivel === antes.nivel,
+      `sala en obra: sin los campos, edificio y nivel sobreviven ("${antes.edificio} · ${antes.nivel}" → "${tras.edificio} · ${tras.nivel}")`,
+    );
+  }
+  // Control positivo del mismo par: la sala sin obra sí los manda y sí se
+  // escriben. Sin esto, un guardado que ignorara siempre los dos campos
+  // pasaría igual la comprobación de arriba.
+  {
+    const antes = await filaSala(salaLegadoId);
+    const fd = new FormData();
+    fd.set('id', salaLegadoId);
+    fd.set('nombre', antes.nombre);
+    fd.set('edificio', 'ÁFRICA');
+    fd.set('nivel', 'NIVEL 1');
+    await invocar(guardarSala, fd);
+    const tras = await filaSala(salaLegadoId);
+    afirmar(
+      tras.edificio === 'ÁFRICA' && tras.nivel === 'NIVEL 1',
+      `sala legado: con los campos, edificio y nivel sí se escriben ("${antes.edificio} · ${antes.nivel}" → "${tras.edificio} · ${tras.nivel}")`,
     );
   }
 

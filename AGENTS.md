@@ -81,11 +81,17 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 - **Cada nivel de la jerarquía se pregunta una sola vez.** La **sede** es la
   instalación (Madrid, Canarias) y la pone la obra; la **localización** es el
   edificio y la planta dentro de ella; la **sala** solo aporta su nombre y su
-  código. `salas.edificio` y `salas.nivel` son de antes de la jerarquía: se
-  siguen pidiendo en el alta de una sala **sin** proyecto, que no tiene otra
-  forma de situarse, y no se piden cuando hay proyecto, porque preguntar la
-  planta después de elegir la localización es preguntar dos veces lo mismo con
-  otro nombre. El código de la obra lo propone la aplicación como `DDMMYY_n`
+  código. `salas.edificio` y `salas.nivel` son de antes de la jerarquía y
+  están **congelados**: se piden, se enseñan y se escriben solo en la sala
+  **sin** proyecto, que no tiene otra forma de situarse. Con localización no
+  se piden ni se pintan —preguntar la planta después de elegirla es
+  preguntarla dos veces con otro nombre—, y el guardado **no lee esa ausencia
+  como un borrado**: adoptar una sala legado y volver a guardarla habría
+  vaciado en silencio lo que traía. Lo comprueba `npm run test:guardas-sala`,
+  con su control positivo. Retirar las dos columnas es una migración aparte y
+  no se hace hasta contar cuántas salas de producción dependen de ellas: hoy
+  son la única geografía de la sala sin obra, y una sala sin obra es legado
+  válido. El código de la obra lo propone la aplicación como `DDMMYY_n`
   (`src/lib/nombres-proyecto.ts`): es la referencia que acaba en una factura y
   un hueco vacío no dice qué se espera dentro. Sigue siendo editable, y el
   servidor vuelve a resolver el correlativo al insertar, porque entre pintar el

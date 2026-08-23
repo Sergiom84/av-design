@@ -19,8 +19,6 @@ const sala = (extra: Partial<Sala> = {}): Sala => ({
   sede_id: null,
   sede: null,
   localizacion_id: null,
-  edificio: null,
-  nivel: null,
   codigo: null,
   nombre: 'Sala de Batería 006',
   tipologia: 'Telepresencia 8',

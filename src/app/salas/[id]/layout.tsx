@@ -33,16 +33,7 @@ export default async function LayoutSala({
     <>
       <Cabecera
         titulo={sala.nombre}
-        // Edificio y Nivel solo cuando no hay localización: en una sala
-        // adoptada dirían la planta dos veces, y con el valor viejo de antes
-        // de entrar en la obra.
-        descripcion={[
-          sala.proyecto,
-          sala.localizacion,
-          sala.sede,
-          ...(sala.localizacion_id ? [] : [sala.edificio, sala.nivel]),
-          sala.tipologia,
-        ]
+        descripcion={[sala.proyecto, sala.localizacion, sala.sede, sala.tipologia]
           .filter(Boolean)
           .join(' · ')}
       />

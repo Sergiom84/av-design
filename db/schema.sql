@@ -130,11 +130,13 @@ create table if not exists plantilla_articulos (
   unique (plantilla_id, categoria)
 );
 
+-- La geografía de la sala tiene dos niveles y solo dos: la sede (la
+-- instalación) y la localización (el edificio y la planta dentro de ella,
+-- más abajo en este fichero). `edificio` y `nivel` vivieron aquí antes de la
+-- jerarquía y los retira db/migraciones/2026-08-retirar-edificio-nivel.sql.
 create table if not exists salas (
   id                      uuid primary key default gen_random_uuid(),
   sede_id                 uuid references sedes on delete set null,
-  edificio                text,
-  nivel                   text,
   codigo                  text,
   nombre                  text not null,
   tipologia               text,

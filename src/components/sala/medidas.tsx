@@ -38,15 +38,9 @@ export function Medidas({
         <ListaClaveValor
           items={[
             { clave: 'Sede', valor: sala.sede || '—' },
-            // Con localización, el edificio y la planta ya los dice la obra.
-            // El par Edificio · Nivel es de antes de la jerarquía y solo se
-            // enseña —y se edita— en la sala que no cuelga de ninguna.
-            sala.localizacion_id
-              ? { clave: 'Localización', valor: sala.localizacion || '—' }
-              : {
-                  clave: 'Edificio · Nivel',
-                  valor: [sala.edificio, sala.nivel].filter(Boolean).join(' · ') || '—',
-                },
+            // El edificio y la planta son la localización de la obra. Una
+            // sala sin obra todavía no los tiene: se sitúa por su sede.
+            { clave: 'Localización', valor: sala.localizacion || '—' },
             { clave: 'Tipología', valor: sala.tipologia || '—' },
             { clave: 'Aforo', valor: sala.aforo ?? '—' },
             {
@@ -74,16 +68,6 @@ export function Medidas({
           <Campo etiqueta="Sede">
             <input name="sede" defaultValue={sala.sede ?? ''} className="w-full" />
           </Campo>
-          {!sala.localizacion_id && (
-            <>
-              <Campo etiqueta="Edificio">
-                <input name="edificio" defaultValue={sala.edificio ?? ''} className="w-full" />
-              </Campo>
-              <Campo etiqueta="Nivel">
-                <input name="nivel" defaultValue={sala.nivel ?? ''} className="w-full" />
-              </Campo>
-            </>
-          )}
           <Campo etiqueta="Código">
             <input name="codigo" defaultValue={sala.codigo ?? ''} className="w-full" />
           </Campo>

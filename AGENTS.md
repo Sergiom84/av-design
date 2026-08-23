@@ -81,17 +81,16 @@ En producción está en <https://av-design.onrender.com>, en el workspace
 - **Cada nivel de la jerarquía se pregunta una sola vez.** La **sede** es la
   instalación (Madrid, Canarias) y la pone la obra; la **localización** es el
   edificio y la planta dentro de ella; la **sala** solo aporta su nombre y su
-  código. `salas.edificio` y `salas.nivel` son de antes de la jerarquía y
-  están **congelados**: se piden, se enseñan y se escriben solo en la sala
-  **sin** proyecto, que no tiene otra forma de situarse. Con localización no
-  se piden ni se pintan —preguntar la planta después de elegirla es
-  preguntarla dos veces con otro nombre—, y el guardado **no lee esa ausencia
-  como un borrado**: adoptar una sala legado y volver a guardarla habría
-  vaciado en silencio lo que traía. Lo comprueba `npm run test:guardas-sala`,
-  con su control positivo. Retirar las dos columnas es una migración aparte y
-  no se hace hasta contar cuántas salas de producción dependen de ellas: hoy
-  son la única geografía de la sala sin obra, y una sala sin obra es legado
-  válido. El código de la obra lo propone la aplicación como `DDMMYY_n`
+  código. **Son dos niveles y solo dos**: `salas.edificio` y `salas.nivel`
+  existieron antes de la jerarquía y los retira
+  `db/migraciones/2026-08-retirar-edificio-nivel.sql`, porque preguntar la
+  planta después de elegir la localización era preguntarla dos veces con otro
+  nombre. Se hizo con la aplicación en desarrollo y sus salas de prueba: sobre
+  inventario real habría que volcarlas antes a localizaciones. Una sala sin
+  obra se sitúa por su sede y afina cuando la adoptan; la importación del
+  inventario (cada línea trae edificio y nivel, `docs/03-datos-reales.md`)
+  mapea ese texto a la localización de su obra. El código de la obra lo
+  propone la aplicación como `DDMMYY_n`
   (`src/lib/nombres-proyecto.ts`): es la referencia que acaba en una factura y
   un hueco vacío no dice qué se espera dentro. Sigue siendo editable, y el
   servidor vuelve a resolver el correlativo al insertar, porque entre pintar el

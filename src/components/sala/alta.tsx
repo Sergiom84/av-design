@@ -301,11 +301,9 @@ export function AltaDeSala({
               />
             </Campo>
             {/*
-              Con proyecto, la geografía ya está decidida: la sede la pone la
-              obra y el edificio y la planta son la localización. Edificio y
-              Nivel son columnas de antes de la jerarquía y volver a pedirlas
-              aquí era preguntar dos veces lo mismo con otro nombre. Sin
-              proyecto siguen siendo la única forma de situar la sala.
+              La geografía tiene dos niveles y solo dos: la sede, que pone la
+              obra, y la localización, que es el edificio y la planta. Una
+              sala sin obra se sitúa por su sede y afina cuando la adopten.
             */}
             {proyecto ? (
               <Campo etiqueta="Sede" ayuda="La instalación, heredada de la obra.">
@@ -317,27 +315,19 @@ export function AltaDeSala({
                 />
               </Campo>
             ) : (
-              <>
-                <Campo etiqueta="Sede" ayuda="La instalación: Madrid, Canarias.">
-                  <input
-                    name="sede"
-                    list="sedes-conocidas"
-                    placeholder="Madrid"
-                    className="w-full"
-                  />
-                  <datalist id="sedes-conocidas">
-                    {sedes.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                </Campo>
-                <Campo etiqueta="Edificio">
-                  <input name="edificio" className="w-full" />
-                </Campo>
-                <Campo etiqueta="Nivel">
-                  <input name="nivel" placeholder="Planta 3" className="w-full" />
-                </Campo>
-              </>
+              <Campo etiqueta="Sede" ayuda="La instalación: Madrid, Canarias.">
+                <input
+                  name="sede"
+                  list="sedes-conocidas"
+                  placeholder="Madrid"
+                  className="w-full"
+                />
+                <datalist id="sedes-conocidas">
+                  {sedes.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </Campo>
             )}
             <Campo etiqueta="Tipología">
               <input

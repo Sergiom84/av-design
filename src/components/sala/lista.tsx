@@ -70,15 +70,7 @@ export function ListaDeSalas({
               </div>
               {s.codigo && <div className="text-tinta-tenue text-[0.8125rem]">{s.codigo}</div>}
               <div className="text-tinta-tenue mt-1 min-w-0 [overflow-wrap:anywhere]">
-                {/* Edificio y Nivel solo sin localización: en una sala de la
-                    obra repetirían la planta con el valor de antes de entrar. */}
-                {[
-                  s.sede,
-                  s.localizacion,
-                  ...(s.localizacion_id ? [] : [s.edificio, s.nivel]),
-                ]
-                  .filter(Boolean)
-                  .join(' · ') || '—'}
+                {[s.sede, s.localizacion].filter(Boolean).join(' · ') || '—'}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[0.8125rem] text-tinta-tenue">
                 {s.tipologia && <span>{s.tipologia}</span>}

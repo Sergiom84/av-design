@@ -37,8 +37,6 @@ const SALA: Sala = {
   nombre: 'TEST editor',
   codigo: null,
   sede: null,
-  edificio: null,
-  nivel: null,
   tipologia: 'SALA TP',
   aforo: 8,
   largo_m: 6,

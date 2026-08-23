@@ -93,8 +93,6 @@ export interface Sala {
   localizacion?: string | null;
   proyecto_id?: string | null;
   proyecto?: string | null;
-  edificio: string | null;
-  nivel: string | null;
   codigo: string | null;
   nombre: string;
   tipologia: string | null;

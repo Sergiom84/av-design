@@ -272,8 +272,6 @@ export async function crearSala(
   const comun = {
     sede_id: sede,
     localizacion_id: localizacionId,
-    edificio: texto(datos.get('edificio')),
-    nivel: texto(datos.get('nivel')),
     plantilla_id: plantillaId,
     tipologia: texto(datos.get('tipologia')),
     aforo: numero(datos.get('aforo')),
@@ -840,23 +838,12 @@ export async function guardarSala(datos: FormData) {
     // obra cerrada aceptaba así sedes nuevas a cambio de nada— y además metía
     // una escritura en `sedes` por delante del cerrojo de `salas`.
     const sede = await sedeId(texto(datos.get('sede')), tx);
-    // Una sala con localización ya no enseña Edificio ni Nivel, así que el
-    // formulario no los manda: leer esa ausencia como "bórralos" habría
-    // vaciado en silencio el dato de las salas de antes de la jerarquía en
-    // cuanto alguien las adoptara y volviera a guardar. Sin localización
-    // siguen llegando y se escriben como siempre.
-    const edificio = datos.has('edificio')
-      ? texto(datos.get('edificio'))
-      : tx`edificio`;
-    const nivel = datos.has('nivel') ? texto(datos.get('nivel')) : tx`nivel`;
     await tx`
     update salas set
       diagrama_version     = diagrama_version + 1,
       nombre               = ${texto(datos.get('nombre')) ?? 'Sala sin nombre'},
       sede_id              = ${sede},
       tipologia            = ${texto(datos.get('tipologia'))},
-      edificio             = ${edificio},
-      nivel                = ${nivel},
       codigo               = ${texto(datos.get('codigo'))},
       aforo                = ${numero(datos.get('aforo'))},
       largo_m              = ${numero(datos.get('largo_m')) ?? 0},

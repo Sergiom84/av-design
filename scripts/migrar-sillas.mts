@@ -156,8 +156,6 @@ function aSalaGeometrica(f: Record<string, unknown>): Sala {
     id: String(f.id),
     sede_id: null,
     localizacion_id: null,
-    edificio: null,
-    nivel: null,
     codigo: null,
     nombre: String(f.nombre),
     tipologia: null,

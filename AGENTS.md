@@ -78,6 +78,23 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   obra, que le arrastra la sede del proyecto. Cada proyecto nace con la
   localización `Sin asignar`. Un pedido puede abastecer varias salas de la
   obra (`pedidos.proyecto_id`); el reparto entre salas lo hacen las reservas.
+- **Cada nivel de la jerarquía se pregunta una sola vez.** La **sede** es la
+  instalación (Madrid, Canarias) y la pone la obra; la **localización** es el
+  edificio y la planta dentro de ella; la **sala** solo aporta su nombre y su
+  código. `salas.edificio` y `salas.nivel` son de antes de la jerarquía: se
+  siguen pidiendo en el alta de una sala **sin** proyecto, que no tiene otra
+  forma de situarse, y no se piden cuando hay proyecto, porque preguntar la
+  planta después de elegir la localización es preguntar dos veces lo mismo con
+  otro nombre. El código de la obra lo propone la aplicación como `DDMMYY_n`
+  (`src/lib/nombres-proyecto.ts`): es la referencia que acaba en una factura y
+  un hueco vacío no dice qué se espera dentro. Sigue siendo editable, y el
+  servidor vuelve a resolver el correlativo al insertar, porque entre pintar el
+  formulario y enviarlo puede haber nacido otra obra.
+- **Lo que falta para terminar la obra también se deriva.** Los pasos de la
+  portada (localizaciones → salas → medidas, `pasosDeProyecto`) salen de lo que
+  ya hay, no de un asistente por pasos: partir el alta obligaría a dejar
+  proyectos creados a medias cuando alguien lo abandona. Se muestran mientras
+  quede alguno pendiente y desaparecen cuando la obra está completa.
 - **El estado de proyecto y sala se deriva de hitos registrados, nunca se
   teclea.** Los hitos de la obra (`inicio`, `cierre`) viven en
   `hitos_proyecto`; los de la sala (`instalacion`, `entrega`), en

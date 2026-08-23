@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
@@ -19,8 +20,9 @@ import {
   tablasDeCicloListas,
 } from '@/lib/datos-ciclo';
 import { estadoDeProyecto, ETIQUETA_ESTADO_PROYECTO, type EstadoProyecto } from '@/lib/ciclo-vida';
-import { agruparSalasPorLocalizacion, resumenDeProyecto } from '@/lib/proyecto';
+import { agruparSalasPorLocalizacion, pasosDeProyecto, resumenDeProyecto } from '@/lib/proyecto';
 import { HitosDeProyecto } from '@/components/proyecto/hitos';
+import { PasosDeProyecto } from '@/components/proyecto/pasos';
 import { LocalizacionesDelProyecto } from '@/components/proyecto/localizaciones';
 import { AdopcionDeSalas } from '@/components/proyecto/adopcion';
 import { BorrarProyecto } from '@/components/proyecto/borrar';
@@ -66,6 +68,10 @@ export default async function PortadaProyecto({
   const resumen = resumenDeProyecto({ salas: proyecto.salas, pedidos: proyecto.pedidos });
   const grupos = agruparSalasPorLocalizacion(proyecto.localizaciones, proyecto.salas);
   const estado = estadoDeProyecto(hitos);
+  const pasos = pasosDeProyecto({
+    localizaciones: proyecto.localizaciones,
+    salas: proyecto.salas,
+  });
 
   return (
     <>
@@ -74,7 +80,14 @@ export default async function PortadaProyecto({
         descripcion={[proyecto.codigo, proyecto.sede, proyecto.notas].filter(Boolean).join(' · ')}
         acciones={
           estado !== 'cerrado' && (
-            <Enlace href={`/salas/nueva?proyecto=${proyecto.id}`}>Nueva sala</Enlace>
+            // Botón y no enlace de texto: es la misma acción principal que en
+            // /salas y el siguiente paso natural de una obra recién creada.
+            <Link
+              href={`/salas/nueva?proyecto=${proyecto.id}` as never}
+              className="boton boton-principal"
+            >
+              Nueva sala
+            </Link>
           )
         }
       />
@@ -82,6 +95,12 @@ export default async function PortadaProyecto({
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Estado tono={TONO_ESTADO_PROYECTO[estado]}>{ETIQUETA_ESTADO_PROYECTO[estado]}</Estado>
       </div>
+
+      <PasosDeProyecto
+        proyectoId={proyecto.id}
+        pasos={pasos}
+        cerrado={estado === 'cerrado'}
+      />
 
       {estado === 'cerrado' && (
         <div className="mb-6">

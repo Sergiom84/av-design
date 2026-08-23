@@ -10,8 +10,19 @@ import { tecnicosDeRol } from '@/lib/ciclo-vida';
  * texto libre con sugerencias del alta de sala. Elegir quién la inicia
  * registra el hito de inicio en el mismo alta: es el hecho de proyecto que
  * el plan P1 viejo colgaba de cada sala.
+ *
+ * El código llega propuesto (`codigoSugerido`) porque es la referencia que
+ * acaba en una factura y un campo vacío sin explicación no dice qué se
+ * espera dentro. Sigue siendo editable: una obra puede traer la referencia
+ * del cliente.
  */
-export async function AltaDeProyecto({ sedes }: { sedes: string[] }) {
+export async function AltaDeProyecto({
+  sedes,
+  codigoSugerido,
+}: {
+  sedes: string[];
+  codigoSugerido: string;
+}) {
   const { tecnicos, roles } = await listarTecnicosConRoles();
   const iniciadores = tecnicosDeRol(tecnicos, roles, 'inicio');
 
@@ -29,10 +40,21 @@ export async function AltaDeProyecto({ sedes }: { sedes: string[] }) {
             className="w-full"
           />
         </Campo>
-        <Campo etiqueta="Código">
-          <input name="codigo" placeholder="TP26" className="w-full" />
+        <Campo
+          etiqueta="Código"
+          ayuda="Referencia de la obra para facturas y pedidos. Día, mes, año y el número del día; se puede sustituir por la referencia del cliente."
+        >
+          <input
+            name="codigo"
+            defaultValue={codigoSugerido}
+            placeholder={codigoSugerido}
+            className="w-full"
+          />
         </Campo>
-        <Campo etiqueta="Sede">
+        <Campo
+          etiqueta="Sede"
+          ayuda="La instalación: Madrid, Canarias. El edificio y la planta son localizaciones dentro de la obra."
+        >
           <input
             name="sede"
             list="sedes-conocidas-proyecto"

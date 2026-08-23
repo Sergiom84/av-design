@@ -46,12 +46,15 @@ export type VarianteTarjeta = keyof typeof VARIANTE_TARJETA;
  * (`ContenedorTabla`, `table.datos`, un diagrama), no de la tarjeta entera.
  */
 export function Tarjeta({
+  id,
   titulo,
   acciones,
   children,
   pie,
   variante = 'estandar',
 }: {
+  /** Ancla para enlazar la tarjeta desde la misma página (`#nueva-localizacion`). */
+  id?: string;
   titulo?: string;
   acciones?: ReactNode;
   children: ReactNode;
@@ -64,7 +67,7 @@ export function Tarjeta({
       : 'p-4 min-w-0 max-w-full';
 
   return (
-    <section className={`tarjeta ${VARIANTE_TARJETA[variante]}`.trim()}>
+    <section id={id} className={`tarjeta ${VARIANTE_TARJETA[variante]}`.trim()}>
       {(titulo || acciones) && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-linea-suave">
           {titulo && (

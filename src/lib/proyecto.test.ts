@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   agruparSalasPorLocalizacion,
   estadoDeSalaEnPortada,
+  pasosDeProyecto,
   resumenDeProyecto,
   type SalaDePortada,
 } from './proyecto';
@@ -82,6 +83,71 @@ describe('agruparSalasPorLocalizacion', () => {
       grupos.map((g) => g.salas.length),
       [1, 2, 0],
     );
+  });
+});
+
+describe('pasosDeProyecto', () => {
+  const sinAsignar = [{ nombre: LOCALIZACION_SIN_ASIGNAR }];
+
+  test('obra recién creada: nada hecho y el primer paso es la localización', () => {
+    const pasos = pasosDeProyecto({ localizaciones: sinAsignar, salas: [] });
+    assert.deepEqual(
+      pasos.map((p) => p.hecho),
+      [false, false, false],
+    );
+    assert.equal(pasos.find((p) => p.actual)?.clave, 'localizaciones');
+  });
+
+  test('"Sin asignar" no cuenta como estructura definida', () => {
+    const pasos = pasosDeProyecto({ localizaciones: sinAsignar, salas: [] });
+    assert.equal(pasos[0].hecho, false);
+    assert.equal(pasos[0].detalle, 'Edificio y planta de la obra');
+  });
+
+  test('con localización propia, el paso actual pasa a las salas', () => {
+    const pasos = pasosDeProyecto({
+      localizaciones: [...sinAsignar, { nombre: 'Edificio B · Planta 3' }],
+      salas: [],
+    });
+    assert.equal(pasos[0].hecho, true);
+    assert.equal(pasos[0].detalle, '1 definida');
+    assert.equal(pasos.find((p) => p.actual)?.clave, 'salas');
+  });
+
+  test('una sala sin medir deja el paso de medidas pendiente y lo dice', () => {
+    const pasos = pasosDeProyecto({
+      localizaciones: [{ nombre: 'Edificio B · Planta 3' }],
+      salas: [sala(), sala({ id: 'b', largo_m: 0 })],
+    });
+    assert.equal(pasos[1].hecho, true);
+    assert.equal(pasos[1].detalle, '2 salas');
+    assert.equal(pasos[2].hecho, false);
+    assert.equal(pasos[2].detalle, '1 sin medir');
+    assert.equal(pasos.find((p) => p.actual)?.clave, 'medidas');
+  });
+
+  test('todo hecho: ningún paso queda marcado como actual', () => {
+    const pasos = pasosDeProyecto({
+      localizaciones: [{ nombre: 'Edificio B · Planta 3' }],
+      salas: [sala()],
+    });
+    assert.deepEqual(
+      pasos.map((p) => p.hecho),
+      [true, true, true],
+    );
+    assert.equal(
+      pasos.some((p) => p.actual),
+      false,
+    );
+  });
+
+  test('sin salas, las medidas no se dan por hechas', () => {
+    const pasos = pasosDeProyecto({
+      localizaciones: [{ nombre: 'Edificio B · Planta 3' }],
+      salas: [],
+    });
+    assert.equal(pasos[2].hecho, false);
+    assert.equal(pasos[2].detalle, 'Después de crear las salas');
   });
 });
 

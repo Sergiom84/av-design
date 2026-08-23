@@ -84,6 +84,18 @@ async function listarProyectosConEstado(): Promise<ProyectoResumen[]> {
   }));
 }
 
+/**
+ * Los códigos de obra ya escritos, para proponer el siguiente correlativo del
+ * día (`codigoSugeridoProyecto`). Son unos cientos de filas de texto corto:
+ * traerlos enteros sale más barato que un `like` por prefijo que además
+ * tendría que repetir aquí el formato del código.
+ */
+export async function listarCodigosDeProyecto(): Promise<string[]> {
+  const filas = await sql<Fila[]>`
+    select codigo from proyectos where codigo is not null`;
+  return filas.map((f) => String(f.codigo));
+}
+
 /** Las salas de antes de la jerarquía de obra. Legado válido, no error. */
 export async function contarSalasSinProyecto(): Promise<number> {
   const [f] = await sql<Fila[]>`

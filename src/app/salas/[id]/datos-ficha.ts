@@ -69,6 +69,7 @@ export async function fichaDeSala(id: string) {
     tomas,
     puertos,
     articulos,
+    parametros,
     porId,
     sinMedidas,
     resultados,

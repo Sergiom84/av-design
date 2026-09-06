@@ -1,39 +1,14 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { construirDiagrama } from '@/lib/diagrama';
-import {
-  bocaCodificada,
-  crearBorrador,
-  decodificarBoca,
-  prepararGuardado,
-  tieneCambios,
-  type ConexionBorrador,
-  type GuardarEditorConexiones,
-} from '@/lib/editor-conexiones';
-import {
-  ETIQUETA_RUTA,
-  ETIQUETA_SENAL,
-  type Articulo,
-  type Conexion,
-  type EquipoEnSala,
-  type Puerto,
-  type Ruta,
-  type Sala,
-  type Senal,
-} from '@/lib/tipos';
+import { bocaCodificada, decodificarBoca, type GuardarEditorConexiones } from '@/lib/editor-conexiones';
+import { avisosDeConexion, identificadoresDeCable } from '@/lib/cable-schedule';
+import { calcularConexion } from '@/lib/calculo-cable';
+import { ETIQUETA_RUTA, ETIQUETA_SENAL, type Articulo, type Conexion, type EquipoEnSala, type ParametrosCable, type Puerto, type Ruta, type Sala, type Senal } from '@/lib/tipos';
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui';
-import { DibujoEsquema } from './dibujo-esquema';
+import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 import { GuardiaSalida } from '@/components/plano-editor/guardia-salida';
-
-const mensajeError = {
-  conflicto: 'La sala cambió en otra pestaña. Recarga antes de volver a guardar.',
-  ajeno: 'Una conexión o un equipo ya no pertenece a esta sala.',
-  invalido: 'El servidor rechazó el borrador. Revisa las bocas y los datos de la conexión.',
-  cerrado: 'La obra está cerrada. No se pueden guardar conexiones.',
-  no_existe: 'La sala ya no existe.',
-} as const;
+import { LienzoConexiones } from './lienzo-conexiones';
+import { useEditorConexiones } from './use-editor-conexiones';
 
 interface Props {
   sala: Sala;
@@ -42,147 +17,101 @@ interface Props {
   equipos: EquipoEnSala[];
   puertos: Puerto[];
   articulos: Articulo[];
+  parametros?: ParametrosCable;
+  posicionesIniciales?: Record<string, { x: number; y: number }>;
   cerrado: boolean;
   guardar: GuardarEditorConexiones;
 }
 
-export function EditorConexiones({ sala, version: versionInicial, conexiones, equipos, puertos, articulos, cerrado, guardar }: Props) {
-  const [originales, setOriginales] = useState(conexiones);
-  const [borrador, setBorrador] = useState(() => crearBorrador(conexiones));
-  const [version, setVersion] = useState(versionInicial);
-  const [seleccionada, setSeleccionada] = useState<string | null>(conexiones[0]?.id ?? null);
-  const [estado, setEstado] = useState<string | null>(null);
-  const [enConflicto, setEnConflicto] = useState(false);
-  const [pendiente, iniciarTransicion] = useTransition();
-  const router = useRouter();
-  const puertosPorId = useMemo(() => new Map(puertos.map((puerto) => [puerto.id, puerto])), [puertos]);
-  const cables = useMemo(() => articulos.filter((articulo) => articulo.tipo === 'cable'), [articulos]);
-  const actual = borrador.find((conexion) => conexion.id === seleccionada) ?? null;
-  const entrada = prepararGuardado({ salaId: sala.id, versionEsperada: version, originales, borrador, puertos: puertosPorId });
-  const hayCambios = tieneCambios(entrada);
-  const incompletas = borrador.filter((conexion) => !conexion.puerto_origen_id || !conexion.puerto_origen_ordinal || !conexion.puerto_destino_id || !conexion.puerto_destino_ordinal);
-
-  const puertosPorArticulo = useMemo(() => puertos.reduce((mapa, puerto) => {
-    const lista = mapa.get(puerto.articulo_id) ?? [];
-    lista.push(puerto);
-    mapa.set(puerto.articulo_id, lista);
-    return mapa;
-  }, new Map<string, Puerto[]>()), [puertos]);
-  const escena = construirDiagrama({ equipos, conexiones: borrador, puertosPorArticulo, soloConectados: false });
-
-  function actualizar(id: string, cambio: Partial<ConexionBorrador>) {
-    if (cerrado) return;
-    setBorrador((lista) => lista.map((conexion) => conexion.id === id ? { ...conexion, ...cambio } : conexion));
-    setEstado(null);
-  }
+export function EditorConexiones(props: Props) {
+  const e = useEditorConexiones({ ...props, salaId: props.sala.id });
+  const { actual, bloqueado } = e;
+  const identificadores = identificadoresDeCable(e.borrador);
+  const cables = props.articulos.filter((a) => a.tipo === 'cable');
+  const avisos = actual ? avisosDeConexion(actual, e.puertosPorId.get(actual.puerto_origen_id ?? ''), e.puertosPorId.get(actual.puerto_destino_id ?? ''), cables.find((c) => c.id === actual.articulo_cable_id)) : [];
+  const extremoNuevo = actual && e.altasEquipo.some((equipo) => [actual.origen_id, actual.destino_id].includes(equipo.id));
+  const longitud = actual && !extremoNuevo && props.sala.largo_m && props.sala.ancho_m && props.sala.alto_m && props.parametros
+    ? calcularConexion(actual, props.sala, new Map(e.equipos.map((equipo) => [equipo.id, equipo])), new Map(props.articulos.map((a) => [a.id, a])), props.parametros)
+    : null;
 
   function elegirBoca(lado: 'origen' | 'destino', valor: string) {
     if (!actual) return;
     const boca = decodificarBoca(valor);
-    if (lado === 'origen') actualizar(actual.id, {
+    e.actualizar(actual.id, lado === 'origen' ? {
       origen_id: boca?.equipo_id ?? actual.origen_id,
-      puerto_origen_id: boca?.puerto_id ?? null,
-      puerto_origen_ordinal: boca?.ordinal ?? null,
-    });
-    else actualizar(actual.id, {
+      puerto_origen_id: boca?.puerto_id ?? null, puerto_origen_ordinal: boca?.ordinal ?? null,
+    } : {
       destino_id: boca?.equipo_id ?? actual.destino_id,
-      puerto_destino_id: boca?.puerto_id ?? null,
-      puerto_destino_ordinal: boca?.ordinal ?? null,
+      puerto_destino_id: boca?.puerto_id ?? null, puerto_destino_ordinal: boca?.ordinal ?? null,
     });
   }
 
   function opcionesBoca(lado: 'origen' | 'destino') {
-    const equipoDelOtroExtremo = lado === 'origen' ? actual?.destino_id : actual?.origen_id;
-    const ocupadas = new Set(borrador.flatMap((conexion) => conexion.id === actual?.id ? [] : [
-      bocaCodificada(conexion.origen_id, conexion.puerto_origen_id, conexion.puerto_origen_ordinal),
-      bocaCodificada(conexion.destino_id, conexion.puerto_destino_id, conexion.puerto_destino_ordinal),
-    ].filter(Boolean)));
-    return equipos.filter((equipo) => equipo.id !== equipoDelOtroExtremo).flatMap((equipo) => (puertosPorArticulo.get(equipo.articulo_id) ?? []).flatMap((puerto) =>
-      Array.from({ length: Math.max(1, puerto.total) }, (_, indice) => ({
-        valor: bocaCodificada(equipo.id, puerto.id, indice + 1),
-        etiqueta: `${equipo.nombre} · ${puerto.nombre}${puerto.total > 1 ? ` ${indice + 1}` : ''}`,
-      })).filter((opcion) => !ocupadas.has(opcion.valor)),
-    ));
-  }
-
-  function nuevaConexion() {
-    if (cerrado) return;
-    const id = `temporal-${crypto.randomUUID()}`;
-    const conexion: ConexionBorrador = {
-      id, temporal: true, sala_id: sala.id,
-      origen_id: equipos[0]?.id ?? '', destino_id: equipos[1]?.id ?? equipos[0]?.id ?? '',
-      puerto_origen_id: null, puerto_origen_ordinal: null,
-      puerto_destino_id: null, puerto_destino_ordinal: null,
-      articulo_cable_id: null, senal: 'otro', ruta: null,
-      longitud_manual_m: null, notas: null, puntos_paso: [],
-    };
-    setBorrador((lista) => [...lista, conexion]);
-    setSeleccionada(id);
-    setEstado(null);
-  }
-
-  function descartar() {
-    if (enConflicto) {
-      router.refresh();
-      return;
-    }
-    setBorrador(crearBorrador(originales));
-    setSeleccionada(originales[0]?.id ?? null);
-    setEstado(null);
-  }
-
-  function guardarTodo() {
-    if (incompletas.some((conexion) => conexion.temporal)) {
-      setEstado('Completa las dos bocas de cada conexión nueva antes de guardar.');
-      return;
-    }
-    iniciarTransicion(async () => {
-      const resultado = await guardar(entrada);
-      if (!resultado.ok) {
-        setEnConflicto(resultado.motivo === 'conflicto');
-        setEstado(resultado.detalle || mensajeError[resultado.motivo]);
-        return;
-      }
-      const consolidadas = borrador.map((conexion) => ({
-        ...conexion,
-        id: conexion.temporal ? (resultado.ids[conexion.id] ?? conexion.id) : conexion.id,
-        temporal: false,
-      }));
-      setVersion(resultado.version);
-      setEnConflicto(false);
-      setOriginales(consolidadas);
-      setBorrador(consolidadas);
-      setSeleccionada((id) => id ? (resultado.ids[id] ?? id) : null);
-      setEstado('Cambios guardados.');
+    const otro = lado === 'origen' ? actual?.destino_id : actual?.origen_id;
+    const ocupadas = new Set(e.borrador.flatMap((c) => c.id === actual?.id ? [] : [bocaCodificada(c.origen_id, c.puerto_origen_id, c.puerto_origen_ordinal), bocaCodificada(c.destino_id, c.puerto_destino_id, c.puerto_destino_ordinal)]));
+    return e.equipos.filter((equipo) => equipo.id !== otro && equipo.cantidad === 1).flatMap((equipo) => {
+      const repetidos = e.equipos.filter((otroEquipo) => otroEquipo.nombre === equipo.nombre);
+      const nombre = `${equipo.nombre}${repetidos.length > 1 ? ` ${repetidos.findIndex((r) => r.id === equipo.id) + 1}` : ''}`;
+      return e.puertos.filter((p) => p.articulo_id === equipo.articulo_id).flatMap((p) => Array.from({ length: p.total }, (_, i) => ({
+        valor: bocaCodificada(equipo.id, p.id, i + 1), etiqueta: `${nombre} · ${p.nombre}${p.total > 1 ? ` ${i + 1}` : ''}`,
+      })).filter((opcion) => !ocupadas.has(opcion.valor)));
     });
   }
 
   return <>
-    <GuardiaSalida activo={hayCambios && !cerrado} superficie="diagrama" />
-    {cerrado && <div className="mb-6"><Aviso tono="alerta">La obra está cerrada: el diagrama se ve pero no se toca.</Aviso></div>}
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] [&>*]:min-w-0">
-    <Tarjeta titulo="Editor de conexiones" acciones={<Boton tipo="button" variante="secundario" onClick={nuevaConexion} disabled={cerrado || equipos.length < 2}>Nueva conexión</Boton>}>
-      {equipos.length === 0 ? <Vacio>La sala no tiene equipos.</Vacio> : borrador.length === 0 ? <Vacio>Sin conexiones. Añade la primera seleccionando sus dos bocas.</Vacio> : <DibujoEsquema escena={escena} conexionSeleccionada={seleccionada} onSeleccionarConexion={setSeleccionada} />}
-    </Tarjeta>
-
-    <aside className="space-y-4 min-w-0" aria-label="Inspector de conexión">
-      <Tarjeta titulo="Conexión seleccionada">
-        {!actual ? <Vacio>Selecciona una línea o crea una conexión.</Vacio> : <div className="space-y-4">
-          {(!actual.puerto_origen_id || !actual.puerto_destino_id) && <Aviso tono="neutro">Conexión histórica: completa sus dos bocas físicas para actualizarla.</Aviso>}
-          <label className="block"><span className="t-etiqueta block mb-1">Origen y boca</span><select disabled={cerrado} className="w-full" aria-label="Origen y boca" value={bocaCodificada(actual.origen_id, actual.puerto_origen_id, actual.puerto_origen_ordinal)} onChange={(e) => elegirBoca('origen', e.target.value)}><option value="">Seleccionar boca</option>{opcionesBoca('origen').map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select></label>
-          <label className="block"><span className="t-etiqueta block mb-1">Destino y boca</span><select disabled={cerrado} className="w-full" aria-label="Destino y boca" value={bocaCodificada(actual.destino_id, actual.puerto_destino_id, actual.puerto_destino_ordinal)} onChange={(e) => elegirBoca('destino', e.target.value)}><option value="">Seleccionar boca</option>{opcionesBoca('destino').map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select></label>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-1 gap-3">
-            <label><span className="t-etiqueta block mb-1">Señal</span><select disabled={cerrado} className="w-full" aria-label="Señal" value={actual.senal} onChange={(e) => actualizar(actual.id, { senal: e.target.value as Senal })}>{Object.entries(ETIQUETA_SENAL).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}</select></label>
-            <label><span className="t-etiqueta block mb-1">Ruta</span><select disabled={cerrado} className="w-full" aria-label="Ruta" value={actual.ruta ?? ''} onChange={(e) => actualizar(actual.id, { ruta: (e.target.value || null) as Ruta | null })}><option value="">{ETIQUETA_RUTA[sala.ruta_por_defecto]} (sala)</option>{Object.entries(ETIQUETA_RUTA).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}</select></label>
+    <GuardiaSalida activo={e.hayCambios && !props.cerrado} superficie="diagrama" />
+    {props.cerrado && <div className="mb-6"><Aviso tono="alerta">La obra está cerrada: el diagrama se ve pero no se toca.</Aviso></div>}
+    <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem] [&>*]:min-w-0">
+      <Tarjeta titulo="Editor de conexiones" acciones={<Boton tipo="button" variante="secundario" onClick={() => e.nuevaConexion()} disabled={bloqueado || e.equipos.length < 2}>Nueva conexión</Boton>}>
+        <fieldset disabled={bloqueado} className="min-w-0 mb-4">
+          <BuscadorArticulo etiqueta="Añadir equipo" tipo="equipo" className="w-full sm:max-w-lg" vaciarAlElegir alElegir={e.anadirEquipo} />
+        </fieldset>
+        {e.cargandoEquipo && <p role="status">Cargando puertos…</p>}
+        {e.equipos.length === 0 ? <Vacio>Busca un equipo para empezar el diagrama.</Vacio> : <LienzoConexiones
+          equipos={e.equipos} puertos={e.puertos} conexiones={e.borrador} posiciones={e.posiciones}
+          onMover={e.mover} onConectar={e.nuevaConexion} onSeleccionarConexion={e.setSeleccionada}
+          conexionSeleccionada={e.seleccionada} bloqueado={bloqueado}
+        />}
+        {e.altasEquipo.length > 0 && <ul className="mt-4 space-y-2" aria-label="Equipos nuevos sin guardar">
+          {e.altasEquipo.map((equipo) => <li key={equipo.id} className="flex flex-wrap items-center justify-between gap-2">
+            <span className="min-w-0 break-words">{equipo.nombre} · Sin guardar</span>
+            <Boton tipo="button" variante="secundario" disabled={bloqueado} onClick={() => e.quitarAlta(equipo.id)} aria-label={`Quitar del borrador ${equipo.nombre}`}>Quitar del borrador</Boton>
+          </li>)}
+        </ul>}
+      </Tarjeta>
+      <aside className="space-y-4 min-w-0" aria-label="Inspector de conexión">
+        <Tarjeta titulo="Conexión seleccionada">
+          {e.borrador.length > 0 && <label className="block mb-4"><span className="t-etiqueta block mb-1">Conexión</span>
+            <select className="w-full min-w-0" aria-label="Seleccionar conexión" value={e.seleccionada ?? ''} onChange={(evento) => e.setSeleccionada(evento.target.value || null)}>
+              <option value="">Seleccionar conexión</option>
+              {e.borrador.map((c) => <option key={c.id} value={c.id}>{identificadores.get(c.id)} · {e.equipos.find((equipo) => equipo.id === c.origen_id)?.nombre ?? 'Origen'} → {e.equipos.find((equipo) => equipo.id === c.destino_id)?.nombre ?? 'Destino'}{!c.puerto_origen_id || !c.puerto_destino_id ? ' · Sin puertos' : ''}</option>)}
+            </select>
+          </label>}
+          {!actual ? <Vacio>Selecciona dos puertos para conectarlos o una línea para editarla.</Vacio> : <fieldset disabled={bloqueado} className="space-y-4 min-w-0">
+            {(!actual.puerto_origen_id || !actual.puerto_destino_id) && <Aviso tono="neutro">Completa las dos bocas físicas de la conexión.</Aviso>}
+            {(['origen', 'destino'] as const).map((lado) => <label key={lado} className="block"><span className="t-etiqueta block mb-1">{lado === 'origen' ? 'Origen y boca' : 'Destino y boca'}</span>
+              <select className="w-full min-w-0" aria-label={lado === 'origen' ? 'Origen y boca' : 'Destino y boca'} value={lado === 'origen' ? bocaCodificada(actual.origen_id, actual.puerto_origen_id, actual.puerto_origen_ordinal) : bocaCodificada(actual.destino_id, actual.puerto_destino_id, actual.puerto_destino_ordinal)} onChange={(evento) => elegirBoca(lado, evento.target.value)}>
+                <option value="">Seleccionar boca</option>{opcionesBoca(lado).map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}
+              </select>
+            </label>)}
+            <div className="grid sm:grid-cols-2 2xl:grid-cols-1 gap-3">
+              <label><span className="t-etiqueta block mb-1">Señal</span><select className="w-full" aria-label="Señal" value={actual.senal} onChange={(evento) => e.actualizar(actual.id, { senal: evento.target.value as Senal })}>{Object.entries(ETIQUETA_SENAL).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}</select></label>
+              <label><span className="t-etiqueta block mb-1">Ruta</span><select className="w-full" aria-label="Ruta" value={actual.ruta ?? ''} onChange={(evento) => e.actualizar(actual.id, { ruta: (evento.target.value || null) as Ruta | null })}><option value="">{ETIQUETA_RUTA[props.sala.ruta_por_defecto]} (sala)</option>{Object.entries(ETIQUETA_RUTA).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}</select></label>
+            </div>
+            <label className="block"><span className="t-etiqueta block mb-1">Cable</span><select className="w-full" aria-label="Cable" value={actual.articulo_cable_id ?? ''} onChange={(evento) => e.actualizar(actual.id, { articulo_cable_id: evento.target.value || null })}><option value="">Sin asignar</option>{cables.map((c) => <option key={c.id} value={c.id}>{`${c.marca ?? ''} ${c.modelo}`.trim()}</option>)}</select></label>
+            <p className="font-mono" aria-label="Longitud del cable">{longitud ? `${longitud.longitud_m.toLocaleString('es-ES', { maximumFractionDigits: 2 })} m${longitud.manual ? ' · Manual' : ' · Calculados desde Plano'}` : extremoNuevo ? 'Longitud disponible al guardar el equipo' : 'Sin medidas para calcular la longitud'}</p>
+            {avisos.map((aviso) => <Aviso key={aviso}>{aviso}</Aviso>)}
+            <Boton tipo="button" variante="peligro" onClick={e.quitarConexion}>Quitar conexión</Boton>
+          </fieldset>}
+        </Tarjeta>
+        <Tarjeta titulo="Borrador" variante="operativa">
+          <p aria-live="polite" className="text-tinta-tenue mb-3">{e.estado ?? (e.hayCambios ? 'Hay cambios sin guardar.' : 'Sin cambios pendientes.')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Boton tipo="button" onClick={e.guardarTodo} disabled={bloqueado || !e.hayCambios}>{e.pendiente ? 'Guardando…' : 'Guardar borrador'}</Boton>
+            <Boton tipo="button" variante="secundario" onClick={e.descartar} disabled={props.cerrado || e.pendiente || e.cargandoEquipo || (!e.enConflicto && !e.hayCambios)}>{e.enConflicto ? 'Recargar sala' : 'Descartar'}</Boton>
           </div>
-          <label className="block"><span className="t-etiqueta block mb-1">Cable</span><select disabled={cerrado} className="w-full" aria-label="Cable" value={actual.articulo_cable_id ?? ''} onChange={(e) => actualizar(actual.id, { articulo_cable_id: e.target.value || null })}><option value="">Sin asignar</option>{cables.map((cable) => <option key={cable.id} value={cable.id}>{`${cable.marca ?? ''} ${cable.modelo}`.trim()}</option>)}</select></label>
-          <Boton tipo="button" variante="peligro" disabled={cerrado} onClick={() => { setBorrador((lista) => lista.filter((conexion) => conexion.id !== actual.id)); setSeleccionada(null); setEstado(null); }}>Quitar conexión</Boton>
-        </div>}
-      </Tarjeta>
-      <Tarjeta titulo="Borrador" variante="operativa">
-        <p aria-live="polite" className="text-tinta-tenue mb-3">{estado ?? (hayCambios ? 'Hay cambios sin guardar.' : 'Sin cambios pendientes.')}</p>
-        <div className="flex flex-wrap gap-2"><Boton tipo="button" onClick={guardarTodo} disabled={cerrado || pendiente || enConflicto || !hayCambios}>{pendiente ? 'Guardando…' : 'Guardar borrador'}</Boton><Boton tipo="button" variante="secundario" onClick={descartar} disabled={cerrado || pendiente || (!enConflicto && !hayCambios)}>{enConflicto ? 'Recargar sala' : 'Descartar'}</Boton></div>
-      </Tarjeta>
-    </aside>
-  </div></>;
+        </Tarjeta>
+      </aside>
+    </div>
+  </>;
 }

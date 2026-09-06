@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /.next-e2e-diagrama/
+/.next-visual-qa/
+/.playwright-cli/
 /out/
 
 # production

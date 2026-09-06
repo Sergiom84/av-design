@@ -73,6 +73,12 @@ try {
 
   const { guardarEditorConexiones } = await import('../src/app/acciones-diagrama');
 
+  const temporalReservado = await guardarEditorConexiones({
+    sala_id: salaId, versionEsperada: 0,
+    altas: [conexion('__proto__', equipos[0], equipos[1], 1)], cambios: [], bajas: [],
+  });
+  afirmar(!temporalReservado.ok && temporalReservado.motivo === 'invalido', 'rechaza temporal reservado sin perder su mapa de identificadores');
+
   const invalido = await guardarEditorConexiones({
     sala_id: salaId,
     versionEsperada: 0,
@@ -126,7 +132,7 @@ try {
   afirmar(Number(a.ok) + Number(b.ok) === 1, 'dos escritores con la misma versión: solo uno confirma');
   afirmar((!a.ok && a.motivo === 'conflicto') || (!b.ok && b.motivo === 'conflicto'), 'el perdedor recibe conflicto explícito');
 
-  const [{ diagrama_version: version }] = await sql<Array<{ diagrama_version: number }>>`
+  let [{ diagrama_version: version }] = await sql<Array<{ diagrama_version: number }>>`
     select diagrama_version from salas where id = ${salaId}`;
   const ocupada = await guardarEditorConexiones({
     sala_id: salaId,
@@ -136,6 +142,39 @@ try {
     bajas: [],
   });
   afirmar(!ocupada.ok && ocupada.motivo === 'invalido', 'la exclusividad física se valida en servidor');
+
+  await sql`update sala_equipos set x_m = 1.2, y_m = 2.3, z_m = 1.5, posicion_confirmada = true where id = ${equipos[0]}`;
+  const base = { sala_id: salaId, versionEsperada: Number(version), altas: [], cambios: [], bajas: [] };
+  const ajenaPosicion = await guardarEditorConexiones({ ...base, posiciones: [{equipo_id: equipoAjeno, x: 10, y: 20}] });
+  afirmar(!ajenaPosicion.ok && ajenaPosicion.motivo === 'ajeno', 'rechaza posición visual ajena');
+  const cableEquipo = await guardarEditorConexiones({ ...base, equipos_alta: [{temporal_id: 'nuevo', articulo_id: cableId}] });
+  afirmar(!cableEquipo.ok, 'no acepta cable como equipo');
+  await sql`update articulos set activo = false where id = ${articuloId}`;
+  const inactivo = await guardarEditorConexiones({ ...base, equipos_alta: [{temporal_id: 'nuevo', articulo_id: articuloId}] });
+  afirmar(!inactivo.ok, 'no acepta artículo inactivo');
+  await sql`update articulos set activo = true where id = ${articuloId}`;
+  const huerfano = await guardarEditorConexiones({ ...base, altas: [conexion('huerfana', 'desconocido', equipos[0], 8)] });
+  afirmar(!huerfano.ok, 'rechaza temporal no declarado');
+  const ordinal = await guardarEditorConexiones({ ...base, equipos_alta: [{temporal_id: 'nuevo', articulo_id: articuloId}], altas: [conexion('ordinal', 'nuevo', equipos[0], 9)] });
+  afirmar(!ordinal.ok, 'valida ordinal real en bloque nuevo');
+  const visual = await guardarEditorConexiones({ ...base,
+    altas: [conexion('visual', 'nuevo', equipos[0], 6)],
+    equipos_alta: [{temporal_id: 'nuevo', articulo_id: articuloId}],
+    posiciones: [{equipo_id: 'nuevo', x: 120, y: 340}, {equipo_id: equipos[0], x: 800, y: 250}] });
+  afirmar(visual.ok && Boolean(visual.equipos_ids.nuevo), 'alta de bloque devuelve UUID');
+  if (!visual.ok) throw new Error('No se pudo guardar bloque');
+  version = visual.version;
+  const [bloque] = await sql<Array<{nombre:string; esquema_x:number; esquema_y:number; posicion_confirmada:boolean; x_m:number; y_m:number; z_m:number}>>`
+    select nombre, esquema_x, esquema_y, posicion_confirmada, x_m, y_m, z_m from sala_equipos where id = ${visual.equipos_ids.nuevo}`;
+  afirmar(bloque.nombre === 'TEST equipo' && !bloque.posicion_confirmada, 'nombre autoritativo y posición física sin confirmar');
+  afirmar(bloque.esquema_x === 120 && bloque.esquema_y === 340, 'guarda coordenadas visuales nuevas');
+  afirmar(Number(bloque.x_m) === 0 && Number(bloque.y_m) === 0 && Number(bloque.z_m) === 0, 'esquema no cambia XYZ físicos');
+  const [medido] = await sql<Array<{x_m:number; y_m:number; z_m:number; posicion_confirmada:boolean}>>`select x_m, y_m, z_m, posicion_confirmada from sala_equipos where id = ${equipos[0]}`;
+  afirmar(Number(medido.x_m) === 1.2 && Number(medido.y_m) === 2.3 && Number(medido.z_m) === 1.5 && medido.posicion_confirmada, 'mover bloque existente conserva medidas confirmadas');
+  const [enlace] = await sql<Array<{origen_id:string; bocas:number}>>`
+    select c.origen_id, count(b.conexion_id)::int as bocas from conexiones c join conexion_bocas b on b.conexion_id = c.id
+    where c.id = ${visual.ids.visual} group by c.origen_id`;
+  afirmar(enlace.origen_id === visual.equipos_ids.nuevo && enlace.bocas === 2, 'resuelve temporal y bocas atómicamente');
 
   await sql`insert into proyectos (id, nombre) values (${proyectoId}, ${`TEST editor ${proyectoId}`})`;
   await sql`insert into localizaciones (id, proyecto_id, nombre) values
@@ -156,19 +195,26 @@ try {
   await sql.unsafe(`create function test_editor_conexiones_revienta() returns trigger language plpgsql as $$ begin raise exception 'fallo inducido'; end $$`);
   await sql.unsafe(`create trigger test_editor_conexiones_revienta before update of diagrama_version on salas for each row when (old.id = '${salaId}') execute function test_editor_conexiones_revienta()`);
   const antes = await sql<Array<{ id: string }>>`select id from conexiones where sala_id = ${salaId}`;
+  const equiposAntes = await sql`select id, esquema_x, esquema_y from sala_equipos where sala_id = ${salaId} order by id`;
   let falloInducido = false;
   try {
     await guardarEditorConexiones({
       sala_id: salaId,
       versionEsperada: Number(version),
-      altas: [conexion('rollback', equipos[0], equipos[1], 8)],
+      altas: [conexion('rollback', 'rollback-equipo', equipos[1], 8)],
+      equipos_alta: [{temporal_id: 'rollback-equipo', articulo_id: articuloId}],
+      posiciones: [{equipo_id: equipos[0], x: 999, y: 999}],
       cambios: [],
       bajas: [primeraId],
     });
   } catch {
     falloInducido = true;
   }
+  const equiposDespues = await sql`select id, esquema_x, esquema_y from sala_equipos where sala_id = ${salaId} order by id`;
+  afirmar(JSON.stringify(equiposAntes) === JSON.stringify(equiposDespues), 'rollback restaura equipos nuevos y posiciones');
   afirmar(falloInducido, 'un fallo posterior a altas y bajas se propaga');
+  const [salaTrasFallo] = await sql<Array<{diagrama_version:number}>>`select diagrama_version from salas where id = ${salaId}`;
+  afirmar(Number(salaTrasFallo.diagrama_version) === Number(version), 'rollback conserva versión anterior');
   const despues = await sql<Array<{ id: string }>>`select id from conexiones where sala_id = ${salaId}`;
   afirmar(
     antes.map((x) => x.id).sort().join(',') === despues.map((x) => x.id).sort().join(','),

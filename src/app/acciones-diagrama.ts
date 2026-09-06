@@ -749,8 +749,8 @@ const rutaConexion = z.enum(['falso_techo', 'canaleta', 'suelo_tecnico', 'direct
 const uuidNullable = z.string().refine(esUuid, 'id no es un uuid').nullable();
 
 const extremosConexion = z.object({
-  origen_id: z.string().refine(esUuid, 'origen_id no es un uuid'),
-  destino_id: z.string().refine(esUuid, 'destino_id no es un uuid'),
+  origen_id: z.string().min(1).max(120),
+  destino_id: z.string().min(1).max(120),
   puerto_origen_id: z.string().refine(esUuid, 'puerto_origen_id no es un uuid'),
   puerto_origen_ordinal: z.number().int().min(1).max(10000),
   puerto_destino_id: z.string().refine(esUuid, 'puerto_destino_id no es un uuid'),
@@ -763,6 +763,8 @@ const extremosConexion = z.object({
 const esquemaEditorConexiones = z.object({
   sala_id: z.string().refine(esUuid, 'sala_id no es un uuid'),
   versionEsperada: z.number().int().min(0),
+  equipos_alta: z.array(z.object({ temporal_id: z.string().min(1).max(120), articulo_id: z.string().refine(esUuid) })).max(200).default([]),
+  posiciones: z.array(z.object({ equipo_id: z.string().min(1).max(120), x: z.number().finite().min(0).max(100000), y: z.number().finite().min(0).max(100000) })).max(500).default([]),
   altas: z.array(extremosConexion.extend({ temporal_id: z.string().min(1).max(120) })).max(500),
   cambios: z
     .array(extremosConexion.extend({ id: z.string().refine(esUuid, 'id no es un uuid') }))
@@ -772,7 +774,7 @@ const esquemaEditorConexiones = z.object({
 
 export type PatchEditorConexiones = z.input<typeof esquemaEditorConexiones>;
 export type ResultadoEditorConexiones =
-  | { ok: true; version: number; ids: Record<string, string> }
+  | { ok: true; version: number; ids: Record<string, string>; equipos_ids: Record<string, string> }
   | {
       ok: false;
       motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno';
@@ -812,6 +814,16 @@ export async function guardarEditorConexiones(
   const p = validado.data;
 
   const temporales = p.altas.map((c) => c.temporal_id);
+  if (temporales.some((id) => ['__proto__', 'constructor', 'prototype'].includes(id))) return falloConexiones('invalido');
+  const altasEquipos = new Set(p.equipos_alta.map((e) => e.temporal_id));
+  const referenciasEquipo = [...p.altas, ...p.cambios].flatMap((c) => [c.origen_id, c.destino_id]);
+  referenciasEquipo.push(...p.posiciones.map((e) => e.equipo_id));
+  if (altasEquipos.size !== p.equipos_alta.length ||
+      new Set(p.posiciones.map((e) => e.equipo_id)).size !== p.posiciones.length ||
+      referenciasEquipo.some((id) => !altasEquipos.has(id) && !esUuid(id)) ||
+      p.equipos_alta.some((e) => ['__proto__', 'constructor', 'prototype'].includes(e.temporal_id))) {
+    return falloConexiones('invalido');
+  }
   const cambios = p.cambios.map((c) => c.id);
   if (
     new Set(temporales).size !== temporales.length ||
@@ -860,7 +872,18 @@ export async function guardarEditorConexiones(
         if (propias.length !== idsPersistidos.length) return falloConexiones('ajeno');
       }
 
-      const equiposIds = [...new Set(mutaciones.flatMap((c) => [c.origen_id, c.destino_id]))].sort();
+      const equiposIds = [...new Set(referenciasEquipo.filter((id) => !altasEquipos.has(id)))].sort();
+      const referencias = [...new Set(p.equipos_alta.map((e) => e.articulo_id))].sort();
+      const catalogo = referencias.length ? await tx<Array<{id:string; marca:string|null; modelo:string; categoria:string}>>`
+        select id, marca, modelo, categoria from articulos
+        where id in ${tx(referencias)} and activo and tipo = 'equipo' order by id for share` : [];
+      if (catalogo.length !== referencias.length) return falloConexiones('invalido');
+      const catalogoPorId = new Map(catalogo.map((a) => [a.id, a]));
+      const temporalesUuid = [...altasEquipos].filter(esUuid);
+      if (temporalesUuid.length) {
+        const colisiones = await tx`select id from sala_equipos where id in ${tx(temporalesUuid)}`;
+        if (colisiones.length) return falloConexiones('invalido');
+      }
       const equipos = equiposIds.length
         ? await tx<Array<{ id: string; sala_id: string; articulo_id: string | null; cantidad: number }>>`
             select id, sala_id, articulo_id, cantidad from sala_equipos
@@ -870,6 +893,9 @@ export async function guardarEditorConexiones(
         return falloConexiones('ajeno');
       }
       const equipoPorId = new Map(equipos.map((e) => [e.id, e]));
+      for (const e of p.equipos_alta) equipoPorId.set(e.temporal_id, {
+        id: e.temporal_id, sala_id: p.sala_id, articulo_id: e.articulo_id, cantidad: 1,
+      });
 
       const puertosIds = [
         ...new Set(mutaciones.flatMap((c) => [c.puerto_origen_id, c.puerto_destino_id])),
@@ -913,7 +939,7 @@ export async function guardarEditorConexiones(
       // Se excluyen del test las conexiones que el mismo lote sustituye o
       // borra. El cerrojo previo de puertos hace que esta lectura sea válida
       // también frente a otra alta concurrente sobre la misma boca.
-      if (bocasPedidas.length > 0) {
+      if (bocasPedidas.length > 0 && equiposIds.length > 0) {
         const reemplazadas = [...new Set([...cambios, ...p.bajas])];
         const ocupadas = await tx<Array<{ equipo_id: string; puerto_id: string; ordinal: number }>>`
           select b.equipo_id, b.puerto_id, b.ordinal
@@ -928,6 +954,27 @@ export async function guardarEditorConexiones(
         ) {
           return falloConexiones('invalido');
         }
+      }
+
+      // Todas las guardas preceden a las escrituras; un fallo posterior se lanza
+      // y revierte también las altas de equipo, posiciones y conexiones.
+      const equipos_ids: Record<string, string> = Object.create(null);
+      for (const e of p.equipos_alta) {
+        const articulo = catalogoPorId.get(e.articulo_id)!;
+        const [alta] = await tx<Array<{id:string}>>`insert into sala_equipos
+          (sala_id, articulo_id, nombre, cantidad, extremo, posicion_confirmada)
+          values (${p.sala_id}, ${articulo.id}, ${[articulo.marca, articulo.modelo].filter(Boolean).join(' ')},
+            1, ${extremoPorCategoria(articulo.categoria)}::extremo_cable, false) returning id`;
+        equipos_ids[e.temporal_id] = alta.id;
+      }
+      const resolver = (id: string) => equipos_ids[id] ?? id;
+      for (const c of mutaciones) {
+        c.origen_id = resolver(c.origen_id);
+        c.destino_id = resolver(c.destino_id);
+      }
+      for (const posicion of p.posiciones) {
+        await tx`update sala_equipos set esquema_x = ${posicion.x}, esquema_y = ${posicion.y}
+          where id = ${resolver(posicion.equipo_id)} and sala_id = ${p.sala_id}`;
       }
 
       if (p.bajas.length > 0) {
@@ -969,7 +1016,7 @@ export async function guardarEditorConexiones(
       const [nuevaVersion] = await tx<Array<{ diagrama_version: number }>>`
         update salas set diagrama_version = diagrama_version + 1
         where id = ${p.sala_id} returning diagrama_version`;
-      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids };
+      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids, equipos_ids };
     });
 
     if (resultado.ok) revalidarLaFicha();

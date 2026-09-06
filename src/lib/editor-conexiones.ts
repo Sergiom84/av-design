@@ -24,13 +24,15 @@ export interface AltaConexionEditor extends Omit<CambioConexionEditor, 'id'> {
 export interface EntradaGuardarEditorConexiones {
   sala_id: string;
   versionEsperada: number;
+  equipos_alta?: { temporal_id: string; articulo_id: string }[];
+  posiciones?: { equipo_id: string; x: number; y: number }[];
   altas: AltaConexionEditor[];
   cambios: CambioConexionEditor[];
   bajas: string[];
 }
 
 export type ResultadoGuardarEditorConexiones =
-  | { ok: true; version: number; ids: Record<string, string> }
+  | { ok: true; version: number; ids: Record<string, string>; equipos_ids?: Record<string, string> }
   | { ok: false; motivo: 'conflicto' | 'ajeno' | 'invalido' | 'cerrado' | 'no_existe'; detalle: string };
 
 export type GuardarEditorConexiones = (
@@ -136,5 +138,5 @@ export function prepararGuardado({
 }
 
 export function tieneCambios(entrada: EntradaGuardarEditorConexiones): boolean {
-  return entrada.altas.length + entrada.cambios.length + entrada.bajas.length > 0;
+  return entrada.altas.length + entrada.cambios.length + entrada.bajas.length + (entrada.equipos_alta?.length ?? 0) + (entrada.posiciones?.length ?? 0) > 0;
 }

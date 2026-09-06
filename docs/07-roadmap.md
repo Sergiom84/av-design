@@ -193,18 +193,22 @@ Lo que fija esta pieza:
 Queda para después: mobiliario con más referencias (atriles, armarios) cuando
 el departamento las mida, y arrastre múltiple.
 
-### R3 · Diagrama de conexiones editable
+### R3 · Diagrama de conexiones editable — IMPLEMENTADO LOCAL (7-9-2026)
 
-Encima de R2, y **distinto de R4**: R4 edita el plano en planta (dónde está
-cada equipo); R3 editaría el esquema de conexiones (qué puerto va a qué
-puerto). Arrastrar bloques, trazar una línea de puerto a puerto y que eso dé
-de alta la conexión. Es la pieza con estado interactivo más pesado. No se
-empieza hasta que R2 esté en uso: puede que con el esquema en lectura y el
-alta por formulario baste.
+En `/salas/[id]/diagrama` se añaden equipos desde el buscador del catálogo,
+se mueven bloques y se unen bocas físicas por clic o arrastre. Las flechas
+mueven el bloque enfocado; Escape cancela la conexión. Zoom y desplazamiento
+permanecen dentro del lienzo. Las conexiones antiguas sin puertos se pueden
+seleccionar desde el inspector para completarlas.
 
-Nota tras R4: el editor del plano se hizo con SVG propio y sin librería de
-diagramación, y cubre el MVP de sobra. Antes de meter React Flow para R3 hay
-que demostrar que el SVG existente no llega, no suponerlo.
+Equipos nuevos, conexiones y posiciones se guardan juntos con control de
+versión y rollback. `sala_equipos.esquema_x/y` guarda exclusivamente el orden
+visual; no modifica XYZ, mediciones ni cálculo de cable. No hay dependencia
+nueva. La sala y las plantillas siguen compartiendo equipos y conexiones.
+
+Antes de desplegar, aplicar `db/migraciones/2026-09-posiciones-esquema.sql`
+en la base de destino. Aplicada en Docker local; producción pendiente.
+Detalle y comprobaciones: `docs/13-editor-conexiones-visual.md`.
 
 ### P1 · Personas y ciclo de vida de la sala — HECHO 7-8-2026
 

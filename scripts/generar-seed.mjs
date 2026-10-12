@@ -10,6 +10,11 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sqlSincronizarPuertos } from './sql-sincronizar-puertos.mjs';
+import { leerTiradasDocumentales, sqlTiradasDocumentales } from './sql-tiradas-documentales.mjs';
+import { leerComposiciones, sqlComposiciones } from './sql-composiciones.mjs';
+import { require as tsRequire } from 'tsx/cjs/api';
+const { sqlDatosTecnicos } = tsRequire('./sql-datos-tecnicos.mts', import.meta.url);
 import {
   claveModelo,
   normalizarMarca,
@@ -251,12 +256,20 @@ const proveedoresPrecios = [...new Set(precios.map((p) => p.proveedor).filter(Bo
 // sin él. Se cruza contra el catálogo por marca y modelo normalizados, igual
 // que los precios. La columna `categoria` del CSV es informativa y NO se usa
 // para casar: un mismo modelo está en una única sección del catálogo y es esa
-// la que manda. Si el artículo no existe, no se da de alta: se avisa y se
-// salta, porque un puerto no describe un producto entero.
+// la que manda. Si una fila no se resuelve, se rechaza la generación completa:
+// omitirla equivaldría a retirar un puerto que puede estar conectado.
 // --------------------------------------------------------------------------
 const SENTIDOS = new Set(['entrada', 'salida', 'bidireccional', 'control']);
 
 const hayCsvPuertos = existsSync(data('puertos.csv'));
+if (hayCsvPuertos) {
+  const primeraLinea = readFileSync(data('puertos.csv'), 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)[0];
+  const cabecera = primeraLinea.split(';').map((columna) => columna.trim());
+  const requeridas = ['marca', 'modelo', 'categoria', 'nombre', 'total', 'sentido', 'senal', 'conector', 'orden', 'notas'];
+  if (cabecera.some((columna) => !columna) || new Set(cabecera).size !== cabecera.length || requeridas.some((columna) => !cabecera.includes(columna))) {
+    throw new Error(`Cabecera de puertos inválida; no se ha escrito seed.sql. Columnas requeridas, sin duplicados: ${requeridas.join(';')}`);
+  }
+}
 const filasPuerto = hayCsvPuertos ? leerCsv(data('puertos.csv')) : [];
 
 const puertos = [];
@@ -264,7 +277,10 @@ const informePuertos = { sinArticulo: [], invalidos: [], duplicados: [] };
 const vistosPuerto = new Set();
 
 for (const r of filasPuerto) {
-  if (!r.modelo || !r.nombre) continue;
+  if (!r.modelo || !r.nombre) {
+    informePuertos.invalidos.push('Fila de puerto sin modelo o nombre');
+    continue;
+  }
 
   const marca = normalizarMarca(r.marca);
   const modelo = normalizarModelo(r.marca, r.modelo);
@@ -279,6 +295,13 @@ for (const r of filasPuerto) {
 
   const sentido = (r.sentido || '').toLowerCase();
   const senal = (r.senal || '').toLowerCase();
+  const total = Number(String(r.total).replace(',', '.'));
+  const orden = r.orden === '' ? null : Number(r.orden);
+  const enteroPostgres = (valor) => Number.isSafeInteger(valor) && valor >= -2147483648 && valor <= 2147483647;
+  if (!enteroPostgres(total) || total < 1 || (orden !== null && !enteroPostgres(orden))) {
+    informePuertos.invalidos.push(`${rotulo}: total u orden inválido`);
+    continue;
+  }
   if (!SENTIDOS.has(sentido)) {
     informePuertos.invalidos.push(`${rotulo}: sentido '${r.sentido}' no válido`);
     continue;
@@ -302,13 +325,16 @@ for (const r of filasPuerto) {
     modelo: articulo.modelo,
     categoria: articulo.categoria,
     nombre: r.nombre,
-    total: Math.max(1, Math.round(Number(String(r.total || '1').replace(',', '.')) || 1)),
+    total,
     sentido,
     senal,
     conector: r.conector || null,
     orden: r.orden === '' || r.orden == null ? '' : r.orden,
     notas: r.notas || null,
   });
+}
+if (Object.values(informePuertos).some((filas) => filas.length)) {
+  throw new Error(`CSV de puertos inválido; no se ha escrito seed.sql:\n${Object.entries(informePuertos).flatMap(([grupo, filas]) => filas.map((fila) => `${grupo}: ${fila}`)).join('\n')}`);
 }
 
 // --------------------------------------------------------------------------
@@ -419,15 +445,7 @@ const montajePlantilla = leerSiExiste('plantillas-montaje.csv').map((r) => ({
   notas: r.notas || null,
 }));
 
-const tiradasPlantilla = leerSiExiste('plantillas-tiradas.csv').map((r) => ({
-  plantilla: nombrePlantilla(r.tipologia, r.aforo),
-  origen: categoriaCanonica(r.origen_categoria),
-  destino: categoriaCanonica(r.destino_categoria),
-  senal: SENALES.has(r.senal) ? r.senal : 'otro',
-  ruta: r.ruta || null,
-  orden: Number(r.orden) || 0,
-  notas: r.notas || null,
-}));
+const tiradasPlantilla = leerTiradasDocumentales(readFileSync(data('plantillas-tiradas.csv'),'utf8'));
 
 // --------------------------------------------------------------------------
 // 4 · volcado
@@ -635,31 +653,7 @@ if (hayCsvPuertos) {
     `-- Puertos: ${puertos.length} de ${articulosConPuertos.size} artículos (data/puertos.csv)`,
   );
 
-  // Mismo criterio que en precios: los CSV mandan sobre lo suyo y su parte se
-  // regenera entera, para que quitar una fila del CSV no deje un puerto
-  // huérfano. Lo escrito desde la aplicación lleva fuente = 'app' y no se toca.
-  sql.push('-- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.');
-  sql.push("delete from puertos where fuente = 'csv';");
-  sql.push('');
-
-  // txt('') devuelve el literal `null`, que aquí no vale: un artículo sin
-  // marca hay que compararlo contra la cadena vacía, no contra null.
-  const dondeArticulo = (p) =>
-    `coalesce(marca, '') = ${p.marca ? txt(p.marca) : "''"} and modelo = ${txt(p.modelo)} ` +
-    `and categoria = ${txt(p.categoria)}`;
-
-  for (const p of puertos) {
-    sql.push(
-      `insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)\n` +
-        `select a.id, ${txt(p.nombre)}, ${p.total}, ${txt(p.sentido)}::sentido_puerto, ` +
-        `${txt(p.senal)}::senal, ${txt(p.conector)}, ${num(p.orden)}, ${txt(p.notas)}, 'csv'\n` +
-        `from articulos a where ${dondeArticulo(p)}\n` +
-        // Después del borrado de arriba, el único choque posible es contra un
-        // puerto dado de alta desde la aplicación. Ese manda: alguien lo miró
-        // en el equipo real. El CSV se aparta y no lo pisa.
-        `on conflict (articulo_id, nombre) do nothing;`,
-    );
-  }
+  sql.push(sqlSincronizarPuertos(puertos));
   sql.push('');
 }
 
@@ -873,30 +867,7 @@ where pa.plantilla_id = ps.id
   sql.push('');
 }
 
-if (tiradasPlantilla.length) {
-  sql.push(`-- Tiradas tipo de plantilla (${tiradasPlantilla.length})`);
-  for (const t of tiradasPlantilla) {
-    // `not exists` sobre la propia tirada y no sobre la plantilla entera: así
-    // añadir una tirada nueva al CSV la siembra sin duplicar las de antes.
-    sql.push(
-      `insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
-select ps.id, o.id, d.id, ${txt(t.senal)}::senal,
-       ${t.ruta ? `'${t.ruta}'::ruta_cable` : 'null'}, ${t.orden}, ${txt(t.notas)}
-from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = ${txt(t.origen)}
-join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = ${txt(t.destino)}
-where ps.nombre = ${txt(t.plantilla)}
-  and not exists (
-    select 1 from plantilla_conexiones pc
-    where pc.plantilla_id = ps.id
-      and pc.origen_linea_id = o.id
-      and pc.destino_linea_id = d.id
-      and pc.senal = ${txt(t.senal)}::senal
-  );`,
-    );
-  }
-  sql.push('');
-}
+sql.push(sqlTiradasDocumentales(tiradasPlantilla));
 
 sql.push('-- Enlaza cada línea de plantilla con el artículo del catálogo cuando el modelo coincide');
 sql.push(`update plantilla_articulos pa
@@ -906,6 +877,23 @@ where pa.articulo_id is null
   and pa.modelo_texto is not null
   and upper(trim(coalesce(a.marca,'') || ' ' || a.modelo)) = upper(trim(pa.modelo_texto));`);
 sql.push('');
+if (existsSync(data('fichas-tecnicas.csv'))) {
+  const lineasFicha = readFileSync(data('fichas-tecnicas.csv'), 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/);
+  const cabecera = lineasFicha[0].split(';').map((c) => c.trim());
+  const requeridas = ['marca', 'modelo', 'clave', 'concepto', 'tipo', 'estado', 'valor_json', 'fuente_url', 'documento', 'apartado', 'consultado_en', 'puerto_nombre', 'puerto_fuente'];
+  if (cabecera.some((c) => !c) || new Set(cabecera).size !== cabecera.length || requeridas.some((c) => !cabecera.includes(c))) {
+    throw new Error('Cabecera de fichas técnicas inválida; no se ha escrito seed.sql');
+  }
+  for (const [indice, linea] of lineasFicha.entries()) {
+    if (indice > 0 && linea.trim() && linea.split(';').length !== cabecera.length) {
+      throw new Error(`Ficha técnica fila ${indice + 1}: número de columnas incorrecto; no se ha escrito seed.sql`);
+    }
+  }
+  sql.push(sqlDatosTecnicos(leerCsv(data('fichas-tecnicas.csv')), catalogoPorClave, puertos));
+}
+if (existsSync(data('composiciones.csv'))) {
+  sql.push(sqlComposiciones(leerComposiciones(readFileSync(data('composiciones.csv'), 'utf8'))));
+}
 sql.push('commit;');
 
 const salida = join(raiz, 'db', 'seed.sql');

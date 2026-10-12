@@ -175,7 +175,8 @@ export function longitudDePared(
   return pared === 'norte' || pared === 'sur' ? sala.largo_m : sala.ancho_m;
 }
 
-export interface TomaBorrador {
+export interface TomaBorrador extends Pick<TomaRed,
+  'capacidad_documentada' | 'bocas' | 'codigo_referencia' | 'codigo_confirmado' | 'esquema_x' | 'esquema_y'> {
   id: string;
   codigo: string;
   ubicacion: string | null;
@@ -321,16 +322,16 @@ export function borradorDesde(
       es_nuevo: false,
     })),
     tomas: tomas.map((t) => {
-      // Situada o no situada, sin estados intermedios: una x sin y no dibuja
-      // ninguna roseta y no puede guardarse.
-      const situada = t.x_m != null && t.y_m != null;
       return {
+        capacidad_documentada: t.capacidad_documentada, bocas: t.bocas,
+        codigo_referencia: t.codigo_referencia, codigo_confirmado: t.codigo_confirmado,
+        esquema_x: t.esquema_x, esquema_y: t.esquema_y,
         id: t.id,
         codigo: t.codigo,
         ubicacion: t.ubicacion,
-        x_m: situada ? t.x_m : null,
-        y_m: situada ? t.y_m : null,
-        z_m: situada ? (t.z_m ?? 0) : null,
+        x_m: t.x_m,
+        y_m: t.y_m,
+        z_m: t.z_m,
         notas: t.notas,
       };
     }),
@@ -418,6 +419,9 @@ export function entradaCroquisDe(
     })),
     conexiones,
     tomas: borrador.tomas.map((t) => ({
+      capacidad_documentada: t.capacidad_documentada, bocas: t.bocas,
+      codigo_referencia: t.codigo_referencia, codigo_confirmado: t.codigo_confirmado,
+      esquema_x: t.esquema_x, esquema_y: t.esquema_y,
       id: t.id,
       sala_id: sala.id,
       codigo: t.codigo,
@@ -607,7 +611,7 @@ export function desplazarToma(
   return moverToma(
     borrador,
     id,
-    { ...desplazado({ x_m: t.x_m, y_m: t.y_m }, paso, opciones), z_m: t.z_m ?? 0 },
+    { ...desplazado({ x_m: t.x_m, y_m: t.y_m }, paso, opciones), z_m: t.z_m },
     { ajustar: false },
   );
 }
@@ -675,7 +679,7 @@ export function confirmarEstimadas(
 export function moverToma(
   borrador: BorradorPlano,
   id: string,
-  punto: { x_m: number; y_m: number; z_m?: number },
+  punto: { x_m: number; y_m: number; z_m?: number | null },
   { ajustar = true, paso = PASO_REJILLA_M }: { ajustar?: boolean; paso?: number } = {},
 ): BorradorPlano {
   const tomas = borrador.tomas.map((t) => {
@@ -684,11 +688,11 @@ export function moverToma(
       {
         x_m: ajustar ? ajustarARejilla(punto.x_m, paso) : punto.x_m,
         y_m: ajustar ? ajustarARejilla(punto.y_m, paso) : punto.y_m,
-        z_m: punto.z_m ?? t.z_m ?? 0,
       },
       borrador,
     );
-    return { ...t, ...dentro };
+    const altura = punto.z_m === undefined ? t.z_m : punto.z_m;
+    return { ...t, ...dentro, z_m: altura === null ? null : limitar(altura, 0, borrador.alto_m) };
   });
   return { ...borrador, tomas };
 }
@@ -701,20 +705,17 @@ export function editarToma(
   const tomas = borrador.tomas.map((t) => {
     if (t.id !== id) return t;
     const combinado = { ...t, ...cambios };
-    // Una roseta puede volver a quedarse sin situar: borrar la casilla la
-    // saca del plano sin borrar la roseta, que sigue existiendo en la sala.
-    // Se van las tres coordenadas juntas: una z suelta sin x ni y no es una
-    // altura medida, es el resto de una posición borrada, y el servidor
-    // rechaza las coordenadas a medias.
-    if (combinado.x_m == null || combinado.y_m == null) {
+    // Borrar expresamente un eje retira la posición completa. Mientras se
+    // rellenan las casillas se conserva el borrador parcial, sin inventar Z.
+    if (Object.values(cambios).some((valor) => valor === null)) {
       return { ...combinado, x_m: null, y_m: null, z_m: null };
     }
-    combinado.z_m = combinado.z_m ?? 0;
-    const dentro = limitarALaSala(
-      { x_m: combinado.x_m, y_m: combinado.y_m, z_m: combinado.z_m ?? 0 },
-      borrador,
-    );
-    return { ...combinado, ...dentro };
+    return {
+      ...combinado,
+      x_m: combinado.x_m === null ? null : limitar(combinado.x_m, 0, borrador.largo_m),
+      y_m: combinado.y_m === null ? null : limitar(combinado.y_m, 0, borrador.ancho_m),
+      z_m: combinado.z_m === null ? null : limitar(combinado.z_m, 0, borrador.alto_m),
+    };
   });
   return { ...borrador, tomas };
 }
@@ -1380,7 +1381,8 @@ export function cambiarMedidasSala(
     tomas: base.tomas.map((t) =>
       t.x_m == null || t.y_m == null
         ? t
-        : { ...t, ...limitarALaSala({ x_m: t.x_m, y_m: t.y_m, z_m: t.z_m ?? 0 }, base) },
+        : { ...t, ...limitarALaSala({ x_m: t.x_m, y_m: t.y_m }, base),
+          z_m: t.z_m === null ? null : limitar(t.z_m, 0, base.alto_m) },
     ),
     // Encoger la sala acorta sus paredes: la puerta se arrastra para que el
     // hueco siga cabiendo, igual que un equipo no se queda en la calle.
@@ -1494,6 +1496,9 @@ export interface PatchEquipoPlano {
   z_m: number;
   posicion_confirmada: boolean;
   rotacion_grados: number;
+  /** Omitido conserva el valor; toma nula elimina la asignación. */
+  extremo?: Extremo;
+  toma_red_id?: string | null;
 }
 
 /**
@@ -1648,10 +1653,12 @@ export function construirPatch(
         a.y_m !== e.y_m ||
         a.z_m !== e.z_m ||
         a.posicion_confirmada !== e.posicion_confirmada ||
-        a.rotacion_grados !== e.rotacion_grados
+        a.rotacion_grados !== e.rotacion_grados ||
+        a.extremo !== e.extremo ||
+        a.toma_red_id !== e.toma_red_id
       );
     })
-    .map(geometriaEquipo);
+    .map((e) => ({ ...geometriaEquipo(e), extremo: e.extremo, toma_red_id: e.toma_red_id }));
 
   const geometriaMueble = (m: MuebleBorrador): PatchMueblePlano => ({
     id: m.id,

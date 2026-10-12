@@ -158,12 +158,12 @@ export function resumenCicloVida(entrada: {
     {
       clave: 'recepciones',
       titulo: 'Recepción de material',
-      hecho: recepciones.length > 0,
+      hecho: false,
       detalle:
         recepciones.length > 0
           ? recepciones
               .map((r) => conQuien(r.quien, r.fecha) + (r.referencia ? ` (${r.referencia})` : ''))
-              .join(' · ')
+              .join(' · ') + ' · Registros históricos: no acreditan recepción completa.'
           : 'Ningún pedido recibido para esta sala.',
     },
     {

@@ -37,12 +37,19 @@ import type {
  * base de datos. Es estructural, así que la salida real encaja tal cual.
  */
 export interface FaltaDeSala {
+  bloqueoComercial?: string | null;
   faltantes: LineaFaltante[];
   grupos: GrupoProveedor[];
   /** Nombres de los equipos de la sala sin referencia de catálogo. */
   sinCatalogar: string[];
   reservas: Array<Pick<Reserva, 'articulo_id' | 'cantidad' | 'estado'>>;
   disponibilidad: Map<string, Disponibilidad>;
+}
+
+export interface HuecoTecnicoMontaje {
+  clave: string;
+  nivel: 'error' | 'aviso' | 'pendiente';
+  causa: string;
 }
 
 export interface EntradaRevision {
@@ -57,6 +64,11 @@ export interface EntradaRevision {
   /** Nulo cuando la sala no existe o no se ha podido resolver el almacén. */
   falta: FaltaDeSala | null;
   cargas: Array<Pick<Carga, 'estado'>>;
+  /**
+   * Huecos de la revisión técnica L4. No es un segundo semáforo: degradan
+   * los puntos de catálogo, equipamiento y conexiones que ya existen.
+   */
+  avisosTecnicos?: HuecoTecnicoMontaje[];
 }
 
 /**
@@ -86,7 +98,7 @@ export function revisarMontaje(entrada: EntradaRevision): PuntoMontaje[] {
   const { sala, equipos, conexiones, resultados, filasCable, falta, cargas } =
     entrada;
 
-  return [
+  return aplicarHuecosTecnicos([
     puntoMedidas(sala),
     puntoMesa(sala),
     puntoEquipamiento(equipos),
@@ -99,7 +111,45 @@ export function revisarMontaje(entrada: EntradaRevision): PuntoMontaje[] {
     puntoMaterial(falta),
     puntoReservas(falta),
     puntoCarga(cargas),
-  ];
+  ], entrada.avisosTecnicos);
+}
+
+/**
+ * Ficha ausente, cero conexiones, posición sin confirmar o cable corto
+ * impiden el verde. No se añaden puntos ni se toca material, reservas o carga.
+ */
+function aplicarHuecosTecnicos(
+  puntos: PuntoMontaje[],
+  avisos: HuecoTecnicoMontaje[] | undefined,
+): PuntoMontaje[] {
+  if (!avisos?.length) return puntos;
+  const impide = (aviso: HuecoTecnicoMontaje) => aviso.nivel === 'pendiente' || aviso.nivel === 'error';
+  const fichas = avisos.filter((a) => a.clave.startsWith('ficha_sin_documentar') && impide(a));
+  const posiciones = avisos.filter((a) => a.clave === 'posicion_sin_confirmar' && impide(a));
+  const sinConexiones = avisos.filter((a) => a.clave === 'sin_conexiones' && impide(a));
+  const cableCorto = avisos.filter((a) =>
+    (a.clave.startsWith('cable_comercial_insuficiente') || a.clave.startsWith('cable_insuficiente'))
+    && (a.nivel === 'aviso' || a.nivel === 'pendiente' || a.nivel === 'error'));
+
+  return puntos.map((p) => {
+    if (p.clave === 'catalogo' && p.estado === 'listo' && fichas.length > 0) {
+      return {
+        ...p,
+        estado: 'aviso',
+        detalle: `${fichas.length} ${plural(fichas.length, 'referencia', 'referencias')} sin ficha técnica documentada. Sin datos no se acredita compatibilidad.`,
+      };
+    }
+    if (p.clave === 'equipamiento' && p.estado === 'listo' && posiciones.length > 0) {
+      return { ...p, estado: 'aviso', detalle: posiciones[0].causa };
+    }
+    if (p.clave === 'conexiones' && (p.estado === 'listo' || p.estado === 'no_aplica') && sinConexiones.length > 0) {
+      return { ...p, estado: 'aviso', detalle: sinConexiones[0].causa };
+    }
+    if (p.clave === 'cable' && p.estado === 'listo' && cableCorto.length > 0) {
+      return { ...p, estado: 'aviso', detalle: cableCorto[0].causa };
+    }
+    return p;
+  });
 }
 
 // ------------------------------------------------------------------- geometría
@@ -387,6 +437,7 @@ function puntoCompatibilidad(filas: FilaCable[]): PuntoMontaje {
 // -------------------------------------------------------------------- material
 
 function puntoMaterial(falta: FaltaDeSala | null): PuntoMontaje {
+  if (falta?.bloqueoComercial) return { clave: 'material', titulo: 'Material contra almacén', estado: 'bloqueo', detalle: falta.bloqueoComercial };
   if (!falta) {
     return {
       clave: 'material',
@@ -425,6 +476,7 @@ function puntoMaterial(falta: FaltaDeSala | null): PuntoMontaje {
  * esta obra. Sin reserva, otra obra se lo lleva antes de montar.
  */
 function puntoReservas(falta: FaltaDeSala | null): PuntoMontaje {
+  if (falta?.bloqueoComercial) return { clave: 'reservas', titulo: 'Material reservado', estado: 'bloqueo', detalle: falta.bloqueoComercial };
   if (!falta || falta.faltantes.length === 0) {
     return {
       clave: 'reservas',
@@ -441,6 +493,11 @@ function puntoReservas(falta: FaltaDeSala | null): PuntoMontaje {
   }
 
   const total = falta.faltantes.length;
+  if (falta.faltantes.some((l) => (l.servido ?? 0) > 0)
+    && falta.faltantes.every((l) => (reservado.get(l.articulo_id) ?? 0) + (l.servido ?? 0) >= l.cantidad)) {
+    return { clave: 'reservas', titulo: 'Material reservado', estado: 'listo',
+      detalle: 'Material cubierto entre las reservas activas y lo enviado a esta sala.' };
+  }
   const cubiertas = falta.faltantes.filter(
     (l) => (reservado.get(l.articulo_id) ?? 0) >= l.cantidad,
   ).length;

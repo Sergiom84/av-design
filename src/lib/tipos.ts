@@ -72,6 +72,23 @@ export interface BocaPuerto {
   ordinal: number;
 }
 
+export type ExtremoConexion =
+  | ({ tipo: 'equipo' } & BocaPuerto)
+  | { tipo: 'roseta'; toma_boca_id: string };
+
+export type DetalleExtremosConexion =
+  | { estado: 'legacy' }
+  | { estado: 'completo'; origen: ExtremoConexion; destino: ExtremoConexion };
+
+export interface TomaRedBoca {
+  id: string;
+  toma_red_id: string;
+  ordinal: number;
+  etiqueta: string | null;
+  senal: Senal;
+  conector: string;
+}
+
 export interface Punto {
   x_m: number;
   y_m: number;
@@ -194,8 +211,8 @@ export interface LineaPlantilla {
 export interface TiradaPlantilla {
   id: string;
   plantilla_id: string;
-  origen_linea_id: string;
-  destino_linea_id: string;
+  origen_linea_id: string | null;
+  destino_linea_id: string | null;
   /** Ya resueltos, para poder pintarlos sin otra consulta. */
   origen: string;
   destino: string;
@@ -272,6 +289,12 @@ export interface TomaRed {
   sala_id: string;
   /** El número o la etiqueta de la roseta, tal cual está serigrafiada. */
   codigo: string;
+  codigo_referencia: string | null;
+  codigo_confirmado: boolean;
+  capacidad_documentada: number | null;
+  bocas: TomaRedBoca[];
+  esquema_x: number | null;
+  esquema_y: number | null;
   ubicacion: string | null;
   /** Posición de la roseta, si se conoce. Hoy es documental. */
   x_m: number | null;
@@ -320,6 +343,7 @@ export interface EquipoEnSala {
   rotacion_grados: number;
   /** En qué roseta de la sala pincha este equipo, si pincha en alguna. */
   toma_red_id?: string | null;
+  toma_red_conexion_id?: string | null;
   /**
    * De qué línea de plantilla salió. Distingue lo heredado de lo añadido a
    * mano y es lo que impide copiar dos veces la misma plantilla.
@@ -469,14 +493,21 @@ export function puertaMedida(p: {
 
 export interface Conexion {
   id: string;
+  /** Brida asignada por Postgres. Ausente solamente en borradores no guardados. */
+  etiqueta_cable?: string | null;
   sala_id: string;
-  origen_id: string;
-  destino_id: string;
+  origen_id: string | null;
+  destino_id: string | null;
+  detalle: DetalleExtremosConexion;
   articulo_cable_id: string | null;
   senal: Senal;
   ruta: Ruta | null;
-  /** Si se rellena, manda sobre el cálculo. */
+  /** Si se rellena, manda sobre el cálculo. Nunca sustituye longitud_utilizable_m. */
   longitud_manual_m: number | null;
+  /** Decisión comercial de la tirada. Ausente en fixtures puros = legado adicional. */
+  estado_suministro?: 'incluido' | 'adicional' | 'por_determinar';
+  cable_suministrado_id?: string | null;
+  decision_heredada?: boolean;
   notas: string | null;
   /**
    * De qué puerto sale y a qué puerto entra. Opcionales: hay conexiones dadas
@@ -487,7 +518,7 @@ export interface Conexion {
   /** Nulos = conexión histórica todavía sin boca física detallada. */
   puerto_origen_ordinal?: number | null;
   puerto_destino_ordinal?: number | null;
-  /** Orden de alta. Es lo que fija el correlativo del identificador de cable. */
+  /** Orden de presentación y referencia del backfill histórico. */
   creado_en?: string | null;
   /** Puntos medidos de la ruta, en el orden físico desde origen a destino. */
   puntos_paso?: PuntoPasoCable[];
@@ -501,6 +532,8 @@ export interface PuntoPasoCable extends Punto {
 
 /** Holguras y márgenes configurables. Se guardan en la tabla `parametros`. */
 export interface ParametrosCable {
+  /** Ausente hasta que el departamento documente el criterio de rosetas. */
+  holgura_roseta: number | null;
   /** Holgura en metros por tipo de extremo. */
   holguras: Record<Extremo, number>;
   /** Margen de seguridad sobre el total, en tanto por uno. 0 = sin margen. */
@@ -512,6 +545,7 @@ export interface ParametrosCable {
 }
 
 export const PARAMETROS_POR_DEFECTO: ParametrosCable = {
+  holgura_roseta: null,
   holguras: {
     pantalla: 0.35, // criterio del departamento: entre 20 y 50 cm
     proyector: 0.1,
@@ -681,6 +715,8 @@ export interface Pedido {
   referencia: string | null;
   estado: EstadoPedido;
   fecha: string | null;
+  entrega_prevista?: string | null;
+  ubicacion_prevista_id?: string | null;
   notas: string | null;
 }
 
@@ -696,6 +732,8 @@ export interface LineaPedido {
   precio_unitario: number | null;
   /** Se puede presupuestar con él; no se puede pedir. */
   precio_orientativo: boolean;
+  comprado_en?: string | null;
+  comprado_por?: string | null;
   notas: string | null;
 }
 

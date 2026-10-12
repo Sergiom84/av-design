@@ -1,5 +1,8 @@
 import 'server-only';
+import type { Sql, TransactionSql } from 'postgres';
+import { leerDetalleConexion, leerTomasRed } from './lectura-extremos';
 import { sql } from './db';
+import { exigirEtiquetaCable } from './cable-schedule';
 import { esUuid } from './uuid';
 import {
   Articulo,
@@ -93,15 +96,15 @@ function aSala(f: Fila): Sala {
   };
 }
 
-export async function listarArticulos(tipo?: Articulo['tipo']): Promise<Articulo[]> {
+export async function listarArticulos(tipo?: Articulo['tipo'], cliente:Sql|TransactionSql=sql): Promise<Articulo[]> {
   const filas = tipo
-    ? await sql<Fila[]>`
+    ? await cliente<Fila[]>`
         select a.*, p.nombre as proveedor
         from articulos a
         left join proveedores p on p.id = a.proveedor_id
         where a.activo and a.tipo = ${tipo}
         order by a.unidades_instaladas desc nulls last, a.modelo`
-    : await sql<Fila[]>`
+    : await cliente<Fila[]>`
         select a.*, p.nombre as proveedor
         from articulos a
         left join proveedores p on p.id = a.proveedor_id
@@ -365,6 +368,18 @@ export async function obtenerArticulo(id: string): Promise<Articulo | null> {
   return f ? aArticulo(f) : null;
 }
 
+/** Referencias concretas, no el catálogo entero. Lo usa el cálculo de metros de una sala. */
+export async function articulosPorIds(ids: string[]): Promise<Articulo[]> {
+  const unicos = [...new Set(ids.filter(Boolean))];
+  if (unicos.length === 0) return [];
+  const filas = await sql<Fila[]>`
+    select a.*, p.nombre as proveedor
+    from articulos a
+    left join proveedores p on p.id = a.proveedor_id
+    where a.id in ${sql(unicos)}`;
+  return filas.map(aArticulo);
+}
+
 export interface PrecioOfertado {
   presupuesto: string;
   /** 'final' es una oferta real de proveedor. 'orientativo' es una referencia. */
@@ -455,11 +470,11 @@ const aPuerto = (f: Fila): Puerto => ({
  * Los puertos de varios artículos de golpe. Es lo que necesita la página de la
  * sala: una consulta para todo el equipamiento en vez de una por equipo.
  */
-export async function puertosDeArticulos(ids: string[]): Promise<Puerto[]> {
+export async function puertosDeArticulos(ids: string[], consulta: Sql | TransactionSql = sql): Promise<Puerto[]> {
   if (ids.length === 0) return [];
-  const filas = await sql<Fila[]>`
+  const filas = await consulta<Fila[]>`
     select * from puertos
-    where articulo_id in ${sql(ids)}
+    where articulo_id in ${consulta(ids)}
     order by articulo_id, orden nulls last, nombre`;
   return filas.map(aPuerto);
 }
@@ -564,20 +579,26 @@ export async function listarPlantillas(): Promise<
 export async function tiradasDePlantillas(): Promise<TiradaPlantilla[]> {
   const filas = await sql<Fila[]>`
     select pc.*,
-           coalesce(o.modelo_texto, o.categoria) as origen,
-           coalesce(d.modelo_texto, d.categoria) as destino
+           coalesce(o.modelo_texto, o.categoria, tro.codigo || ' · ' || coalesce(bro.etiqueta, 'Boca ' || bro.ordinal)) as origen,
+           coalesce(d.modelo_texto, d.categoria, trd.codigo || ' · ' || coalesce(brd.etiqueta, 'Boca ' || brd.ordinal)) as destino
     from plantilla_conexiones pc
-    join plantilla_articulos o on o.id = pc.origen_linea_id
-    join plantilla_articulos d on d.id = pc.destino_linea_id
+    left join plantilla_articulos o on o.id = pc.origen_linea_id
+    left join plantilla_articulos d on d.id = pc.destino_linea_id
+    left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = pc.id and bo.lado = 'origen'
+    left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = pc.id and bd.lado = 'destino'
+    left join plantilla_toma_red_bocas bro on bro.id = bo.toma_boca_id
+    left join plantilla_toma_red_bocas brd on brd.id = bd.toma_boca_id
+    left join plantilla_tomas_red tro on tro.id = bro.plantilla_toma_red_id
+    left join plantilla_tomas_red trd on trd.id = brd.plantilla_toma_red_id
     order by pc.plantilla_id, pc.orden, pc.creado_en`;
 
   return filas.map((f) => ({
     id: String(f.id),
     plantilla_id: String(f.plantilla_id),
-    origen_linea_id: String(f.origen_linea_id),
-    destino_linea_id: String(f.destino_linea_id),
-    origen: String(f.origen),
-    destino: String(f.destino),
+    origen_linea_id: s(f.origen_linea_id),
+    destino_linea_id: s(f.destino_linea_id),
+    origen: s(f.origen) ?? 'Origen sin documentar',
+    destino: s(f.destino) ?? 'Destino sin documentar',
     articulo_cable_id: s(f.articulo_cable_id),
     senal: f.senal as TiradaPlantilla['senal'],
     ruta: (f.ruta as TiradaPlantilla['ruta']) ?? null,
@@ -706,6 +727,7 @@ export async function obtenerSalaCabecera(id: string): Promise<Sala | null> {
 }
 
 export interface SalaCompleta {
+  suministros: import('./suministros').ContextoSuministros;
   sala: Sala;
   equipos: EquipoEnSala[];
   /** Sillas y mesas de la sala. El croquis las dibuja igual que el editor. */
@@ -725,8 +747,16 @@ export interface SalaCompleta {
   catalogoEquipos: Map<string, { marca: string | null; modelo: string; categoria: string }>;
 }
 
-export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
+export async function obtenerSala(id: string, tx?:TransactionSql): Promise<SalaCompleta | null> {
   if (!esUuid(id)) return null;
+  if(tx)return leerSalaEnInstantanea(tx,id);
+  // Una misma revisión para sala, físicos, conexiones, catálogo y suministros.
+  // READ COMMITTED permitiría ver un alta entre dos consultas del mismo lector.
+  return await sql.begin('isolation level repeatable read read only',
+    (tx) => leerSalaEnInstantanea(tx, id)) as SalaCompleta | null;
+}
+
+async function leerSalaEnInstantanea(sql: TransactionSql, id: string): Promise<SalaCompleta | null> {
   const [fila] = await sql<Fila[]>`
     select s.*, sd.nombre as sede, l.nombre as localizacion,
            p.id as proyecto_id, p.nombre as proyecto
@@ -737,12 +767,12 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles] = await Promise.all([
+  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles, filasBocasTomas] = await Promise.all([
     sql<Fila[]>`select * from sala_equipos where sala_id = ${id} order by nombre`,
     sql<Fila[]>`
       select c.*,
-             bo.puerto_id as boca_puerto_origen_id, bo.ordinal as puerto_origen_ordinal,
-             bd.puerto_id as boca_puerto_destino_id, bd.ordinal as puerto_destino_ordinal
+             bo.equipo_id as boca_equipo_origen_id, bo.toma_boca_id as boca_toma_origen_id, bo.puerto_id as boca_puerto_origen_id, bo.ordinal as puerto_origen_ordinal,
+             bd.equipo_id as boca_equipo_destino_id, bd.toma_boca_id as boca_toma_destino_id, bd.puerto_id as boca_puerto_destino_id, bd.ordinal as puerto_destino_ordinal
       from conexiones c
       left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
       left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
@@ -758,6 +788,8 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     // de Resumen tiene que dibujar exactamente lo mismo que el editor. Sin
     // esto, las sillas se veían en Diagrama y desaparecían en Resumen.
     sql<Fila[]>`select * from sala_mobiliario where sala_id = ${id} order by orden, creado_en`,
+    sql<Fila[]>`select b.* from toma_red_bocas b join tomas_red t on t.id = b.toma_red_id
+                where t.sala_id = ${id} order by b.toma_red_id, b.ordinal`,
   ]);
 
   const muebles: MuebleEnSala[] = filasMuebles.map((f) => ({
@@ -794,6 +826,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     rotacion_grados: Number(f.rotacion_grados ?? 0),
     origen_plantilla_linea_id: s(f.origen_plantilla_linea_id),
     toma_red_id: s(f.toma_red_id),
+      toma_red_conexion_id: s(f.toma_red_conexion_id),
   }));
 
   const articulos = [...new Set(equipos.map((e) => e.articulo_id).filter(Boolean))];
@@ -814,10 +847,16 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     muebles,
     conexiones: filasConexiones.map((f) => ({
       id: String(f.id),
+      etiqueta_cable: exigirEtiquetaCable(f.etiqueta_cable, f.id),
+      detalle: leerDetalleConexion(f),
       sala_id: String(f.sala_id),
-      origen_id: String(f.origen_id),
-      destino_id: String(f.destino_id),
+      origen_id: s(f.origen_id),
+      destino_id: s(f.destino_id),
       articulo_cable_id: s(f.articulo_cable_id),
+      estado_suministro: f.estado_suministro === 'incluido' || f.estado_suministro === 'por_determinar' || f.estado_suministro === 'adicional'
+        ? f.estado_suministro : 'adicional',
+      cable_suministrado_id: s(f.cable_suministrado_id),
+      decision_heredada: f.decision_heredada === true,
       senal: (f.senal as Conexion['senal']) ?? 'otro',
       ruta: (f.ruta as Conexion['ruta']) ?? null,
       longitud_manual_m: n(f.longitud_manual_m),
@@ -838,18 +877,10 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
           z_m: Number(p.z_m),
         })),
     })),
-    tomas: filasTomas.map((f) => ({
-      id: String(f.id),
-      sala_id: String(f.sala_id),
-      codigo: String(f.codigo),
-      ubicacion: s(f.ubicacion),
-      x_m: n(f.x_m),
-      y_m: n(f.y_m),
-      z_m: n(f.z_m),
-      notas: s(f.notas),
-    })),
-    puertos: await puertosDeArticulos(articulos),
+    tomas: leerTomasRed(filasTomas, filasBocasTomas),
+    puertos: await puertosDeArticulos(articulos, sql),
     catalogoEquipos,
+    suministros: await (await import('./suministros-db')).leerSuministros(sql, id),
   };
 }
 
@@ -860,8 +891,8 @@ export interface FilaParametro {
   descripcion: string | null;
 }
 
-export async function listarParametros(): Promise<FilaParametro[]> {
-  const filas = await sql<Fila[]>`select * from parametros order by clave`;
+export async function listarParametros(cliente:Sql|TransactionSql=sql): Promise<FilaParametro[]> {
+  const filas = await cliente<Fila[]>`select * from parametros order by clave`;
   return filas.map((f) => ({
     clave: String(f.clave),
     valor: Number(f.valor),
@@ -870,8 +901,8 @@ export async function listarParametros(): Promise<FilaParametro[]> {
   }));
 }
 
-export async function obtenerParametros(): Promise<ParametrosCable> {
-  const filas = await listarParametros();
+export async function obtenerParametros(cliente:Sql|TransactionSql=sql): Promise<ParametrosCable> {
+  const filas = await listarParametros(cliente);
   const mapa = new Map(filas.map((f) => [f.clave, f.valor]));
   const holguras = { ...PARAMETROS_POR_DEFECTO.holguras };
   (Object.keys(holguras) as Array<keyof typeof holguras>).forEach((k) => {
@@ -880,6 +911,7 @@ export async function obtenerParametros(): Promise<ParametrosCable> {
   });
   return {
     holguras,
+    holgura_roseta: mapa.get('holgura_roseta') ?? null,
     margen: mapa.get('margen') ?? PARAMETROS_POR_DEFECTO.margen,
     cables_por_canalizacion:
       mapa.get('cables_por_canalizacion') ??
@@ -915,3 +947,4 @@ export async function contarPanel() {
     costeOrientativo: Number(f.coste_orientativo),
   };
 }
+

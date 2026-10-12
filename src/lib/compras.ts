@@ -22,6 +22,8 @@ import type { Articulo, EquipoEnSala, EstadoPedido, UnidadMedida } from './tipos
 export type OrigenNecesidad = 'equipo' | 'cable';
 
 export interface LineaNecesidad {
+  /** Identidades comerciales; nunca inferidas desde artículo+sala. */
+  suministros?: string[];
   articulo_id: string;
   descripcion: string;
   unidad: UnidadMedida;
@@ -40,7 +42,7 @@ export interface LineaNecesidad {
  * antes de comprar.
  */
 export function necesidadDeSala(
-  equipos: Array<Pick<EquipoEnSala, 'articulo_id' | 'nombre' | 'cantidad'>>,
+  equipos: Array<Pick<EquipoEnSala, 'articulo_id' | 'nombre' | 'cantidad'> & { suministro_id?: string | null }>,
   materialCable: LineaMaterialCable[],
   articulos: Map<string, Pick<Articulo, 'marca' | 'modelo' | 'unidad'>>,
 ): LineaNecesidad[] {
@@ -74,7 +76,7 @@ export function necesidadDeSala(
   for (const e of equipos) {
     if (!e.articulo_id) continue;
     const a = articulos.get(e.articulo_id);
-    const descripcion = a ? `${a.marca ?? ''} ${a.modelo}`.trim() : e.nombre;
+    const descripcion = e.suministro_id ? e.nombre : a ? `${a.marca ?? ''} ${a.modelo}`.trim() : e.nombre;
     acumular(
       e.articulo_id,
       descripcion,
@@ -83,6 +85,10 @@ export function necesidadDeSala(
       'equipo',
       `${e.cantidad} × ${e.nombre}`,
     );
+    if (e.suministro_id) {
+      const linea = lineas.get(e.articulo_id)!;
+      linea.suministros = [...(linea.suministros ?? []), e.suministro_id];
+    }
   }
 
   for (const l of materialCable) {
@@ -96,6 +102,8 @@ export function necesidadDeSala(
 }
 
 export interface LineaFaltante extends LineaNecesidad {
+  /** Material ya salido para esta sala, descontadas las devoluciones. */
+  servido?: number;
   /** Existencias menos reservado para otras obras, en el momento de mirar. */
   disponible: number;
   /** Lo que hay que comprar. Nunca negativo: sobrar no es faltar. */
@@ -113,6 +121,7 @@ export function calcularFaltante(
   necesidad: LineaNecesidad[],
   disponible: Map<string, number>,
   reservadoParaEstaSala: Map<string, number> = new Map(),
+  servidoParaEstaSala: Map<string, number> = new Map(),
 ): LineaFaltante[] {
   return necesidad.map((l) => {
     const enAlmacen = redondear(
@@ -120,8 +129,9 @@ export function calcularFaltante(
     );
     return {
       ...l,
+      ...(servidoParaEstaSala.has(l.articulo_id) ? { servido: Math.max(0, servidoParaEstaSala.get(l.articulo_id) ?? 0) } : {}),
       disponible: enAlmacen,
-      falta: redondear(Math.max(0, l.cantidad - enAlmacen)),
+      falta: redondear(Math.max(0, l.cantidad - Math.max(0, enAlmacen) - Math.max(0, servidoParaEstaSala.get(l.articulo_id) ?? 0))),
     };
   });
 }

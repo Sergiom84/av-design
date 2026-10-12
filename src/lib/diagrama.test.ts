@@ -61,6 +61,7 @@ const conexion = (
 ): Conexion => ({
   id,
   sala_id: 'sala-1',
+  detalle: { estado: 'legacy' },
   origen_id,
   destino_id,
   articulo_cable_id: null,
@@ -68,6 +69,7 @@ const conexion = (
   ruta: null,
   longitud_manual_m: null,
   notas: null,
+  etiqueta_cable: id === 'c22' || id === 'c3' ? 'HD-1001' : 'HD-1000',
   creado_en: `2026-01-0${id.length}`,
   ...extra,
 });
@@ -95,7 +97,9 @@ function entradaTipo(): EntradaDiagrama {
     conexion('c1', 'e-caja', 'e-codec', { puerto_destino_id: 'p-codec-in' }),
     conexion('c22', 'e-codec', 'e-tv', {
       puerto_origen_id: 'p-codec-out',
+      puerto_origen_ordinal: 1,
       puerto_destino_id: 'p-tv-in',
+      puerto_destino_ordinal: 1,
     }),
   ];
   return { equipos, puertosPorArticulo: puertos, conexiones };
@@ -318,22 +322,23 @@ function entradaMixta(): EntradaDiagrama {
   ]);
   const conexiones = [
     conexion('c1', 'e-caja', 'e-codec', { senal: 'hdmi', puerto_destino_id: 'p-codec-in' }),
-    conexion('c2', 'e-caja', 'e-codec', { senal: 'red' }),
+    conexion('c2', 'e-caja', 'e-codec', { senal: 'red', etiqueta_cable: 'RED-1000' }),
     conexion('c3', 'e-codec', 'e-tv', {
       senal: 'hdmi',
       puerto_origen_id: 'p-codec-dp',
+      puerto_origen_ordinal: 1,
       puerto_destino_id: 'p-tv-in',
     }),
     conexion('c4', 'e-codec', 'e-suelto', {
-      senal: 'audio_linea',
+      senal: 'audio_linea', etiqueta_cable: 'AUD-1000',
       puerto_destino_id: 'p-alt-in',
     }),
-    conexion('c5', 'e-caja', 'e-codec', { senal: 'microfono', puerto_destino_id: 'p-codec-mic' }),
-    conexion('c6', 'e-codec', 'e-tv', { senal: 'audio_altavoz' }),
-    conexion('c7', 'e-caja', 'e-codec', { senal: 'usb' }),
-    conexion('c8', 'e-caja', 'e-codec', { senal: 'control' }),
-    conexion('c9', 'e-caja', 'e-tv', { senal: 'alimentacion' }),
-    conexion('c10', 'e-caja', 'e-tv', { senal: 'otro' }),
+    conexion('c5', 'e-caja', 'e-codec', { etiqueta_cable: 'MIC-1000', senal: 'microfono', puerto_destino_id: 'p-codec-mic' }),
+    conexion('c6', 'e-codec', 'e-tv', { etiqueta_cable: 'ALT-1000', senal: 'audio_altavoz' }),
+    conexion('c7', 'e-caja', 'e-codec', { etiqueta_cable: 'USB-1000', senal: 'usb' }),
+    conexion('c8', 'e-caja', 'e-codec', { etiqueta_cable: 'CTL-1000', senal: 'control' }),
+    conexion('c9', 'e-caja', 'e-tv', { etiqueta_cable: 'ALI-1000', senal: 'alimentacion' }),
+    conexion('c10', 'e-caja', 'e-tv', { etiqueta_cable: 'OTR-1000', senal: 'otro' }),
   ];
   return { equipos, puertosPorArticulo, conexiones };
 }
@@ -447,7 +452,7 @@ describe('construirDiagrama con filtro de señal', () => {
 
   it('las conexiones que esconde el filtro no cuentan como omitidas', () => {
     const entrada = entradaMixta();
-    entrada.conexiones.push(conexion('c11', 'e-codec', 'e-fantasma', { senal: 'red' }));
+    entrada.conexiones.push(conexion('c11', 'e-codec', 'e-fantasma', { senal: 'red', etiqueta_cable: 'RED-1000' }));
     assert.equal(construirDiagrama(entrada).omitidas, 1);
     // En vídeo, la del fantasma es de red: ni se dibuja ni se cuenta.
     assert.equal(construirDiagrama({ ...entrada, filtroSenal: 'video' }).omitidas, 0);

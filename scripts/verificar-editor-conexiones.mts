@@ -44,12 +44,8 @@ const conexion = (
   ordinal: number,
 ) => ({
   temporal_id,
-  origen_id: origen,
-  destino_id: destinoEquipo,
-  puerto_origen_id: salidaId,
-  puerto_origen_ordinal: ordinal,
-  puerto_destino_id: entradaId,
-  puerto_destino_ordinal: ordinal,
+  origen: {tipo:'equipo' as const,equipo_id:origen,puerto_id:salidaId,ordinal},
+  destino: {tipo:'equipo' as const,equipo_id:destinoEquipo,puerto_id:entradaId,ordinal},
   senal: 'hdmi' as const,
   articulo_cable_id: cableId,
   ruta: 'canaleta' as const,
@@ -82,7 +78,7 @@ try {
   const invalido = await guardarEditorConexiones({
     sala_id: salaId,
     versionEsperada: 0,
-    altas: [{ ...conexion('rota', equipos[0], equipos[1], 1), puerto_destino_ordinal: 0 }],
+    altas: [{ ...conexion('rota', equipos[0], equipos[1], 1), destino:{tipo:'equipo',equipo_id:equipos[1],puerto_id:entradaId,ordinal:0} }],
     cambios: [],
     bajas: [],
   });
@@ -97,7 +93,13 @@ try {
   });
   afirmar(alta.ok && alta.version === 1 && Boolean(alta.ids['temporal-a']), 'el alta devuelve uuid y versión nueva');
   if (!alta.ok) throw new Error('No se pudo preparar la prueba');
+  afirmar([alta.ids, alta.equipos_ids, alta.etiquetas].every(mapa => Object.getPrototypeOf(mapa) === Object.prototype),
+    'los mapas de respuesta son objetos planos serializables por las acciones de Next');
   const primeraId = alta.ids['temporal-a'];
+  const [bridaGuardada] = await sql<Array<{ etiqueta_cable: string }>>`
+    select etiqueta_cable from conexiones where id = ${primeraId}`;
+  afirmar(bridaGuardada.etiqueta_cable === 'HD-1000' && alta.etiquetas[primeraId] === bridaGuardada.etiqueta_cable,
+    'el guardado devuelve la brida confirmada por UUID para sustituir el provisional');
   const [persistida] = await sql<Array<{ bocas: number; senal: string }>>`
     select count(b.conexion_id)::int as bocas, min(c.senal::text) as senal
     from conexiones c join conexion_bocas b on b.conexion_id = c.id

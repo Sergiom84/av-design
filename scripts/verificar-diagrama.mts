@@ -217,9 +217,12 @@ async function preparar() {
     values (${plantillaAId}, ${articuloEquipoId}, 'CAJA CONEXIONES', 'TEST CAJA', 1, false,
             'caja_conexiones', null)
     returning id`;
-  await sql`
-    insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal)
-    values (${plantillaAId}, ${l2.id}, ${l1.id}, 'hdmi')`;
+  const [puerto]=await sql<Array<{id:string}>>`insert into puertos(articulo_id,nombre,sentido,senal,total) values (${articuloEquipoId},'QA DIAGRAMA','bidireccional','hdmi',1) returning id`;
+  await sql.begin(async tx=>{
+    const [c]=await tx<Array<{id:string}>>`insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal)
+      values (${plantillaAId}, ${l2.id}, ${l1.id}, 'hdmi') returning id`;
+    await tx`insert into plantilla_conexion_bocas(plantilla_conexion_id,lado,linea_id,puerto_id,ordinal) values (${c.id},'origen',${l2.id},${puerto.id},1),(${c.id},'destino',${l1.id},${puerto.id},1)`;
+  });
   await sql`
     insert into plantilla_mobiliario
       (plantilla_id, mobiliario_id, nombre, forma, largo_m, ancho_m,

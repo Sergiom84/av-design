@@ -152,6 +152,8 @@ const equipo = (
 });
 
 const toma = (id: string, x: number | null = null, y: number | null = null): TomaRed => ({
+  capacidad_documentada: null, bocas: [], codigo_referencia: null, codigo_confirmado: false,
+  esquema_x: null, esquema_y: null,
   id,
   sala_id: 'sala-1',
   codigo: id,
@@ -170,6 +172,24 @@ const base = (): BorradorPlano =>
   );
 
 describe('el borrador de partida', () => {
+  it('el patch conserva un cambio aislado de extremo en un equipo existente', () => {
+    const original = base();
+    const patch = construirPatch('sala-1', 3, original, editarEquipo(original, 'tv', { extremo: 'techo' }));
+    assert.equal(patch.equipos.length, 1);
+    assert.equal(Reflect.get(patch.equipos[0], 'extremo'), 'techo');
+    assert.equal(patch.equipos[0].x_m, original.equipos[0].x_m);
+  });
+
+  it('el patch conserva asignar y quitar una toma sin mover el equipo', () => {
+    const original = base();
+    const asignado = editarEquipo(original, 'tv', { toma_red_id: '12' });
+    const patch = construirPatch('sala-1', 3, original, asignado);
+    assert.equal(patch.equipos.length, 1);
+    assert.equal(Reflect.get(patch.equipos[0], 'toma_red_id'), '12');
+    const quitar = construirPatch('sala-1', 4, asignado, editarEquipo(asignado, 'tv', { toma_red_id: null }));
+    assert.equal(quitar.equipos.length, 1);
+    assert.equal(Reflect.get(quitar.equipos[0], 'toma_red_id'), null);
+  });
   it('copia la sala, sus equipos y sus rosetas sin tocar nada', () => {
     const b = base();
     assert.equal(b.largo_m, 4.7);
@@ -398,6 +418,33 @@ describe('confirmar las posiciones estimadas', () => {
 });
 
 describe('las rosetas', () => {
+  it('cambiar aforo o medidas no convierte una altura histórica desconocida en cero', () => {
+    const original = borradorDesde(SALA, [], [{ ...toma('parcial', 1, 2), z_m: null }]);
+    for (const cambios of [{ aforo: 12 }, { largo_m: 2, ancho_m: 1 }]) {
+      const siguiente = cambiarMedidasSala(original, cambios);
+      assert.equal(siguiente.tomas[0].z_m, null);
+      assert.equal(original.tomas[0].y_m, 2);
+    }
+    assert.equal(cambiarMedidasSala(original, { largo_m: 2, ancho_m: 1 }).tomas[0].y_m, 1);
+  });
+  it('conserva un histórico parcial al abrir y al mover sin inventar altura', () => {
+    const original = borradorDesde(SALA, [], [{ ...toma('parcial', 1, 2), z_m: null }]);
+    assert.equal(original.tomas[0].z_m, null);
+    assert.equal(moverToma(original, 'parcial', { x_m: 2, y_m: 1 }).tomas[0].z_m, null);
+    assert.equal(desplazarToma(original, 'parcial', { dx_m: 0.1, dy_m: 0 }).tomas[0].z_m, null);
+    assert.deepEqual(construirPatch('sala-1', 3, original, original).tomas, []);
+  });
+
+  it('permite introducir los tres ejes uno a uno sin borrar ni completar los restantes', () => {
+    let b = editarToma(base(), '13', { x_m: 0 });
+    assert.equal(b.tomas.find((t) => t.id === '13')!.x_m, 0);
+    assert.equal(b.tomas.find((t) => t.id === '13')!.y_m, null);
+    b = editarToma(b, '13', { y_m: 0 });
+    assert.equal(b.tomas.find((t) => t.id === '13')!.z_m, null);
+    b = editarToma(b, '13', { z_m: 0 });
+    const t = b.tomas.find((t) => t.id === '13')!;
+    assert.deepEqual([t.x_m, t.y_m, t.z_m], [0, 0, 0]);
+  });
   it('se sitúan como un equipo', () => {
     const b = moverToma(base(), '13', { x_m: 1.24, y_m: 0.31 });
     const t = b.tomas.find((x) => x.id === '13')!;

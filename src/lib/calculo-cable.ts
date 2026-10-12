@@ -22,6 +22,8 @@ import {
   Ruta,
   Sala,
 } from './tipos';
+import { resolverLadoConexion, type ContextoExtremos } from './extremos-conexion';
+import { sumaCompraCable } from './suministros';
 
 /** Recorrido horizontal ortogonal. Los cables van por bandeja o canaleta, no en diagonal. */
 function horizontalOrtogonal(a: Punto, b: Punto): number {
@@ -160,9 +162,10 @@ export function calcularConexion(
   equipos: Map<string, EquipoEnSala>,
   articulos: Map<string, Articulo>,
   parametros: ParametrosCable = PARAMETROS_POR_DEFECTO,
+  contexto: ContextoExtremos = { tomas: new Map(), puertos: new Map() },
 ): ResultadoCable | null {
-  const origen = equipos.get(conexion.origen_id);
-  const destino = equipos.get(conexion.destino_id);
+  const origen = resolverLadoConexion(conexion, 'origen', equipos, contexto, parametros);
+  const destino = resolverLadoConexion(conexion, 'destino', equipos, contexto, parametros);
   if (!origen || !destino) return null;
 
   const ruta = conexion.ruta ?? sala.ruta_por_defecto;
@@ -173,6 +176,7 @@ export function calcularConexion(
 
   if (conexion.longitud_manual_m != null) {
     const manual = conexion.longitud_manual_m;
+    if (!Number.isFinite(manual) || manual <= 0) return null;
     return {
       conexion_id: conexion.id,
       etiqueta,
@@ -190,12 +194,15 @@ export function calcularConexion(
     };
   }
 
+  if (!origen.posicion.punto || !destino.posicion.punto ||
+    origen.holgura_m == null || destino.holgura_m == null) return null;
+
   const detalle = conexion.puntos_paso?.length
     ? (() => {
         const recorrido = longitudPolilinea(
-          origen.posicion,
+          origen.posicion.punto,
           [...conexion.puntos_paso].sort((a, b) => a.orden - b.orden),
-          destino.posicion,
+          destino.posicion.punto,
         );
         return {
           ruta,
@@ -205,9 +212,9 @@ export function calcularConexion(
           recorrido_m: recorrido,
         };
       })()
-    : calcularRecorrido(origen.posicion, destino.posicion, ruta, sala);
-  const holguraOrigen = parametros.holguras[origen.extremo] ?? 0;
-  const holguraDestino = parametros.holguras[destino.extremo] ?? 0;
+    : calcularRecorrido(origen.posicion.punto, destino.posicion.punto, ruta, sala);
+  const holguraOrigen = origen.holgura_m;
+  const holguraDestino = destino.holgura_m;
   const base = detalle.recorrido_m + holguraOrigen + holguraDestino;
   const margen = base * parametros.margen;
   const longitud = redondear(base + margen);
@@ -227,6 +234,27 @@ export function calcularConexion(
     ),
     manual: false,
   };
+}
+
+/** Causas del cálculo pendiente, para que cada tirada siga siendo accionable. */
+export function diagnosticarCalculoConexion(
+  conexion: Conexion, sala: Sala, equipos: Map<string, EquipoEnSala>,
+  articulos: Map<string, Articulo>, parametros: ParametrosCable = PARAMETROS_POR_DEFECTO,
+  contexto: ContextoExtremos = { tomas: new Map(), puertos: new Map() },
+): string[] {
+  const avisos: string[] = [];
+  for (const lado of ['origen', 'destino'] as const) {
+    const extremo = resolverLadoConexion(conexion, lado, equipos, contexto, parametros);
+    if (!extremo) { avisos.push(`Extremo de ${lado} inexistente o ajeno a la sala.`); continue; }
+    if (conexion.longitud_manual_m != null) continue;
+    if (extremo.posicion.estado === 'desconocida') avisos.push(`Falta la posición completa de ${extremo.nombre} (${lado}).`);
+    if (extremo.holgura_m == null) avisos.push(`Falta configurar la holgura de roseta (${lado}).`);
+  }
+  if (conexion.longitud_manual_m != null &&
+    (!Number.isFinite(conexion.longitud_manual_m) || conexion.longitud_manual_m <= 0)) {
+    avisos.push('La longitud manual debe ser un número positivo finito.');
+  }
+  return avisos;
 }
 
 export interface LineaMaterialCable {
@@ -258,6 +286,7 @@ export function agruparMaterialCable(
 
   for (const r of resultados) {
     const conexion = porConexion.get(r.conexion_id);
+    if (!sumaCompraCable(conexion?.estado_suministro)) continue;
     const articulo = conexion?.articulo_cable_id
       ? articulos.get(conexion.articulo_cable_id)
       : undefined;

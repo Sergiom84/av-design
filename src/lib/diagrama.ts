@@ -15,7 +15,7 @@
  */
 
 import { identificadoresDeCable, ordenarConexiones } from './cable-schedule';
-import type { Conexion, EquipoEnSala, Puerto, Senal, SentidoPuerto } from './tipos';
+import type { Conexion, EquipoEnSala, Puerto, Senal, SentidoPuerto, TomaRed } from './tipos';
 
 // ---------------------------------------------------------------------
 // Medidas del dibujo, en píxeles de SVG. Un solo sitio.
@@ -149,6 +149,7 @@ export interface LineaDiagrama {
 
 export interface EscenaDiagrama {
   bloques: BloqueDiagrama[];
+  rosetas: BloqueRosetaDiagrama[];
   lineas: LineaDiagrama[];
   ancho: number;
   alto: number;
@@ -160,7 +161,18 @@ export interface EscenaDiagrama {
   omitidas: number;
 }
 
+export interface BloqueRosetaDiagrama {
+  toma_id: string;
+  etiqueta: string;
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+  bocas: { toma_boca_id: string; nombre: string; conector: string; senal: Senal; y: number; conectado: boolean }[];
+}
+
 export interface EntradaDiagrama {
+  tomas?: TomaRed[];
   equipos: EquipoEnSala[];
   /** Puertos del catálogo de los artículos presentes, indexados por artículo. */
   puertosPorArticulo: Map<string, Puerto[]>;
@@ -280,9 +292,9 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
   const puertosUsados = new Set<string>();
   const puertosUsadosLegacy = new Set<string>();
   for (const c of visibles) {
-    if (c.puerto_origen_id && c.puerto_origen_ordinal) puertosUsados.add(claveBoca(c.origen_id, c.puerto_origen_id, c.puerto_origen_ordinal));
+    if (c.origen_id && c.puerto_origen_id && c.puerto_origen_ordinal) puertosUsados.add(claveBoca(c.origen_id, c.puerto_origen_id, c.puerto_origen_ordinal));
     else if (c.puerto_origen_id) puertosUsadosLegacy.add(`${c.origen_id}:${c.puerto_origen_id}`);
-    if (c.puerto_destino_id && c.puerto_destino_ordinal) puertosUsados.add(claveBoca(c.destino_id, c.puerto_destino_id, c.puerto_destino_ordinal));
+    if (c.destino_id && c.puerto_destino_id && c.puerto_destino_ordinal) puertosUsados.add(claveBoca(c.destino_id, c.puerto_destino_id, c.puerto_destino_ordinal));
     else if (c.puerto_destino_id) puertosUsadosLegacy.add(`${c.destino_id}:${c.puerto_destino_id}`);
   }
 
@@ -348,6 +360,23 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
     x += m.ancho_bloque + m.separacion_x;
   }
 
+  const bocasRosetaUsadas = new Set(visibles.flatMap((c) => c.detalle.estado === 'completo'
+    ? [c.detalle.origen, c.detalle.destino].flatMap((e) => e.tipo === 'roseta' ? [e.toma_boca_id] : []) : []));
+  let yRoseta = m.margen;
+  const rosetas: BloqueRosetaDiagrama[] = (entrada.tomas ?? []).map((toma) => {
+    const bocas = toma.bocas.filter((b) => !soloConectados || bocasRosetaUsadas.has(b.id)).sort((a, b) => a.ordinal - b.ordinal);
+    const alto = m.alto_cabecera + Math.max(1, bocas.length) * m.alto_fila + m.alto_pie;
+    const bloque: BloqueRosetaDiagrama = {
+      toma_id: toma.id, etiqueta: toma.codigo, x, y: yRoseta, ancho: m.ancho_bloque, alto,
+      bocas: bocas.map((b, i) => ({ toma_boca_id: b.id, nombre: b.etiqueta ?? `Boca ${b.ordinal}`,
+        conector: b.conector, senal: b.senal, y: yRoseta + m.alto_cabecera + (i + 0.5) * m.alto_fila,
+        conectado: bocasRosetaUsadas.has(b.id) })),
+    };
+    yRoseta += alto + m.separacion_y;
+    return bloque;
+  });
+  if (rosetas.length) altoTotal = Math.max(altoTotal, yRoseta - m.separacion_y + m.margen);
+
   // --- líneas ---------------------------------------------------------------
   const lineas: LineaDiagrama[] = [];
   let omitidas = 0;
@@ -357,9 +386,26 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
   let carril = 0;
 
   for (const c of ordenarConexiones(visibles)) {
-    const bOrigen = bloquePorEquipo.get(c.origen_id);
-    const bDestino = bloquePorEquipo.get(c.destino_id);
-    if (!bOrigen || !bDestino) {
+    const ancla = (lado: 'origen' | 'destino') => {
+      if (c.detalle.estado === 'completo' && c.detalle[lado].tipo === 'roseta') {
+        const extremo = c.detalle[lado];
+        const bloque = rosetas.find((b) => b.bocas.some((f) => f.toma_boca_id === extremo.toma_boca_id));
+        const fila = bloque?.bocas.find((f) => f.toma_boca_id === extremo.toma_boca_id);
+        return bloque && fila ? { x: bloque.x - m.largo_conector, y: fila.y } : null;
+      }
+      const id = c[`${lado}_id`];
+      const bloque = id === null ? undefined : bloquePorEquipo.get(id);
+      if (!bloque || id === null) return null;
+      const puertoId = c[`puerto_${lado}_id`];
+      const ordinal = c[`puerto_${lado}_ordinal`];
+      const fila = puertoId && ordinal != null ? filaPorBoca.get(claveBoca(id, puertoId, ordinal)) : undefined;
+      if (c.detalle.estado === 'completo' && !fila) return null;
+      return { x: lado === 'origen' ? bloque.x + bloque.ancho + m.largo_conector : bloque.x - m.largo_conector,
+        y: fila?.fila.y ?? bloque.y + m.alto_cabecera / 2 };
+    };
+    const origen = ancla('origen');
+    const destino = ancla('destino');
+    if (!origen || !destino) {
       omitidas += 1;
       continue;
     }
@@ -367,17 +413,8 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
     // El cable sale del lado derecho del origen y entra por el izquierdo del
     // destino. Si el puerto se conoce, a la altura de su fila; si no, a media
     // cabecera, que se lee como "del equipo en general".
-    const fOrigen = c.puerto_origen_id
-      ? filaPorBoca.get(claveBoca(c.origen_id, c.puerto_origen_id, c.puerto_origen_ordinal ?? 1))
-      : undefined;
-    const fDestino = c.puerto_destino_id
-      ? filaPorBoca.get(claveBoca(c.destino_id, c.puerto_destino_id, c.puerto_destino_ordinal ?? 1))
-      : undefined;
-
-    const x1 = bOrigen.x + bOrigen.ancho + m.largo_conector;
-    const y1 = fOrigen?.fila.y ?? bOrigen.y + m.alto_cabecera / 2;
-    const x2 = bDestino.x - m.largo_conector;
-    const y2 = fDestino?.fila.y ?? bDestino.y + m.alto_cabecera / 2;
+    const { x: x1, y: y1 } = origen;
+    const { x: x2, y: y2 } = destino;
 
     carril += 1;
     const carrilX =
@@ -417,8 +454,9 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
 
   return {
     bloques,
+    rosetas,
     lineas,
-    ancho: anchoTotal,
+    ancho: rosetas.length ? x + m.ancho_bloque + m.margen : anchoTotal,
     alto: Math.max(altoTotal, m.margen * 2),
     omitidas,
   };

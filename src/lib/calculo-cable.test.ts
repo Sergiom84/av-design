@@ -171,6 +171,7 @@ describe('longitud de la tirada', () => {
   const conexion: Conexion = {
     id: 'x1',
     sala_id: 's1',
+    detalle: { estado: 'legacy' },
     origen_id: PANTALLA.id,
     destino_id: CAJA.id,
     articulo_cable_id: HDMI.id,
@@ -279,6 +280,7 @@ describe('material a comprar', () => {
     const conexiones: Conexion[] = Array.from({ length: 3 }, (_, i) => ({
       id: `c${i}`,
       sala_id: 's1',
+      detalle: { estado: 'legacy' },
       origen_id: PANTALLA.id,
       destino_id: CAJA.id,
       articulo_cable_id: CAT6A.id,
@@ -305,6 +307,7 @@ describe('material a comprar', () => {
       {
         id: 'c1',
         sala_id: 's1',
+        detalle: { estado: 'legacy' },
         origen_id: PANTALLA.id,
         destino_id: CAJA.id,
         articulo_cable_id: HDMI.id,
@@ -316,6 +319,7 @@ describe('material a comprar', () => {
       {
         id: 'c2',
         sala_id: 's1',
+        detalle: { estado: 'legacy' },
         origen_id: PANTALLA.id,
         destino_id: CAJA.id,
         articulo_cable_id: HDMI.id,
@@ -340,6 +344,7 @@ describe('material a comprar', () => {
     const conexion: Conexion = {
       id: 'c1',
       sala_id: 's1',
+      detalle: { estado: 'legacy' },
       origen_id: PANTALLA.id,
       destino_id: CAJA.id,
       articulo_cable_id: null,
@@ -355,6 +360,20 @@ describe('material a comprar', () => {
     );
     assert.match(lineas[0].descripcion, /Sin cable asignado/);
     assert.equal(lineas[0].coste_estimado, null);
+  });
+
+  test('incluido y por_determinar no suman compra; adicional sí', () => {
+    const base: Conexion = {
+      id: 'c1', sala_id: 's1', detalle: { estado: 'legacy' }, origen_id: PANTALLA.id, destino_id: CAJA.id,
+      articulo_cable_id: HDMI.id, senal: 'hdmi', ruta: null, longitud_manual_m: null, notas: null,
+    };
+    const resultado = calcularConexion(base, SALA, equipos, articulos)!;
+    const incluido = agruparMaterialCable([resultado], [{ ...base, estado_suministro: 'incluido', cable_suministrado_id: 'k1' }], articulos);
+    const pendiente = agruparMaterialCable([resultado], [{ ...base, estado_suministro: 'por_determinar' }], articulos);
+    const adicional = agruparMaterialCable([resultado], [{ ...base, estado_suministro: 'adicional' }], articulos);
+    assert.equal(incluido.length, 0);
+    assert.equal(pendiente.length, 0);
+    assert.equal(adicional[0]?.cantidad, 1);
   });
 });
 

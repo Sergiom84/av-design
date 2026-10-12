@@ -24,15 +24,16 @@ import {
   Ruta,
   Senal,
   TomaRed,
+  PARAMETROS_POR_DEFECTO,
 } from './tipos';
+import { resolverLadoConexion } from './extremos-conexion';
+import { estadoComercialCable, type CableSuministrado, type SuministroSala } from './suministros';
 
 /**
  * Orden determinista de las conexiones de una sala.
  *
- * De aquí sale el correlativo del identificador, así que tiene que ser estable:
- * una tirada ya etiquetada en obra no puede cambiar de número porque se dé de
- * alta otra. Se ordena por fecha de alta y se desempata por id; ambos son
- * inmutables, y una conexión nueva siempre cae al final de su serie.
+ * Orden de presentación. El backfill histórico usa este mismo desempate;
+ * la brida de las conexiones guardadas ya no depende del orden de la lista.
  */
 export function ordenarConexiones(conexiones: Conexion[]): Conexion[] {
   return [...conexiones].sort((a, b) => {
@@ -44,10 +45,11 @@ export function ordenarConexiones(conexiones: Conexion[]): Conexion[] {
 }
 
 /**
+ * Algoritmo histórico congelado, exclusivo del backfill y sus verificaciones.
  * Identificador correlativo por tipo de señal: `HD-1000`, `HD-1001`, `RED-1000`.
  * Los prefijos están en `PREFIJO_CABLE` (src/lib/tipos.ts), que es su único sitio.
  */
-export function identificadoresDeCable(conexiones: Conexion[]): Map<string, string> {
+export function identificadoresHistoricosDeCable(conexiones: Conexion[]): Map<string, string> {
   const siguiente = new Map<Senal, number>();
   const ids = new Map<string, string>();
   for (const c of ordenarConexiones(conexiones)) {
@@ -58,6 +60,19 @@ export function identificadoresDeCable(conexiones: Conexion[]): Map<string, stri
   return ids;
 }
 
+/** Solo para lectores de filas persistidas: nunca reconstruir una brida ausente. */
+export function exigirEtiquetaCable(etiqueta: unknown, id: unknown): string {
+  if (typeof etiqueta !== 'string' || !etiqueta.trim()) {
+    throw new Error(`La conexión ${String(id)} no tiene etiqueta de cable. Aplica la migración de etiquetas antes de leer la sala.`);
+  }
+  return etiqueta;
+}
+
+/** El navegador presenta la asignación confirmada; las altas aún no tienen brida. */
+export function identificadoresDeCable(conexiones: Conexion[]): Map<string, string> {
+  return new Map(conexiones.map((c) => [c.id, c.etiqueta_cable ?? 'Pendiente de guardar']));
+}
+
 /**
  * Avisos de compatibilidad. Avisan, no bloquean: el técnico puede tener un
  * motivo para conectar algo raro (un adaptador por medio, un puerto mal
@@ -65,8 +80,8 @@ export function identificadoresDeCable(conexiones: Conexion[]): Map<string, stri
  */
 export function avisosDeConexion(
   conexion: Pick<Conexion, 'senal'>,
-  puertoOrigen: Puerto | undefined,
-  puertoDestino: Puerto | undefined,
+  puertoOrigen: Pick<Puerto, 'senal' | 'sentido'> | undefined,
+  puertoDestino: Pick<Puerto, 'senal' | 'sentido'> | undefined,
   /** Solo interesa su señal, así que vale cualquier cosa que la tenga. */
   cable: { senal: Senal | null } | undefined,
 ): string[] {
@@ -123,8 +138,10 @@ export interface FilaCable {
   toma_red: string | null;
   senal: Senal;
   ruta: Ruta | null;
-  /** Metros a cortar o pedir. Nulo si la sala no tiene medidas y no hay cálculo. */
+  /** Metros a cortar o pedir. Nulo mientras falten datos para calcular. */
   metros: number | null;
+  /** Diagnóstico del cálculo, separado de los avisos de compatibilidad. */
+  motivo_calculo_pendiente?: string;
   recorrido_m: number | null;
   holgura_origen_m: number | null;
   holgura_destino_m: number | null;
@@ -132,6 +149,9 @@ export interface FilaCable {
   manual: boolean;
   articulo_cable: string | null;
   longitud_comercial_m: number | null;
+  estado_suministro?: 'incluido' | 'adicional' | 'por_determinar';
+  longitud_utilizable_m?: number | null;
+  etiqueta_suministro?: string | null;
   avisos: string[];
 }
 
@@ -143,6 +163,9 @@ export interface EntradaTablaCables {
   articulos: Map<string, Articulo>;
   /** Lo que ha devuelto `calcularConexion()`, indexado por conexión. */
   resultados: Map<string, ResultadoCable>;
+  avisosCalculo?: Map<string, string[]>;
+  cables?: CableSuministrado[];
+  suministros?: SuministroSala[];
 }
 
 /** Cómo se lee la roseta en la tabla cuando la tienen los dos extremos. */
@@ -159,35 +182,42 @@ function describirTomas(
 export function construirTablaCables(entrada: EntradaTablaCables): FilaCable[] {
   const { conexiones, equipos, tomas, puertos, articulos, resultados } = entrada;
   const identificadores = identificadoresDeCable(conexiones);
+  const cables = new Map((entrada.cables ?? []).map((k) => [k.id, k]));
+  const sku = new Map((entrada.suministros ?? []).map((s) => [s.id, s.snapshot.sku]));
 
   return ordenarConexiones(conexiones).map((c) => {
-    const origen = equipos.get(c.origen_id);
-    const destino = equipos.get(c.destino_id);
-    const pOrigen = c.puerto_origen_id ? puertos.get(c.puerto_origen_id) : undefined;
-    const pDestino = c.puerto_destino_id ? puertos.get(c.puerto_destino_id) : undefined;
+    const origen = resolverLadoConexion(c, 'origen', equipos, { tomas, puertos }, PARAMETROS_POR_DEFECTO);
+    const destino = resolverLadoConexion(c, 'destino', equipos, { tomas, puertos }, PARAMETROS_POR_DEFECTO);
+    const pOrigen = origen?.senal && origen.sentido ? { senal: origen.senal, sentido: origen.sentido } : undefined;
+    const pDestino = destino?.senal && destino.sentido ? { senal: destino.senal, sentido: destino.sentido } : undefined;
     const cable = c.articulo_cable_id ? articulos.get(c.articulo_cable_id) : undefined;
     const r = resultados.get(c.id);
+    const estado = estadoComercialCable(c.estado_suministro);
+    const fisico = c.cable_suministrado_id ? cables.get(c.cable_suministrado_id) : undefined;
+    const avisosSuministro: string[] = [];
+    if (estado === 'por_determinar') avisosSuministro.push('Suministro del cable por determinar');
+    if (estado === 'incluido' && (fisico?.longitud_utilizable_m == null)) avisosSuministro.push('Longitud suministrada pendiente');
+    if (estado === 'incluido' && fisico?.longitud_utilizable_m != null && r && fisico.longitud_utilizable_m + 1e-9 < r.longitud_m) {
+      avisosSuministro.push(`Cable incluido de ${fisico.longitud_utilizable_m} m insuficiente para ${r.longitud_m} m`);
+    }
 
     return {
       identificador: identificadores.get(c.id) ?? '—',
       conexion_id: c.id,
       origen: origen?.nombre ?? '—',
-      puerto_origen: pOrigen
-        ? `${pOrigen.nombre}${c.puerto_origen_ordinal != null && pOrigen.total > 1 ? ` ${c.puerto_origen_ordinal}` : ''}`
-        : null,
-      conector_origen: pOrigen?.conector ?? null,
+      puerto_origen: origen?.boca ?? null,
+      conector_origen: origen?.conector ?? null,
       destino: destino?.nombre ?? '—',
-      puerto_destino: pDestino
-        ? `${pDestino.nombre}${c.puerto_destino_ordinal != null && pDestino.total > 1 ? ` ${c.puerto_destino_ordinal}` : ''}`
-        : null,
-      conector_destino: pDestino?.conector ?? null,
+      puerto_destino: destino?.boca ?? null,
+      conector_destino: destino?.conector ?? null,
       toma_red: describirTomas(
-        origen?.toma_red_id ? tomas.get(origen.toma_red_id) : undefined,
-        destino?.toma_red_id ? tomas.get(destino.toma_red_id) : undefined,
+        origen?.toma ?? undefined,
+        destino?.toma ?? undefined,
       ),
       senal: c.senal,
       ruta: r?.ruta ?? c.ruta,
       metros: r?.longitud_m ?? null,
+      motivo_calculo_pendiente: !r ? entrada.avisosCalculo?.get(c.id)?.join(' ') || undefined : undefined,
       recorrido_m: r?.detalle.recorrido_m ?? null,
       holgura_origen_m: r?.holgura_origen_m ?? null,
       holgura_destino_m: r?.holgura_destino_m ?? null,
@@ -195,7 +225,12 @@ export function construirTablaCables(entrada: EntradaTablaCables): FilaCable[] {
       manual: r?.manual ?? false,
       articulo_cable: cable ? `${cable.marca ?? ''} ${cable.modelo}`.trim() : null,
       longitud_comercial_m: r?.longitud_comercial_m ?? null,
-      avisos: avisosDeConexion(c, pOrigen, pDestino, cable),
+      estado_suministro: estado,
+      longitud_utilizable_m: fisico?.longitud_utilizable_m ?? null,
+      etiqueta_suministro: estado === 'incluido' && fisico
+        ? `Incluido en ${sku.get(fisico.suministro_id) ?? 'suministro'}`
+        : estado === 'adicional' ? 'Adicional' : estado === 'por_determinar' ? 'Por determinar' : null,
+      avisos: [...avisosDeConexion(c, pOrigen, pDestino, cable), ...(entrada.avisosCalculo?.get(c.id) ?? []), ...avisosSuministro],
     };
   });
 }
@@ -218,6 +253,8 @@ const CABECERAS_CSV = [
   'margen_m',
   'articulo_cable',
   'longitud_comercial_m',
+  'estado_suministro',
+  'longitud_utilizable_m',
   'avisos',
 ] as const;
 
@@ -229,7 +266,7 @@ const CABECERAS_CSV = [
  * punto decimal los metros llegarían como texto y no se podrían sumar.
  */
 export function tablaCablesACsv(filas: FilaCable[]): string {
-  const celda = (v: string | number | null): string => {
+  const celda = (v: string | number | null | undefined): string => {
     if (v == null) return '';
     const s = typeof v === 'number' ? v.toFixed(2).replace('.', ',') : v;
     return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -254,6 +291,8 @@ export function tablaCablesACsv(filas: FilaCable[]): string {
       f.margen_m,
       f.articulo_cable,
       f.longitud_comercial_m,
+      f.estado_suministro,
+      f.longitud_utilizable_m,
       f.avisos.join(' | ') || null,
     ]
       .map(celda)

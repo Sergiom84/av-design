@@ -211,13 +211,23 @@ try {
     'la coordenada tecleada en Equipamiento coloca el equipo',
   );
 
-  const [conexionDetallada] = await sql<Array<{ id: string }>>`
-    insert into conexiones (sala_id, origen_id, destino_id, senal, ruta, notas)
-    values (${salaId}, ${caja}, ${pantalla}, 'hdmi', 'falso_techo', 'TEST tirada') returning id`;
-  await sql.begin(async (tx) => {
+  // Consumir y retirar la primera brida permite distinguir copiar la etiqueta
+  // de asignar una nueva serie a la sala recreada desde la plantilla.
+  const retirada = await sql.begin(async tx=>{
+    const [c]=await tx<Array<{id:string}>>`insert into conexiones(sala_id,origen_id,destino_id,puerto_origen_id,puerto_destino_id,senal)
+      values (${salaId},${caja},${pantalla},${puertoSalidaId},${puertoEntradaId},'hdmi') returning id`;
+    await tx`insert into conexion_bocas(conexion_id,lado,equipo_id,puerto_id,ordinal) values (${c.id},'origen',${caja},${puertoSalidaId},1),(${c.id},'destino',${pantalla},${puertoEntradaId},1)`;
+    return c;
+  });
+  await sql`delete from conexiones where id = ${retirada.id}`;
+  const conexionDetallada = await sql.begin(async (tx) => {
+    const [c]=await tx<Array<{ id: string; etiqueta_cable: string }>>`
+      insert into conexiones (sala_id, origen_id, destino_id,puerto_origen_id,puerto_destino_id, senal, ruta, notas)
+      values (${salaId}, ${caja}, ${pantalla},${puertoSalidaId},${puertoEntradaId}, 'hdmi', 'falso_techo', 'TEST tirada') returning id, etiqueta_cable`;
     await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
-      (${conexionDetallada.id}, 'origen', ${caja}, ${puertoSalidaId}, 2),
-      (${conexionDetallada.id}, 'destino', ${pantalla}, ${puertoEntradaId}, 1)`;
+      (${c.id}, 'origen', ${caja}, ${puertoSalidaId}, 2),
+      (${c.id}, 'destino', ${pantalla}, ${puertoEntradaId}, 1)`;
+    return c;
   });
 
   // Dos sillas: una colocada y girada, otra sin colocar. Las dos tienen que
@@ -310,6 +320,11 @@ try {
   const [recreada] = await sql<Array<{ id: string }>>`
     select id from salas where nombre = ${NOMBRE_RECREADA}`;
   afirmar(Boolean(recreada), 'la sala se recrea desde la plantilla');
+  const copiasCable = await sql<Array<{ id: string; etiqueta_cable: string }>>`
+    select id, etiqueta_cable from conexiones where sala_id = ${recreada.id}`;
+  afirmar(conexionDetallada.etiqueta_cable === 'HD-1001' && copiasCable.length === 1
+    && copiasCable[0].id !== conexionDetallada.id && copiasCable[0].etiqueta_cable === 'HD-1000',
+  'sala a plantilla y vuelta crea UUID y brida propios sin copiar la etiqueta original');
 
   const despues = await escenaDe(recreada.id);
 

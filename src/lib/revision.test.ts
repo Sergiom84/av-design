@@ -58,6 +58,7 @@ const equipo = (id: string, extra: Partial<EquipoEnSala> = {}): EquipoEnSala => 
 });
 
 const conexion = (id: string, extra: Partial<Conexion> = {}): Conexion => ({
+  detalle: { estado: 'legacy' },
   id,
   sala_id: 's1',
   origen_id: 'tv',
@@ -165,6 +166,14 @@ const estadoDe = (puntos: PuntoMontaje[], clave: string): Semaforo =>
   buscar(puntos, clave).estado;
 
 describe('revisión de montaje', () => {
+  test('no pide reservar de nuevo material ya enviado y detecta cobertura parcial', () => {
+    const servido = { ...faltante('a-qb65', 2, 0), disponible: 0, servido: 2 };
+    const revisar = (cantidad: number) => revisarMontaje(entradaCompleta({
+      falta: falta({ faltantes: [{ ...servido, servido: cantidad }], reservas: [] }),
+    }));
+    assert.equal(estadoDe(revisar(2), 'reservas'), 'listo');
+    assert.equal(estadoDe(revisar(1), 'reservas'), 'aviso');
+  });
   test('una sala vacía bloquea por medidas, equipamiento y conexiones', () => {
     const puntos = revisarMontaje({
       sala: sala({ largo_m: 0, ancho_m: 0, alto_m: 0, mesa_largo_m: null, mesa_ancho_m: null }),
@@ -402,5 +411,59 @@ describe('resumen del montaje', () => {
       avisos: 0,
       listos: 0,
     });
+  });
+});
+
+describe('huecos técnicos L4 en el semáforo existente', () => {
+  test('ficha ausente, posición sin confirmar o cero conexiones impiden listo', () => {
+    const ficha = revisarMontaje(entradaCompleta({
+      avisosTecnicos: [{ clave: 'ficha_sin_documentar:a-tv', nivel: 'pendiente', causa: 'Sin ficha.' }],
+    }));
+    assert.equal(estadoDe(ficha, 'catalogo'), 'aviso');
+    assert.notEqual(resumirMontaje(ficha).estado, 'listo');
+
+    const posicion = revisarMontaje(entradaCompleta({
+      avisosTecnicos: [{
+        clave: 'posicion_sin_confirmar',
+        nivel: 'pendiente',
+        causa: '2 de 2 equipos sin posición confirmada: tv, caja.',
+      }],
+    }));
+    assert.equal(estadoDe(posicion, 'equipamiento'), 'aviso');
+    assert.match(buscar(posicion, 'equipamiento').detalle, /2 de 2/);
+    assert.notEqual(resumirMontaje(posicion).estado, 'listo');
+
+    const sinTiradas = revisarMontaje(entradaCompleta({
+      conexiones: [],
+      resultados: [],
+      filasCable: [],
+      avisosTecnicos: [{ clave: 'sin_conexiones', nivel: 'pendiente', causa: 'La sala tiene equipos y ninguna conexión: no hay montaje que acreditar.' }],
+    }));
+    assert.notEqual(estadoDe(sinTiradas, 'conexiones'), 'listo');
+    assert.notEqual(resumirMontaje(sinTiradas).estado, 'listo');
+  });
+
+  test('los huecos técnicos no reescriben material, reservas ni carga', () => {
+    const puntos = revisarMontaje(entradaCompleta({
+      avisosTecnicos: [{ clave: 'ficha_sin_documentar:a-tv', nivel: 'pendiente', causa: 'Sin ficha.' }],
+    }));
+    assert.equal(estadoDe(puntos, 'material'), 'listo');
+    assert.equal(estadoDe(puntos, 'reservas'), 'listo');
+    assert.equal(estadoDe(puntos, 'carga'), 'listo');
+  });
+
+  test('10 m comerciales frente a 40 m impiden listo en el punto de cable', () => {
+    const puntos = revisarMontaje(entradaCompleta({
+      avisosTecnicos: [{
+        clave: 'cable_comercial_insuficiente:c1',
+        nivel: 'aviso',
+        causa: 'HD-1000: la longitud comercial disponible es de 10 m y no cubre los 40 m calculados.',
+      }],
+    }));
+    assert.equal(estadoDe(puntos, 'cable'), 'aviso');
+    assert.match(buscar(puntos, 'cable').detalle, /10 m/);
+    assert.match(buscar(puntos, 'cable').detalle, /40 m/);
+    assert.notEqual(resumirMontaje(puntos).estado, 'listo');
+    assert.equal(estadoDe(puntos, 'material'), 'listo');
   });
 });

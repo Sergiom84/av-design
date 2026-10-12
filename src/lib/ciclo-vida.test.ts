@@ -161,25 +161,25 @@ describe('resumenCicloVida', () => {
     assert.match(inicio!.detalle, /2026-08-01/);
   });
 
-  test('las recepciones se derivan de los pedidos, con quién y referencia', () => {
+  test('registros históricos conservan quién y referencia sin acreditar cobertura', () => {
     const r = resumenCicloVida({
       hitosProyecto: [],
       hitosSala: [],
       recepciones: [recepcion],
     });
     const paso = r.pasos.find((p) => p.clave === 'recepciones');
-    assert.ok(paso?.hecho);
+    assert.equal(paso?.hecho, false);
     assert.match(paso!.detalle, /Roberto/);
     assert.match(paso!.detalle, /Comm-Tec/);
   });
 
-  test('ciclo completo: nada pendiente', () => {
+  test('hitos completos no acreditan recepción completa sin líneas', () => {
     const r = resumenCicloVida({
       hitosProyecto: [hitoProyecto('inicio')],
       hitosSala: [hitoSala('instalacion'), hitoSala('entrega')],
       recepciones: [recepcion],
     });
-    assert.deepEqual(r.pendiente, []);
+    assert.deepEqual(r.pendiente, ['Recepción de material']);
   });
 
   test('un hito con técnico ya fuera de la lista no pierde la fecha', () => {

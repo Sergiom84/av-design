@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { crearBorrador, decodificarBoca, prepararGuardado } from './editor-conexiones';
+import { crearBorrador, actualizarExtremoBorrador, decodificarBoca, prepararGuardado } from './editor-conexiones';
 import type { Conexion, Puerto } from './tipos';
 
 const puerto = (id: string, articulo_id: string, total = 1): Puerto => ({
@@ -8,7 +8,7 @@ const puerto = (id: string, articulo_id: string, total = 1): Puerto => ({
   conector: null, orden: 1, notas: null, fuente: 'csv',
 });
 const original: Conexion = {
-  id: 'c1', sala_id: 's1', origen_id: 'e1', destino_id: 'e2',
+  id: 'c1', detalle: { estado: 'legacy' }, sala_id: 's1', origen_id: 'e1', destino_id: 'e2',
   puerto_origen_id: null, puerto_destino_id: null,
   puerto_origen_ordinal: null, puerto_destino_ordinal: null,
   articulo_cable_id: null, senal: 'otro', ruta: null,
@@ -26,7 +26,7 @@ describe('borrador del editor de conexiones', () => {
 
   it('envía juntas alta completa, cambio legacy completado y baja', () => {
     const puertos = new Map([['p1', puerto('p1', 'a1', 2)], ['p2', puerto('p2', 'a2')]]);
-    const completada = { ...crearBorrador([original])[0], puerto_origen_id: 'p1', puerto_origen_ordinal: 2, puerto_destino_id: 'p2', puerto_destino_ordinal: 1 };
+    const completada = actualizarExtremoBorrador(actualizarExtremoBorrador(crearBorrador([original])[0], 'origen', { tipo: 'equipo', equipo_id: 'e1', puerto_id: 'p1', ordinal: 2 }), 'destino', { tipo: 'equipo', equipo_id: 'e2', puerto_id: 'p2', ordinal: 1 });
     const temporal = { ...completada, id: 'tmp-1', temporal: true, senal: 'hdmi' as const };
     const entrada = prepararGuardado({ salaId: 's1', versionEsperada: 4, originales: [original, { ...original, id: 'borrar' }], borrador: [completada, temporal], puertos });
     assert.equal(entrada.altas[0].temporal_id, 'tmp-1');

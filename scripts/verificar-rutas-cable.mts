@@ -51,8 +51,12 @@ try {
   await sql`insert into sala_equipos (id, sala_id, articulo_id, nombre, x_m, y_m, z_m)
     values (${origenId}, ${salaId}, ${articuloId}, 'Origen', 0, 0, 0),
            (${destinoId}, ${salaId}, ${articuloId}, 'Destino', 6, 4, 3)`;
-  await sql`insert into conexiones (id, sala_id, origen_id, destino_id)
-    values (${conexionId}, ${salaId}, ${origenId}, ${destinoId})`;
+  const [puerto]=await sql<Array<{id:string}>>`insert into puertos(articulo_id,nombre,sentido,senal,total) values (${articuloId},'QA RUTA','bidireccional','red',1) returning id`;
+  await sql.begin(async tx=>{
+    await tx`insert into conexiones (id, sala_id, origen_id, destino_id,puerto_origen_id,puerto_destino_id)
+      values (${conexionId}, ${salaId}, ${origenId}, ${destinoId},${puerto.id},${puerto.id})`;
+    await tx`insert into conexion_bocas(conexion_id,lado,equipo_id,puerto_id,ordinal) values (${conexionId},'origen',${origenId},${puerto.id},1),(${conexionId},'destino',${destinoId},${puerto.id},1)`;
+  });
 
   const { guardarDiagramaSala } = await import('../src/app/acciones-diagrama');
   const puntos = [

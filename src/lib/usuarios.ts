@@ -56,7 +56,7 @@ export const SECCIONES = [
   { id: 'proyectos', ruta: '/proyectos', etiqueta: 'Proyectos' },
   { id: 'salas', ruta: '/salas', etiqueta: 'Salas' },
   { id: 'plantillas', ruta: '/plantillas', etiqueta: 'Plantillas' },
-  { id: 'checkin', ruta: '/checkin', etiqueta: 'Check-in' },
+  { id: 'checkin', ruta: '/checkin', etiqueta: 'Visitas previas' },
   { id: 'catalogo', ruta: '/catalogo', etiqueta: 'Catálogo' },
   { id: 'almacen', ruta: '/almacen', etiqueta: 'Almacén' },
   { id: 'compras', ruta: '/compras', etiqueta: 'Compras' },

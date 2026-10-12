@@ -664,8 +664,18 @@ export function construirEscena({
   const porId = new Map(dibujados.map((e) => [e.id, e]));
 
   const tiradas: TiradaCroquis[] = conexiones.flatMap((c) => {
-    const origen = porId.get(c.origen_id);
-    const destino = porId.get(c.destino_id);
+    const extremo = (lado: 'origen' | 'destino') => {
+      if (c.detalle.estado === 'completo' && c.detalle[lado].tipo === 'roseta') {
+        const referencia = c.detalle[lado];
+        const toma = tomas.find((t) => t.bocas.some((b) => b.id === referencia.toma_boca_id));
+        return toma && toma.x_m !== null && toma.y_m !== null && toma.z_m !== null
+          ? { nombre: toma.codigo, x_m: toma.x_m, y_m: toma.y_m } : undefined;
+      }
+      const id = c[`${lado}_id`];
+      return id === null ? undefined : porId.get(id);
+    };
+    const origen = extremo('origen');
+    const destino = extremo('destino');
     if (!origen || !destino) return [];
     return [
       {

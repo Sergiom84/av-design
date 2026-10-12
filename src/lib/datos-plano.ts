@@ -1,5 +1,7 @@
 import 'server-only';
+import { leerDetalleConexion, leerTomasRed } from './lectura-extremos';
 import { sql } from './db';
+import { exigirEtiquetaCable } from './cable-schedule';
 import { esUuid } from './uuid';
 import type {
   Conexion,
@@ -55,20 +57,26 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
     where s.id = ${id}`;
   if (!fila) return null;
 
-  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles, filasPuertas] =
+  const [filasEquipos, filasConexiones, filasPuntos, filasTomas, filasMuebles, filasPuertas, filasBocasTomas] =
     await Promise.all([
     sql<Fila[]>`select id, sala_id, articulo_id, nombre, cantidad, extremo,
                        x_m, y_m, z_m, posicion_confirmada, rotacion_grados,
-                       origen_plantilla_linea_id, toma_red_id
+                       origen_plantilla_linea_id, toma_red_id, toma_red_conexion_id
                 from sala_equipos where sala_id = ${id} order by nombre`,
-    sql<Fila[]>`select id, sala_id, origen_id, destino_id, senal, ruta,
-                       longitud_manual_m, articulo_cable_id, notas
-                from conexiones where sala_id = ${id} order by creado_en, id`,
+    sql<Fila[]>`select c.*,
+                  bo.equipo_id as boca_equipo_origen_id, bo.toma_boca_id as boca_toma_origen_id,
+                  bo.puerto_id as boca_puerto_origen_id, bo.ordinal as puerto_origen_ordinal,
+                  bd.equipo_id as boca_equipo_destino_id, bd.toma_boca_id as boca_toma_destino_id,
+                  bd.puerto_id as boca_puerto_destino_id, bd.ordinal as puerto_destino_ordinal
+                from conexiones c
+                left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
+                left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
+                where c.sala_id = ${id} order by c.creado_en, c.id`,
     sql<Fila[]>`select p.id, p.conexion_id, p.orden, p.x_m, p.y_m, p.z_m
                 from conexion_puntos_paso p
                 join conexiones c on c.id = p.conexion_id
                 where c.sala_id = ${id} order by p.conexion_id, p.orden`,
-    sql<Fila[]>`select id, sala_id, codigo, ubicacion, x_m, y_m, z_m, notas
+    sql<Fila[]>`select *
                 from tomas_red where sala_id = ${id} order by codigo`,
     sql<Fila[]>`select id, sala_id, mobiliario_id, nombre, forma,
                        largo_m, ancho_m, alto_m, x_m, y_m, z_m,
@@ -77,6 +85,8 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
                 from sala_mobiliario where sala_id = ${id} order by orden, creado_en`,
     sql<Fila[]>`select id, sala_id, pared, posicion_m, anchura_m, altura_m, orden
                 from puertas where sala_id = ${id} order by orden, creado_en`,
+    sql<Fila[]>`select b.* from toma_red_bocas b join tomas_red t on t.id = b.toma_red_id
+                where t.sala_id = ${id} order by b.toma_red_id, b.ordinal`,
   ]);
 
   const sala: Sala = {
@@ -132,12 +142,16 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       rotacion_grados: Number(f.rotacion_grados ?? 0),
       origen_plantilla_linea_id: s(f.origen_plantilla_linea_id),
       toma_red_id: s(f.toma_red_id),
+      toma_red_conexion_id: s(f.toma_red_conexion_id),
     })),
     conexiones: filasConexiones.map((f) => ({
       id: String(f.id),
+      etiqueta_cable: exigirEtiquetaCable(f.etiqueta_cable, f.id),
+      detalle: leerDetalleConexion(f),
+      creado_en: f.creado_en instanceof Date ? f.creado_en.toISOString() : s(f.creado_en),
       sala_id: String(f.sala_id),
-      origen_id: String(f.origen_id),
-      destino_id: String(f.destino_id),
+      origen_id: s(f.origen_id),
+      destino_id: s(f.destino_id),
       articulo_cable_id: s(f.articulo_cable_id),
       senal: (f.senal as Conexion['senal']) ?? 'otro',
       ruta: (f.ruta as Conexion['ruta']) ?? null,
@@ -179,15 +193,7 @@ export async function obtenerDatosPlanoSala(id: string): Promise<DatosPlanoSala 
       altura_m: n(f.altura_m),
       orden: Number(f.orden ?? 100),
     })),
-    tomas: filasTomas.map((f) => ({
-      id: String(f.id),
-      sala_id: String(f.sala_id),
-      codigo: String(f.codigo),
-      ubicacion: s(f.ubicacion),
-      x_m: n(f.x_m),
-      y_m: n(f.y_m),
-      z_m: n(f.z_m),
-      notas: s(f.notas),
-    })),
+    tomas: leerTomasRed(filasTomas, filasBocasTomas),
   };
 }
+

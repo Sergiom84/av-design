@@ -69,6 +69,7 @@ const equipo = (
 const conexion = (id: string, origen: string, destino: string): Conexion => ({
   id,
   sala_id: 'sala-1',
+  detalle: { estado: 'legacy' },
   origen_id: origen,
   destino_id: destino,
   articulo_cable_id: null,
@@ -678,6 +679,7 @@ describe('la escena completa', () => {
           id: 't1',
           sala_id: 'sala-1',
           codigo: '15',
+          codigo_referencia: null, codigo_confirmado: false, capacidad_documentada: null, bocas: [], esquema_x: null, esquema_y: null,
           ubicacion: 'suelo',
           x_m: 1,
           y_m: 1,
@@ -688,6 +690,7 @@ describe('la escena completa', () => {
           id: 't2',
           sala_id: 'sala-1',
           codigo: '16',
+          codigo_referencia: null, codigo_confirmado: false, capacidad_documentada: null, bocas: [], esquema_x: null, esquema_y: null,
           ubicacion: 'pared',
           x_m: null,
           y_m: null,

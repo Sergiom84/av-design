@@ -11,6 +11,20 @@ import {
 import type { LineaMaterialCable } from './calculo-cable';
 import type { Articulo, EquipoEnSala } from './tipos';
 
+test('el material cargado no se recompra y una devolución reduce su cobertura', () => {
+  const necesidad = [{ articulo_id: 'micro', descripcion: 'Micro', unidad: 'ud' as const, cantidad: 3, origenes: ['equipo' as const], detalle: [] }];
+  const cargado = calcularFaltante(necesidad, new Map(), new Map(), new Map([['micro', 3]]))[0];
+  assert.equal(cargado.falta, 0);
+  assert.equal(cargado.disponible, 0);
+  assert.equal(cargado.servido, 3);
+  const deficitAjeno = calcularFaltante(necesidad, new Map([['micro', -2]]), new Map(), new Map([['micro', 3]]))[0];
+  assert.equal(deficitAjeno.disponible, -2);
+  assert.equal(deficitAjeno.falta, 0);
+  const devuelto = calcularFaltante(necesidad, new Map(), new Map(), new Map([['micro', 2]]))[0];
+  assert.equal(devuelto.falta, 1);
+  assert.equal(calcularFaltante(necesidad, new Map([['micro', 1]]), new Map(), new Map([['micro', 2]]))[0].falta, 0);
+});
+
 /**
  * Misma sala de referencia que en calculo-cable.test.ts: la SALA TP de aforo 8,
  * que es la plantilla más repetida del inventario. Aquí interesa su lista de

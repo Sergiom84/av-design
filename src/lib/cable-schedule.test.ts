@@ -5,6 +5,8 @@ import {
   avisosDeConexion,
   construirTablaCables,
   identificadoresDeCable,
+  identificadoresHistoricosDeCable,
+  exigirEtiquetaCable,
   ordenarConexiones,
   tablaCablesACsv,
 } from './cable-schedule';
@@ -54,6 +56,7 @@ const TOMA: TomaRed = {
   id: 't-12',
   sala_id: 's1',
   codigo: '12',
+  codigo_referencia: null, codigo_confirmado: false, capacidad_documentada: null, bocas: [], esquema_x: null, esquema_y: null,
   ubicacion: 'suelo',
   x_m: 3,
   y_m: 2,
@@ -175,6 +178,8 @@ const RJ45 = puerto({
 /** Una conexión sin detallar. Los tests le cambian lo que necesitan. */
 const conexion = (p: Partial<Conexion> & Pick<Conexion, 'id'>): Conexion => ({
   sala_id: 's1',
+  etiqueta_cable: 'HD-1000',
+  detalle: { estado: 'legacy' },
   origen_id: CAJA.id,
   destino_id: PANTALLA.id,
   articulo_cable_id: HDMI.id,
@@ -188,9 +193,22 @@ const conexion = (p: Partial<Conexion> & Pick<Conexion, 'id'>): Conexion => ({
   ...p,
 });
 
-describe('identificador de cable', () => {
+describe('identificador histórico de cable', () => {
+  test('el mapeo Date del lector trunca microsegundos antes del desempate UUID', () => {
+    const anterior = new Date('2026-08-05T10:00:00.000100Z').toISOString();
+    const posterior = new Date('2026-08-05T10:00:00.000900Z').toISOString();
+    assert.equal(anterior, posterior);
+    const ids = identificadoresHistoricosDeCable([
+      conexion({ id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', creado_en: anterior }),
+      conexion({ id: '00000000-0000-4000-8000-000000000000', creado_en: posterior }),
+      conexion({ id: '00000000-0000-4000-8000-000000000001', senal: 'red', creado_en: anterior }),
+    ]);
+    assert.equal(ids.get('00000000-0000-4000-8000-000000000000'), 'HD-1000');
+    assert.equal(ids.get('ffffffff-ffff-4fff-8fff-ffffffffffff'), 'HD-1001');
+    assert.equal(ids.get('00000000-0000-4000-8000-000000000001'), 'RED-1000');
+  });
   test('correlativo por señal, arrancando en 1000', () => {
-    const ids = identificadoresDeCable([
+    const ids = identificadoresHistoricosDeCable([
       conexion({ id: 'c1', senal: 'hdmi', creado_en: '2026-08-05T10:00:00.000Z' }),
       conexion({ id: 'c2', senal: 'hdmi', creado_en: '2026-08-05T10:01:00.000Z' }),
       conexion({ id: 'c3', senal: 'hdmi', creado_en: '2026-08-05T10:02:00.000Z' }),
@@ -201,7 +219,7 @@ describe('identificador de cable', () => {
   });
 
   test('cada señal lleva su propia serie y su propio prefijo', () => {
-    const ids = identificadoresDeCable([
+    const ids = identificadoresHistoricosDeCable([
       conexion({ id: 'c1', senal: 'hdmi', creado_en: '2026-08-05T10:00:00.000Z' }),
       conexion({ id: 'c2', senal: 'red', creado_en: '2026-08-05T10:01:00.000Z' }),
       conexion({ id: 'c3', senal: 'microfono', creado_en: '2026-08-05T10:02:00.000Z' }),
@@ -221,13 +239,13 @@ describe('identificador de cable', () => {
       conexion({ id: 'c1', senal: 'hdmi', creado_en: '2026-08-05T10:00:00.000Z' }),
       conexion({ id: 'c2', senal: 'red', creado_en: '2026-08-05T10:01:00.000Z' }),
     ];
-    const ids = identificadoresDeCable(antes);
+    const ids = identificadoresHistoricosDeCable(antes);
 
     const despues = [
       ...antes,
       conexion({ id: 'c3', senal: 'hdmi', creado_en: '2026-08-05T18:30:00.000Z' }),
     ];
-    const idsDespues = identificadoresDeCable(despues);
+    const idsDespues = identificadoresHistoricosDeCable(despues);
 
     assert.equal(idsDespues.get('c1'), ids.get('c1'));
     assert.equal(idsDespues.get('c2'), ids.get('c2'));
@@ -242,18 +260,42 @@ describe('identificador de cable', () => {
     const b = conexion({ id: 'b', senal: 'hdmi', creado_en: misma });
     const a = conexion({ id: 'a', senal: 'hdmi', creado_en: misma });
 
-    assert.equal(identificadoresDeCable([b, a]).get('a'), 'HD-1000');
-    assert.equal(identificadoresDeCable([a, b]).get('a'), 'HD-1000');
-    assert.equal(identificadoresDeCable([b, a]).get('b'), 'HD-1001');
+    assert.equal(identificadoresHistoricosDeCable([b, a]).get('a'), 'HD-1000');
+    assert.equal(identificadoresHistoricosDeCable([a, b]).get('a'), 'HD-1000');
+    assert.equal(identificadoresHistoricosDeCable([b, a]).get('b'), 'HD-1001');
   });
 
   test('sin fecha de alta sigue numerando, ordenado por id', () => {
-    const ids = identificadoresDeCable([
+    const ids = identificadoresHistoricosDeCable([
       conexion({ id: 'z', senal: 'hdmi', creado_en: null }),
       conexion({ id: 'a', senal: 'hdmi', creado_en: null }),
     ]);
     assert.equal(ids.get('a'), 'HD-1000');
     assert.equal(ids.get('z'), 'HD-1001');
+  });
+});
+
+describe('brida persistida', () => {
+  const primera = conexion({ id: 'primera', etiqueta_cable: 'HD-1000' });
+  const segunda = conexion({ id: 'segunda', etiqueta_cable: 'HD-1007' });
+  test('borrar otra conexión conserva el hueco y la etiqueta confirmada', () => {
+    assert.equal(identificadoresDeCable([primera, segunda]).get('segunda'), 'HD-1007');
+    assert.equal(identificadoresDeCable([segunda]).get('segunda'), 'HD-1007');
+  });
+  test('cambiar señal y orden conserva la brida original', () => {
+    assert.equal(identificadoresDeCable([{ ...segunda, senal: 'red', creado_en: null }, primera]).get('segunda'), 'HD-1007');
+  });
+  test('un borrador no anuncia un correlativo definitivo', () => {
+    assert.equal(identificadoresDeCable([conexion({ id: 'temporal-nueva', etiqueta_cable: null })]).get('temporal-nueva'), 'Pendiente de guardar');
+  });
+  test('la lectura persistida exige migración cuando falta etiqueta', () => {
+    for (const valor of [undefined, null, '', ' ']) assert.throws(() => exigirEtiquetaCable(valor, 'segunda'), /segunda.*migración/);
+    assert.equal(exigirEtiquetaCable('HD-1007', 'segunda'), 'HD-1007');
+  });
+  test('tabla y exportación conservan la etiqueta aunque cambie la señal', () => {
+    const filas = construirTablaCables({ conexiones: [{ ...segunda, senal: 'red' }], equipos: new Map(), tomas: new Map(), puertos: new Map(), articulos: new Map(), resultados: new Map() });
+    assert.equal(filas[0].identificador, 'HD-1007');
+    assert.ok(tablaCablesACsv(filas).split('\r\n')[1].startsWith('HD-1007;'));
   });
 });
 
@@ -387,6 +429,28 @@ describe('tabla de cables', () => {
       resultados: resultados(cs),
     });
 
+  test('incluido corto avisa sin acreditar alcance; por_determinar queda pendiente', () => {
+    const corto = construirTablaCables({
+      conexiones: [{ ...tirada, estado_suministro: 'incluido', cable_suministrado_id: 'k1' }],
+      equipos, tomas, puertos, articulos, resultados: resultados([tirada]),
+      cables: [{
+        id: 'k1', suministro_id: 'sum', sala_id: 's1', linea_id: 'l', ordinal: 1, tipo: 'unido',
+        propietario_equipo_id: CAJA.id, puerto_fijo_id: HDMI_OUT.id, ordinal_fijo: 1,
+        articulo_cable_id: null, longitud_utilizable_m: 1, snapshot: {},
+      }],
+      suministros: [{
+        id: 'sum', sala_id: 's1', articulo_id: 'kit', composicion_id: 'c', estado: 'activo',
+        snapshot: { sku: 'CS-MIC-ARRAY-T', version: 1, estado_documental: 'parcial', fuente: 'F', lineas: [] },
+      }],
+    });
+    assert.equal(corto[0].estado_suministro, 'incluido');
+    assert.equal(corto[0].etiqueta_suministro, 'Incluido en CS-MIC-ARRAY-T');
+    assert.ok(corto[0].avisos.some((a) => /insuficiente/.test(a)));
+    const pd = construir([{ ...tirada, estado_suministro: 'por_determinar' }]);
+    assert.equal(pd[0].estado_suministro, 'por_determinar');
+    assert.ok(pd[0].avisos.some((a) => /por determinar/i.test(a)));
+  });
+
   test('lleva los puertos, los conectores y los metros calculados', () => {
     const [fila] = construir([tirada]);
     assert.equal(fila.identificador, 'HD-1000');
@@ -426,7 +490,7 @@ describe('tabla de cables', () => {
 
   test('las filas salen en el mismo orden que los identificadores', () => {
     const filas = construir([
-      conexion({ id: 'c2', creado_en: '2026-08-05T11:00:00.000Z' }),
+      conexion({ id: 'c2', etiqueta_cable: 'HD-1001', creado_en: '2026-08-05T11:00:00.000Z' }),
       tirada,
     ]);
     assert.deepEqual(
@@ -474,13 +538,13 @@ describe('exportación a CSV', () => {
       'id_cable;equipo_origen;puerto_origen;conector_origen;equipo_destino;' +
         'puerto_destino;conector_destino;toma_red;senal;ruta;metros;recorrido_m;' +
         'holgura_origen_m;holgura_destino_m;margen_m;articulo_cable;' +
-        'longitud_comercial_m;avisos',
+        'longitud_comercial_m;estado_suministro;longitud_utilizable_m;avisos',
     );
   });
 
   test('separa con punto y coma, como el resto de CSV del proyecto', () => {
-    assert.equal(lineas[0].split(';').length, 18);
-    assert.equal(lineas[1].split(';').length, 18);
+    assert.equal(lineas[0].split(';').length, 20);
+    assert.equal(lineas[1].split(';').length, 20);
   });
 
   test('los decimales van con coma para que Excel los sume', () => {
@@ -502,7 +566,7 @@ describe('exportación a CSV', () => {
     const conPuntoYComa = filas.map((f) => ({ ...f, origen: 'Rack A; fila 2' }));
     const linea = tablaCablesACsv(conPuntoYComa).split('\r\n')[1];
     assert.ok(linea.includes('"Rack A; fila 2"'));
-    assert.equal(linea.split(';').length, 19); // el de dentro de las comillas no parte
+    assert.equal(linea.split(';').length, 21); // el de dentro de las comillas no parte
   });
 
   test('una tirada sin detallar deja las celdas vacías, no la palabra null', () => {

@@ -166,9 +166,11 @@ async function nuevaConexion(salaId: string, etiqueta: string): Promise<string> 
   const origenId = await nuevoEquipo(salaId, `${etiqueta}-origen`);
   const destinoId = await nuevoEquipo(salaId, `${etiqueta}-destino`);
   const id = randomUUID();
-  await sql`
-    insert into conexiones (id, sala_id, origen_id, destino_id, senal)
-    values (${id}, ${salaId}, ${origenId}, ${destinoId}, 'hdmi')`;
+  await sql.begin(async tx=>{
+    await tx`insert into conexiones (id, sala_id, origen_id, destino_id,puerto_origen_id,puerto_destino_id, senal)
+      values (${id}, ${salaId}, ${origenId}, ${destinoId},${puertoSalidaId},${puertoEntradaId}, 'hdmi')`;
+    await tx`insert into conexion_bocas(conexion_id,lado,equipo_id,puerto_id,ordinal) values (${id},'origen',${origenId},${puertoSalidaId},1),(${id},'destino',${destinoId},${puertoEntradaId},1)`;
+  });
   return id;
 }
 
@@ -566,7 +568,7 @@ try {
 
   await verificarAccionDeConexion({
     etiqueta: 'guardarConexion',
-    accion: guardarConexion,
+    accion: async (d) => { await guardarConexion(d); },
     datos: (conexionId, salaId) => {
       const fd = new FormData();
       fd.set('id', conexionId);
@@ -583,7 +585,7 @@ try {
 
   await verificarAccionDeConexion({
     etiqueta: 'borrarConexion',
-    accion: borrarConexion,
+    accion: async (d) => { await borrarConexion(d); },
     datos: (conexionId, salaId) => {
       const fd = new FormData();
       fd.set('id', conexionId);

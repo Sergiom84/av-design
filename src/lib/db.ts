@@ -1,5 +1,6 @@
 import 'server-only';
 import postgres from 'postgres';
+import {sqlConReintentos} from './sql-reintentos';
 
 /**
  * Conexión a Postgres. Ahora apunta al contenedor local de docker-compose;
@@ -29,12 +30,17 @@ function crear() {
 }
 
 /** En desarrollo se reutiliza la conexión entre recargas en caliente. */
+const adaptadas = new WeakMap<ReturnType<typeof postgres>,ReturnType<typeof postgres>>();
 function obtener() {
   const existente = global.__sql;
-  if (existente) return existente;
+  if (existente) {
+    let adaptada=adaptadas.get(existente);
+    if(!adaptada){adaptada=sqlConReintentos(existente);adaptadas.set(existente,adaptada);}
+    return adaptada;
+  }
   const nueva = crear();
   if (process.env.NODE_ENV !== 'production') global.__sql = nueva;
-  return nueva;
+  const adaptada=sqlConReintentos(nueva);adaptadas.set(nueva,adaptada);return adaptada;
 }
 
 /**

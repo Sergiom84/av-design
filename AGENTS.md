@@ -113,8 +113,10 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   `/documentos`) con layout compartido. Las acciones que tocan la sala
   revalidan con alcance `layout`; `typedRoutes` está activado y `next build`
   caza los enlaces rotos. Serán siete: `/cableado` se retira cuando
-  `/diagrama` cubra su flujo, y no antes, porque hoy es la única superficie
-  del esquema de conexiones.
+  `/diagrama` cubra su flujo, y no antes. `/diagrama` ya da de alta equipos,
+  une bocas en el lienzo y enseña los metros de la conexión seleccionada; lo
+  que queda en `/cableado` es la tabla de cables entera y el resumen de metros,
+  que es el entregable que se imprime y se lleva a la obra.
 - **`Plano` es dónde está cada cosa; `Diagrama` es qué conecta con qué.** Eran
   la misma pestaña y el nombre describía la que no era. La posición física
   vive en `/plano`; el editor de conexiones puerto a puerto, en `/diagrama`.
@@ -122,6 +124,17 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   así (`salas.diagrama_version`, `guardarDiagramaSala`, `OrigenDiagrama`):
   renombrarlos es una migración aparte, con su propio riesgo, y no se hace de
   paso.
+- **El esquema tiene sus propias coordenadas, y son píxeles.** Dónde se dibuja
+  un bloque en `/diagrama` vive en `sala_equipos.esquema_x` y `esquema_y`
+  (`db/migraciones/2026-09-posiciones-esquema.sql`) y no es dónde está el
+  equipo en la sala: mover un bloque para que un cable no cruce no mueve nada
+  en la obra, así que no toca `x_m`, `y_m`, `z_m`, `posicion_confirmada` ni el
+  cálculo de cable. Un `check` exige las dos coordenadas o ninguna; sin ellas,
+  el bloque cae en la rejilla por defecto de `bloquesDelLienzo()`. Se guardan
+  con el resto del borrador, en un solo `update` y dentro de la misma
+  transacción, porque una colocación a medias es peor que ninguna. Y una
+  conexión histórica sin bocas no se puede dibujar: el lienzo la cuenta y
+  lleva hasta ella en vez de callarla, que es como se pierde un cable.
 - **El plano se edita donde vive, y no se guarda como imagen.** La pestaña
   `Plano` (`src/components/plano-editor/`, `src/lib/plano-editor.ts`) edita
   medidas, mesa, mobiliario, posiciones de equipo y rosetas: los mismos datos
@@ -156,10 +169,14 @@ En producción está en <https://av-design.onrender.com>, en el workspace
   escritura se lanza —no se devuelve—, porque `sql.begin` hace commit de todo lo
   que resuelva.
 - **De un alta solo se cree el identificador.** Un equipo añadido desde el
-  plano manda su `articulo_id`; el nombre, la categoría y el extremo los relee
-  el servidor del catálogo, exigiendo activo y `tipo = 'equipo'`. Los ids
-  temporales los inventa el navegador y no se escriben nunca: cada alta recibe
-  su uuid y la acción devuelve el mapa.
+  plano o desde el diagrama manda su `articulo_id`; el nombre, la categoría y
+  el extremo los relee el servidor del catálogo, exigiendo activo y
+  `tipo = 'equipo'`. Los ids temporales los inventa el navegador y no se
+  escriben nunca: cada alta recibe su uuid y la acción devuelve el mapa. En el
+  diagrama ese identificador temporal viaja además en los extremos de las
+  conexiones y en las posiciones del mismo lote, así que el servidor comprueba
+  que toda referencia o está declarada como alta o es un uuid suyo, y que un
+  temporal con forma de uuid no choca con una fila que ya existe.
 - **El mobiliario no es catálogo AV.** Una silla no se pide a un proveedor de
   audiovisuales, no tiene puertos y no entra en ninguna tirada: vive en
   `catalogo_mobiliario` con su fuente editable `data/mobiliario.csv`, y las

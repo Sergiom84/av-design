@@ -18,7 +18,7 @@ insert into parametros (clave, valor, unidad, descripcion) values
   ('tipo_cambio_usd_eur', 0.867, 'EUR por USD', 'Para convertir precios de referencia en dólares. Agosto de 2026')
 on conflict (clave) do update set valor = excluded.valor, descripcion = excluded.descripcion;
 
--- Catálogo: 809 equipos del inventario real
+-- Catálogo: 811 equipos del inventario real
 insert into articulos (tipo, categoria, marca, modelo, unidad, unidades_instaladas) values
   ('equipo', 'PANEL TÁCTIL', 'CISCO', 'ROOM NAVIGATOR', 'ud', 406),
   ('equipo', 'VIDEOCONFERENCIA', 'CISCO', 'SPARK ROOM KIT', 'ud', 285),
@@ -828,7 +828,9 @@ insert into articulos (tipo, categoria, marca, modelo, unidad, unidades_instalad
   ('equipo', 'WEBCAM', 'LOGITECH', 'C 170', 'ud', 1),
   ('equipo', 'WEBCAM', 'LOGITECH', 'HD C920', 'ud', 1),
   ('equipo', 'WEBCAM', 'LOGITECH', 'PRO5000', 'ud', 1),
-  ('equipo', 'WEBCAM', 'LOGITECH', 'QUICKCAM PRO 5000', 'ud', 1)
+  ('equipo', 'WEBCAM', 'LOGITECH', 'QUICKCAM PRO 5000', 'ud', 1),
+  ('equipo', 'VIDEOCONFERENCIA', 'CISCO', 'CODEC EQ', 'ud', null),
+  ('equipo', 'MICRÓFONO', 'CISCO', 'TABLE MICROPHONE PRO', 'ud', null)
 on conflict (coalesce(marca, ''), modelo, categoria) do update set unidades_instaladas = excluded.unidades_instaladas;
 
 -- Catálogo: 30 referencias de cable y consumible (base editable)
@@ -1437,506 +1439,218 @@ from (
 ) c
 where c.articulo_id = a.id and a.referencia_fabricante is null;
 
--- Puertos: 124 de 22 artículos (data/puertos.csv)
--- El CSV manda sobre lo suyo. Lo escrito desde la app no se toca.
-delete from puertos where fuente = 'csv';
-
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'NETWORK', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Un solo cable para red y alimentación. Se alimenta por PoE. Emparejamiento directo a un puerto PoE del codec o remoto por LAN. Cat5e o Cat6 hasta 100 m', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM NAVIGATOR' and categoria = 'PANEL TÁCTIL'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'MICRO USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 2, 'Depuración y servicio. No se cablea en la instalación', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'ROOM NAVIGATOR' and categoria = 'PANEL TÁCTIL'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'NETWORK', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Un solo cable para red y alimentación PoE 802.3af. Emparejamiento directo al codec o por LAN con inyector PoE intermedio. El inyector debe estar en el mismo edificio', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TOUCH 10' and categoria = 'PANEL TÁCTIL'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUT 1', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'Pantalla principal. Hasta 3840x2160 a 60 fps', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUT 2', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 3, 'Segunda pantalla. Hasta 3840x2160 a 60 fps', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'MIC IN', 2, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 4, 'Dos entradas de micrófono en mini jack de 4 pines. Aquí van los Cisco Table Microphone', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LINE OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo. Preparado para subwoofer o bucle de inducción', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Ethernet 10/100/1000 a la red del edificio', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'TOUCH', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 7, 'Ethernet dedicada al emparejamiento directo del Touch 10 o del Room Navigator. Da PoE al panel', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0. La ficha dice USB 2.0 pero no el tipo de conector. USB-A sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 9, 'Fuente externa de 100-240 V CA con salida de 12 V CC al equipo. Tipo de conector del equipo sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'SPARK ROOM KIT' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUT', 3, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'Tres salidas hasta 3840x2160 a 60 fps. Admiten pantalla táctil usando además un USB-A para el retorno del táctil', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 3, 'Entrada de vídeo y audio y passthrough de cámara micrófono y altavoces con un solo cable para BYOD. Requiere DisplayPort alt mode en el portátil', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 4, 'Ethernet 10/100/1000 a la red del edificio', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'PoE NAVIGATOR', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 5, 'Ethernet PoE 802.3af con presupuesto de 15,4 W para el emparejamiento directo del Room Navigator', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'PoE AV', 2, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Dos puertos PoE 802.3af de 15,4 W cada uno para micrófonos IP y equipo de audio AES67. Más de tres micrófonos IP exigen licencia AV Integrator', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'MIC IN', 2, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 7, 'Dos entradas analógicas de micrófono. La ficha no da el conector. Mini jack de 4 pines sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LINE OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 8, 'Una salida de línea analógica. La ficha no da el conector. Sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB-A', 2, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 para pantalla táctil micrófonos teclados y periféricos de sala', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'MICRO USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 10, 'Puerto de servicio. No se cablea en la instalación', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable de red específico por país. Media de 20 W. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'WEBEX ROOM BAR PRO' and categoria = 'VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'SALIDA DE MICRÓFONO', 1, 'salida'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 1, 'Cable fijo de 7,5 m terminado en mini jack macho de 4 pines. Extensión CAB-MIC-EXT-J de 9 m. No lleva alimentación propia. Se alimenta del codec', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V1)' and categoria = 'MICRÓFONO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'SALIDA DE MICRÓFONO', 1, 'salida'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 1, 'Mismo conector que la V1. Longitud exacta del cable de la V2 sin confirmar en ficha técnica. No lleva alimentación propia', 'csv'
-from articulos a where coalesce(marca, '') = 'CISCO' and modelo = 'TABLE MICROPHONE MINI JACK (V2)' and categoria = 'MICRÓFONO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio. La ficha de serie menciona además RS232C OUT pero no está confirmado en este tamaño', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. 128 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB65R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. 108 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. Segunda fuente', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DVI-D', 3, 'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DVI/HDMI AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo. Audio analógico de la fuente DVI', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 1', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB 2', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 9, 'USB 2.0 hasta 0,5 A', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 10, 'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 11, '100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QB55R' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 1', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN 2', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0. También hace de entrada de daisy chain', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DP IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'DisplayPort', 3, 'DisplayPort 1.2. Entrada de daisy chain. Este modelo no tiene DVI', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 4, 'Mini jack estéreo común para HDMI y audio', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 5, 'Mini jack estéreo a sistema de audio externo', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232C IN', 1, 'entrada'::sentido_puerto, 'control'::senal, 'Jack 3.5', 7, 'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB', 2, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 8, 'Dos puertos USB 2.0. Corriente máxima constante de 1,0 A', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 9, '100-240 V CA a 50/60 Hz. 44 W típicos. Tipo de conector IEC sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'SAMSUNG' and modelo = 'QM32R-B' and categoria = 'PANTALLA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'PC', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-B', 1, 'USB 3.0. Pasa cámara micrófono y altavoz por un solo cable. Cable A-B de 1,83 m incluido', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 2, 'Estéreo no balanceada TRS de 3,5 mm. Entra directa al amplificador sin control de volumen ni proceso', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 3, 'Nivel de línea para sistema de ayuda a la audición. Misma señal que los altavoces de la barra', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, '24V 2.5A', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 4, 'Alimentador externo de 24 V CC y 2,5 A con cable de red de 1,78 m. Tipo de conector del equipo sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'UC-SB1-CAM' and categoria = 'CÁMARA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI INPUT', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra con HDCP 2.2 EDID y CEC', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 2, '100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm. Solo funciona con señal de entrada estéreo de 2 canales', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'COM', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'RS-232 bidireccional hasta 115,2 kbaudios con control de flujo', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR 1-2', 1, 'salida'::sentido_puerto, 'control'::senal, 'PHX-4P', 5, 'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'CONSOLE', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 6, 'Consola USB 2.0 para configuración. No se cablea en la instalación', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, '24VDC', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'Jack DC 5.5', 7, 'Entrada de 24 V CC con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-E30' and categoria = 'TRANSMISOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUTPUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'LAN', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 2, '100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'COM', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'RS-232 bidireccional', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'IR 1-2', 1, 'salida'::sentido_puerto, 'control'::senal, 'PHX-4P', 5, 'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'CONSOLE', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'Micro-USB', 6, 'Consola USB 2.0 para configuración. No se cablea en la instalación', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, '24VDC', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'Jack DC 5.5', 7, 'Entrada de 24 V CC y 1,25 A con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+', 'csv'
-from articulos a where coalesce(marca, '') = 'CRESTRON' and modelo = 'DM-NVX-D30' and categoria = 'RECEPTOR DE VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI IN', 1, 'entrada'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'HDMI tipo A hembra. Lleva bridas LockIt para fijar el conector', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 2, 'Mini jack estéreo de 3,5 mm no balanceado. El audio analógico viaja por el par trenzado sin embeberse en el vídeo', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS-232 IR', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 3, 'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx. Se conecta el equipo principal al Tx y el secundario al Rx', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DTP OUT', 1, 'salida'::sentido_puerto, 'otro'::senal, 'RJ45', 4, 'Enlace de par trenzado al receptor hasta 70 m. Cat6A apantallado de 24 AWG rígido terminado en T568B. NO conectar a la red de datos', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'PHX-2P', 5, '12 V CC por bloque de tornillo. Fuente externa con cable IEC a 100-240 V CA. Una sola fuente alimenta la pareja Tx y Rx a través del cable DTP', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 TX' and categoria = 'TRANSMISOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DTP IN', 1, 'entrada'::sentido_puerto, 'otro'::senal, 'RJ45', 1, 'Enlace de par trenzado desde el transmisor hasta 70 m. Cat6A apantallado de 24 AWG rígido. NO conectar a la red de datos', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI tipo A hembra a la pantalla. Lleva bridas LockIt para fijar el conector', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO OUT', 1, 'salida'::sentido_puerto, 'audio_linea'::senal, 'PHX-5P', 3, 'Bloque de tornillo. Admite salida estéreo balanceada o no balanceada y mono', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS-232 IR', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'PHX-5P', 4, 'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'POWER', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, 'PHX-2P', 5, '12 V CC por bloque de tornillo. Puede alimentarse en remoto desde el Tx por el cable DTP y entonces no necesita fuente local', 'csv'
-from articulos a where coalesce(marca, '') = 'EXTRON' and modelo = 'DTP HDMI 4K 230 RX' and categoria = 'RECEPTOR VÍDEO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI OUT', 1, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 1, 'Salida a pantalla por DisplayLink con adaptador USB a HDMI integrado a 1080p. Ficha del VB342+. El inventario no distingue VB342 de VB342+', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 2, 'USB 3.1 Gen 1 al PC. Cable USB-C a USB-A de 1,8 m incluido. Ficha del VB342+. Sin confirmar para el VB342 base', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'PHONE IN', 1, 'entrada'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 3, 'Line-in de 3,5 mm para usar la barra como manos libres de un móvil o un PC. Ficha del VB342+', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'MICROPHONE', 1, 'entrada'::sentido_puerto, 'microfono'::senal, 'Jack 3.5', 4, 'Entrada para micrófono de extensión de 10 m o 20 m. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RS232', 1, 'bidireccional'::sentido_puerto, 'control'::senal, 'Mini DIN 6', 5, 'Control VISCA o Pelco P o Pelco D. Necesita adaptador Mini DIN6 a RS-232 opcional. Ficha del VB342+', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DC 12V', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 6, 'Alimentador externo de 12 V y 5 A con cable de 3 m. Tipo de conector sin confirmar en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'AVER' and modelo = 'VB342' and categoria = 'BARRA DE VIDEOCONFERENCIA'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'ETHERNET', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 1, 'Único cable. Red 10BaseT o 100BaseTX y alimentación PoE 802.3af por el mismo par. No necesita toma de corriente. Requiere switch PoE o inyector', 'csv'
-from articulos a where coalesce(marca, '') = 'STEELCASE' and modelo = 'ROOMWIZARD II' and categoria = 'PANTALLA ROOMWIZARD'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HOST USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 1, 'Cable de host desmontable de 1 m al portátil. Datos vídeo y hasta 100 W de carga con Power Delivery 3.0. Lleva adaptador de USB-C a USB-A', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI', 2, 'salida'::sentido_puerto, 'hdmi'::senal, 'HDMI A', 2, 'HDMI 2.0 hasta 4096x2160 a 60 Hz. Solo dos pantallas simultáneas contando HDMI y DisplayPort', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DISPLAYPORT', 2, 'salida'::sentido_puerto, 'otro'::senal, 'DisplayPort', 3, 'DisplayPort 1.2a. Solo dos pantallas simultáneas contando HDMI y DisplayPort', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB-A', 4, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-A', 4, 'USB 3.2 Gen 1 a 5 Gb/s. Uno de ellos con carga rápida BC1.2', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'USB-C', 1, 'bidireccional'::sentido_puerto, 'usb'::senal, 'USB-C', 5, 'USB 3.2 Gen 2 a 10 Gb/s y 7,5 W. Es puerto de datos aguas abajo. No confundir con el USB-C de host', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RJ45', 1, 'bidireccional'::sentido_puerto, 'red'::senal, 'RJ45', 6, 'Gigabit Ethernet con Wake-on-LAN PXE y clonado de MAC', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'AUDIO', 1, 'bidireccional'::sentido_puerto, 'audio_linea'::senal, 'Jack 3.5', 7, 'Combo de entrada y salida de audio de 3,5 mm', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'DC IN', 1, 'entrada'::sentido_puerto, 'alimentacion'::senal, null, 8, 'Alimentador externo de 150 W cuya toma de red es IEC C5. El conector del alimentador al dock no está confirmado en ficha técnica', 'csv'
-from articulos a where coalesce(marca, '') = 'TARGUS' and modelo = 'DOCK182' and categoria = 'DOCK STATION'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'RECEPTOR UNIFYING', 1, 'control'::sentido_puerto, 'usb'::senal, 'USB-A', 1, 'Nano receptor de 2,4 GHz que se enchufa en el PC no en el teclado. El teclado es inalámbrico y funciona con dos pilas AA. No lleva ninguna tirada de cable', 'csv'
-from articulos a where coalesce(marca, '') = 'LOGITECH' and modelo = 'K400+' and categoria = 'TECLADO'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI', 1, 'bidireccional'::sentido_puerto, 'hdmi'::senal, 'HDMI A H', 1, 'Confirmado por Sergio: la caja lleva HDMI hembra-hembra. TopFrame es modular', 'csv'
-from articulos a where coalesce(marca, '') = 'BACHMANN' and modelo = 'TOPFRAME' and categoria = 'CAJA DE CONEXIONES'
-on conflict (articulo_id, nombre) do nothing;
-insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-select a.id, 'HDMI', 1, 'bidireccional'::sentido_puerto, 'hdmi'::senal, 'HDMI A H', 1, 'Mismo criterio que la Bachmann segun Sergio. Sin confirmar modulo a modulo', 'csv'
-from articulos a where coalesce(marca, '') = 'AMX' and modelo = 'HPX 1200' and categoria = 'CAJA DE CONEXIONES'
-on conflict (articulo_id, nombre) do nothing;
+-- Puertos: 147 de 26 artículos (data/puertos.csv)
+-- BEGIN SINCRONIZACION PUERTOS
+create temporary table seed_puertos_origen (
+  marca text, modelo text not null, categoria text not null, nombre text not null,
+  total integer not null check(total>0), sentido sentido_puerto not null,
+  senal senal not null, conector text, orden integer, notas text
+) on commit drop;
+insert into seed_puertos_origen values
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','NETWORK',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',1,'Un solo cable para red y alimentación. Se alimenta por PoE. Emparejamiento directo a un puerto PoE del codec o remoto por LAN. Cat5e o Cat6 hasta 100 m'),
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','MICRO USB',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',2,'Depuración y servicio. No se cablea en la instalación'),
+('CISCO','TOUCH 10','PANEL TÁCTIL','NETWORK',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',1,'Un solo cable para red y alimentación PoE 802.3af. Emparejamiento directo al codec o por LAN con inyector PoE intermedio. El inyector debe estar en el mismo edificio'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','HDMI IN',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','HDMI OUT 1',1,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'Pantalla principal. Hasta 3840x2160 a 60 fps'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','HDMI OUT 2',1,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',3,'Segunda pantalla. Hasta 3840x2160 a 60 fps'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','MIC IN',2,'entrada'::sentido_puerto,'microfono'::senal,'Jack 3.5',4,'Dos entradas de micrófono en mini jack de 4 pines. Aquí van los Cisco Table Microphone'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','LINE OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo. Preparado para subwoofer o bucle de inducción'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','LAN',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Ethernet 10/100/1000 a la red del edificio'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','TOUCH',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',7,'Ethernet dedicada al emparejamiento directo del Touch 10 o del Room Navigator. Da PoE al panel'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','USB',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'USB 2.0. La ficha dice USB 2.0 pero no el tipo de conector. USB-A sin confirmar en ficha técnica'),
+('CISCO','SPARK ROOM KIT','VIDEOCONFERENCIA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,9,'Fuente externa de 100-240 V CA con salida de 12 V CC al equipo. Tipo de conector del equipo sin confirmar en ficha técnica'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','HDMI IN',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'Presentación. Hasta 3840x2160 a 30 fps. CEC 2.0'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','HDMI OUT',3,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'Tres salidas hasta 3840x2160 a 60 fps. Admiten pantalla táctil usando además un USB-A para el retorno del táctil'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','USB-C',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',3,'Entrada de vídeo y audio y passthrough de cámara micrófono y altavoces con un solo cable para BYOD. Requiere DisplayPort alt mode en el portátil'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','LAN',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',4,'Ethernet 10/100/1000 a la red del edificio'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','PoE NAVIGATOR',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',5,'Ethernet PoE 802.3af con presupuesto de 15,4 W para el emparejamiento directo del Room Navigator'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','PoE AV',2,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Dos puertos PoE 802.3af de 15,4 W cada uno para micrófonos IP y equipo de audio AES67. Más de tres micrófonos IP exigen licencia AV Integrator'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','MIC IN',2,'entrada'::sentido_puerto,'microfono'::senal,'Jack 3.5',7,'Dos entradas analógicas de micrófono. La ficha no da el conector. Mini jack de 4 pines sin confirmar en ficha técnica'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','LINE OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',8,'Una salida de línea analógica. La ficha no da el conector. Sin confirmar en ficha técnica'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','USB-A',2,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',9,'USB 2.0 para pantalla táctil micrófonos teclados y periféricos de sala'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','MICRO USB',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',10,'Puerto de servicio. No se cablea en la instalación'),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,11,'100-240 V CA a 50/60 Hz con cable de red específico por país. Media de 20 W. Tipo de conector sin confirmar en ficha técnica'),
+('CISCO','TABLE MICROPHONE MINI JACK (V1)','MICRÓFONO','SALIDA DE MICRÓFONO',1,'salida'::sentido_puerto,'microfono'::senal,'Jack 3.5',1,'Cable fijo de 7,5 m terminado en mini jack macho de 4 pines. Extensión CAB-MIC-EXT-J de 9 m. No lleva alimentación propia. Se alimenta del codec'),
+('CISCO','TABLE MICROPHONE MINI JACK (V2)','MICRÓFONO','SALIDA DE MICRÓFONO',1,'salida'::sentido_puerto,'microfono'::senal,'Jack 3.5',1,'Mismo conector que la V1. Longitud exacta del cable de la V2 sin confirmar en ficha técnica. No lleva alimentación propia'),
+('SAMSUNG','QB65R-B','PANTALLA','HDMI IN 1',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal'),
+('SAMSUNG','QB65R-B','PANTALLA','HDMI IN 2',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0. Segunda fuente'),
+('SAMSUNG','QB65R-B','PANTALLA','DVI IN',1,'entrada'::sentido_puerto,'otro'::senal,'DVI-D',3,'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN'),
+('SAMSUNG','QB65R-B','PANTALLA','DVI/HDMI AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',4,'Mini jack estéreo. Audio analógico de la fuente DVI'),
+('SAMSUNG','QB65R-B','PANTALLA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo a sistema de audio externo'),
+('SAMSUNG','QB65R-B','PANTALLA','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado'),
+('SAMSUNG','QB65R-B','PANTALLA','RS232C IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',7,'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio. La ficha de serie menciona además RS232C OUT pero no está confirmado en este tamaño'),
+('SAMSUNG','QB65R-B','PANTALLA','USB 1',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB'),
+('SAMSUNG','QB65R-B','PANTALLA','USB 2',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',9,'USB 2.0 hasta 0,5 A'),
+('SAMSUNG','QB65R-B','PANTALLA','IR IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',10,'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica'),
+('SAMSUNG','QB65R-B','PANTALLA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,11,'100-240 V CA a 50/60 Hz con cable desmontable. 128 W típicos. Tipo de conector IEC sin confirmar en ficha técnica'),
+('SAMSUNG','QB65R','PANTALLA','HDMI IN 1',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal'),
+('SAMSUNG','QB65R','PANTALLA','HDMI IN 2',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0. Segunda fuente'),
+('SAMSUNG','QB65R','PANTALLA','DVI IN',1,'entrada'::sentido_puerto,'otro'::senal,'DVI-D',3,'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN'),
+('SAMSUNG','QB65R','PANTALLA','DVI/HDMI AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',4,'Mini jack estéreo. Audio analógico de la fuente DVI'),
+('SAMSUNG','QB65R','PANTALLA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo a sistema de audio externo'),
+('SAMSUNG','QB65R','PANTALLA','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado'),
+('SAMSUNG','QB65R','PANTALLA','RS232C IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',7,'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio'),
+('SAMSUNG','QB65R','PANTALLA','USB 1',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB'),
+('SAMSUNG','QB65R','PANTALLA','USB 2',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',9,'USB 2.0 hasta 0,5 A'),
+('SAMSUNG','QB65R','PANTALLA','IR IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',10,'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica'),
+('SAMSUNG','QB65R','PANTALLA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,11,'100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica'),
+('SAMSUNG','QB55R-B','PANTALLA','HDMI IN 1',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal'),
+('SAMSUNG','QB55R-B','PANTALLA','HDMI IN 2',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0. Segunda fuente'),
+('SAMSUNG','QB55R-B','PANTALLA','DVI IN',1,'entrada'::sentido_puerto,'otro'::senal,'DVI-D',3,'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN'),
+('SAMSUNG','QB55R-B','PANTALLA','DVI/HDMI AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',4,'Mini jack estéreo. Audio analógico de la fuente DVI'),
+('SAMSUNG','QB55R-B','PANTALLA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo a sistema de audio externo'),
+('SAMSUNG','QB55R-B','PANTALLA','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado'),
+('SAMSUNG','QB55R-B','PANTALLA','RS232C IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',7,'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio'),
+('SAMSUNG','QB55R-B','PANTALLA','USB 1',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB'),
+('SAMSUNG','QB55R-B','PANTALLA','USB 2',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',9,'USB 2.0 hasta 0,5 A'),
+('SAMSUNG','QB55R-B','PANTALLA','IR IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',10,'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica'),
+('SAMSUNG','QB55R-B','PANTALLA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,11,'100-240 V CA a 50/60 Hz con cable desmontable. 108 W típicos. Tipo de conector IEC sin confirmar en ficha técnica'),
+('SAMSUNG','QB55R','PANTALLA','HDMI IN 1',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal'),
+('SAMSUNG','QB55R','PANTALLA','HDMI IN 2',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0. Segunda fuente'),
+('SAMSUNG','QB55R','PANTALLA','DVI IN',1,'entrada'::sentido_puerto,'otro'::senal,'DVI-D',3,'DVI-D. Admite fuente HDMI con cable HDMI-DVI. El audio de esta entrada va por DVI/HDMI AUDIO IN'),
+('SAMSUNG','QB55R','PANTALLA','DVI/HDMI AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',4,'Mini jack estéreo. Audio analógico de la fuente DVI'),
+('SAMSUNG','QB55R','PANTALLA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo a sistema de audio externo'),
+('SAMSUNG','QB55R','PANTALLA','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado'),
+('SAMSUNG','QB55R','PANTALLA','RS232C IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',7,'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio'),
+('SAMSUNG','QB55R','PANTALLA','USB 1',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'USB 2.0 hasta 1,0 A. Reproducción local desde memoria USB'),
+('SAMSUNG','QB55R','PANTALLA','USB 2',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',9,'USB 2.0 hasta 0,5 A'),
+('SAMSUNG','QB55R','PANTALLA','IR IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',10,'Cable receptor de infrarrojos externo. Tipo de conector sin confirmar en ficha técnica'),
+('SAMSUNG','QB55R','PANTALLA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,11,'100-240 V CA a 50/60 Hz con cable desmontable. Tipo de conector IEC sin confirmar en ficha técnica'),
+('SAMSUNG','QM32R-B','PANTALLA','HDMI IN 1',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI 2.0 con ARC y HDCP 2.2. Entrada principal'),
+('SAMSUNG','QM32R-B','PANTALLA','HDMI IN 2',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0. También hace de entrada de daisy chain'),
+('SAMSUNG','QM32R-B','PANTALLA','DP IN',1,'entrada'::sentido_puerto,'otro'::senal,'DisplayPort',3,'DisplayPort 1.2. Entrada de daisy chain. Este modelo no tiene DVI'),
+('SAMSUNG','QM32R-B','PANTALLA','AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',4,'Mini jack estéreo común para HDMI y audio'),
+('SAMSUNG','QM32R-B','PANTALLA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',5,'Mini jack estéreo a sistema de audio externo'),
+('SAMSUNG','QM32R-B','PANTALLA','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Red y control MDC a 10/100 Mbps. Samsung recomienda Cat7 apantallado'),
+('SAMSUNG','QM32R-B','PANTALLA','RS232C IN',1,'entrada'::sentido_puerto,'control'::senal,'Jack 3.5',7,'Control MDC con adaptador RS232C. Es un jack estéreo pero no lleva audio'),
+('SAMSUNG','QM32R-B','PANTALLA','USB',2,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',8,'Dos puertos USB 2.0. Corriente máxima constante de 1,0 A'),
+('SAMSUNG','QM32R-B','PANTALLA','POWER IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,9,'100-240 V CA a 50/60 Hz. 44 W típicos. Tipo de conector IEC sin confirmar en ficha técnica'),
+('CRESTRON','UC-SB1-CAM','CÁMARA','PC',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-B',1,'USB 3.0. Pasa cámara micrófono y altavoz por un solo cable. Cable A-B de 1,83 m incluido'),
+('CRESTRON','UC-SB1-CAM','CÁMARA','AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',2,'Estéreo no balanceada TRS de 3,5 mm. Entra directa al amplificador sin control de volumen ni proceso'),
+('CRESTRON','UC-SB1-CAM','CÁMARA','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',3,'Nivel de línea para sistema de ayuda a la audición. Misma señal que los altavoces de la barra'),
+('CRESTRON','UC-SB1-CAM','CÁMARA','24V 2.5A',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,4,'Alimentador externo de 24 V CC y 2,5 A con cable de red de 1,78 m. Tipo de conector del equipo sin confirmar en ficha técnica'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','HDMI INPUT',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI tipo A hembra con HDCP 2.2 EDID y CEC'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','LAN',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',2,'100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','AUDIO',1,'salida'::sentido_puerto,'audio_linea'::senal,'PHX-5P',3,'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm. Solo funciona con señal de entrada estéreo de 2 canales'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','COM',1,'bidireccional'::sentido_puerto,'control'::senal,'PHX-5P',4,'RS-232 bidireccional hasta 115,2 kbaudios con control de flujo'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','IR 1-2',1,'salida'::sentido_puerto,'control'::senal,'PHX-4P',5,'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','CONSOLE',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',6,'Consola USB 2.0 para configuración. No se cablea en la instalación'),
+('CRESTRON','DM-NVX-E30','TRANSMISOR DE VÍDEO','24VDC',1,'entrada'::sentido_puerto,'alimentacion'::senal,'Jack DC 5.5',7,'Entrada de 24 V CC con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','HDMI OUTPUT',1,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI tipo A hembra'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','LAN',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',2,'100BASE-TX o 1000BASE-T. Se puede alimentar por PoE+. Mínimo Cat5e y red no bloqueante. No conectar a puertos DM de otros equipos Crestron'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','AUDIO',1,'salida'::sentido_puerto,'audio_linea'::senal,'PHX-5P',3,'Salida de línea estéreo balanceada o no balanceada. Bloque de tornillo desmontable de 5 pines y 3,5 mm'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','COM',1,'bidireccional'::sentido_puerto,'control'::senal,'PHX-5P',4,'RS-232 bidireccional'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','IR 1-2',1,'salida'::sentido_puerto,'control'::senal,'PHX-4P',5,'Bloque de tornillo de 4 pines con dos puertos IR o serie TTL'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','CONSOLE',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',6,'Consola USB 2.0 para configuración. No se cablea en la instalación'),
+('CRESTRON','DM-NVX-D30','RECEPTOR DE VÍDEO','24VDC',1,'entrada'::sentido_puerto,'alimentacion'::senal,'Jack DC 5.5',7,'Entrada de 24 V CC y 1,25 A con conector de 2,1 x 5,5 mm. Alternativa a alimentar por PoE+'),
+('EXTRON','DTP HDMI 4K 230 TX','TRANSMISOR VÍDEO','HDMI IN',1,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'HDMI tipo A hembra. Lleva bridas LockIt para fijar el conector'),
+('EXTRON','DTP HDMI 4K 230 TX','TRANSMISOR VÍDEO','AUDIO IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',2,'Mini jack estéreo de 3,5 mm no balanceado. El audio analógico viaja por el par trenzado sin embeberse en el vídeo'),
+('EXTRON','DTP HDMI 4K 230 TX','TRANSMISOR VÍDEO','RS-232 IR',1,'bidireccional'::sentido_puerto,'control'::senal,'PHX-5P',3,'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx. Se conecta el equipo principal al Tx y el secundario al Rx'),
+('EXTRON','DTP HDMI 4K 230 TX','TRANSMISOR VÍDEO','DTP OUT',1,'salida'::sentido_puerto,'otro'::senal,'RJ45',4,'Enlace de par trenzado al receptor hasta 70 m. Cat6A apantallado de 24 AWG rígido terminado en T568B. NO conectar a la red de datos'),
+('EXTRON','DTP HDMI 4K 230 TX','TRANSMISOR VÍDEO','POWER',1,'entrada'::sentido_puerto,'alimentacion'::senal,'PHX-2P',5,'12 V CC por bloque de tornillo. Fuente externa con cable IEC a 100-240 V CA. Una sola fuente alimenta la pareja Tx y Rx a través del cable DTP'),
+('EXTRON','DTP HDMI 4K 230 RX','RECEPTOR VÍDEO','DTP IN',1,'entrada'::sentido_puerto,'otro'::senal,'RJ45',1,'Enlace de par trenzado desde el transmisor hasta 70 m. Cat6A apantallado de 24 AWG rígido. NO conectar a la red de datos'),
+('EXTRON','DTP HDMI 4K 230 RX','RECEPTOR VÍDEO','HDMI OUT',1,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI tipo A hembra a la pantalla. Lleva bridas LockIt para fijar el conector'),
+('EXTRON','DTP HDMI 4K 230 RX','RECEPTOR VÍDEO','AUDIO OUT',1,'salida'::sentido_puerto,'audio_linea'::senal,'PHX-5P',3,'Bloque de tornillo. Admite salida estéreo balanceada o no balanceada y mono'),
+('EXTRON','DTP HDMI 4K 230 RX','RECEPTOR VÍDEO','RS-232 IR',1,'bidireccional'::sentido_puerto,'control'::senal,'PHX-5P',4,'Bloque de tornillo con masa RS-232 Tx y Rx e IR Tx y Rx'),
+('EXTRON','DTP HDMI 4K 230 RX','RECEPTOR VÍDEO','POWER',1,'entrada'::sentido_puerto,'alimentacion'::senal,'PHX-2P',5,'12 V CC por bloque de tornillo. Puede alimentarse en remoto desde el Tx por el cable DTP y entonces no necesita fuente local'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','HDMI OUT',1,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',1,'Salida a pantalla por DisplayLink con adaptador USB a HDMI integrado a 1080p. Ficha del VB342+. El inventario no distingue VB342 de VB342+'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','USB',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',2,'USB 3.1 Gen 1 al PC. Cable USB-C a USB-A de 1,8 m incluido. Ficha del VB342+. Sin confirmar para el VB342 base'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','PHONE IN',1,'entrada'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',3,'Line-in de 3,5 mm para usar la barra como manos libres de un móvil o un PC. Ficha del VB342+'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','MICROPHONE',1,'entrada'::sentido_puerto,'microfono'::senal,'Jack 3.5',4,'Entrada para micrófono de extensión de 10 m o 20 m. Tipo de conector sin confirmar en ficha técnica'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','RS232',1,'bidireccional'::sentido_puerto,'control'::senal,'Mini DIN 6',5,'Control VISCA o Pelco P o Pelco D. Necesita adaptador Mini DIN6 a RS-232 opcional. Ficha del VB342+'),
+('AVER','VB342','BARRA DE VIDEOCONFERENCIA','DC 12V',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,6,'Alimentador externo de 12 V y 5 A con cable de 3 m. Tipo de conector sin confirmar en ficha técnica'),
+('STEELCASE','ROOMWIZARD II','PANTALLA ROOMWIZARD','ETHERNET',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',1,'Único cable. Red 10BaseT o 100BaseTX y alimentación PoE 802.3af por el mismo par. No necesita toma de corriente. Requiere switch PoE o inyector'),
+('TARGUS','DOCK182','DOCK STATION','HOST USB-C',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',1,'Cable de host desmontable de 1 m al portátil. Datos vídeo y hasta 100 W de carga con Power Delivery 3.0. Lleva adaptador de USB-C a USB-A'),
+('TARGUS','DOCK182','DOCK STATION','HDMI',2,'salida'::sentido_puerto,'hdmi'::senal,'HDMI A',2,'HDMI 2.0 hasta 4096x2160 a 60 Hz. Solo dos pantallas simultáneas contando HDMI y DisplayPort'),
+('TARGUS','DOCK182','DOCK STATION','DISPLAYPORT',2,'salida'::sentido_puerto,'otro'::senal,'DisplayPort',3,'DisplayPort 1.2a. Solo dos pantallas simultáneas contando HDMI y DisplayPort'),
+('TARGUS','DOCK182','DOCK STATION','USB-A',4,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',4,'USB 3.2 Gen 1 a 5 Gb/s. Uno de ellos con carga rápida BC1.2'),
+('TARGUS','DOCK182','DOCK STATION','USB-C',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',5,'USB 3.2 Gen 2 a 10 Gb/s y 7,5 W. Es puerto de datos aguas abajo. No confundir con el USB-C de host'),
+('TARGUS','DOCK182','DOCK STATION','RJ45',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',6,'Gigabit Ethernet con Wake-on-LAN PXE y clonado de MAC'),
+('TARGUS','DOCK182','DOCK STATION','AUDIO',1,'bidireccional'::sentido_puerto,'audio_linea'::senal,'Jack 3.5',7,'Combo de entrada y salida de audio de 3,5 mm'),
+('TARGUS','DOCK182','DOCK STATION','DC IN',1,'entrada'::sentido_puerto,'alimentacion'::senal,null,8,'Alimentador externo de 150 W cuya toma de red es IEC C5. El conector del alimentador al dock no está confirmado en ficha técnica'),
+('LOGITECH','K400+','TECLADO','RECEPTOR UNIFYING',1,'control'::sentido_puerto,'usb'::senal,'USB-A',1,'Nano receptor de 2,4 GHz que se enchufa en el PC no en el teclado. El teclado es inalámbrico y funciona con dos pilas AA. No lleva ninguna tirada de cable'),
+('BACHMANN','TOPFRAME','CAJA DE CONEXIONES','HDMI',1,'bidireccional'::sentido_puerto,'hdmi'::senal,'HDMI A H',1,'Confirmado por Sergio: la caja lleva HDMI hembra-hembra. TopFrame es modular'),
+('AMX','HPX 1200','CAJA DE CONEXIONES','HDMI',1,'bidireccional'::sentido_puerto,'hdmi'::senal,'HDMI A H',1,'Mismo criterio que la Bachmann segun Sergio. Sin confirmar modulo a modulo'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','HDMI outputs',3,'salida'::sentido_puerto,'hdmi'::senal,'HDMI',1,'Grupo 7. Bocas numeradas 1 a 3. Audio y video 4Kp60. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','HDMI inputs',3,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI',2,'Grupo 8. Bocas numeradas 1 a 3. Audio y video 4Kp30. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Network (Ethernet PoE)',3,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',3,'Grupo 4. Tres bocas de perifericos. No incluye la boca del panel tactil. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Touch panel',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',4,'Grupo 5. Boca del panel tactil PoE. No se suma otra vez como red de perifericos. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Network (Ethernet)',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',5,'Grupo 6. LAN del edificio. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','USB 3.0 type C',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',6,'Grupo 9. Una boca fisica aunque transporte varios tipos de contenido. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','USB 3.0 type A',4,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',7,'Grupo 10. Cuatro bocas fisicas. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Maintenance (micro USB)',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',8,'Grupo 12. Solo mantenimiento. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Microphone inputs',3,'entrada'::sentido_puerto,'microfono'::senal,'Mini jack',9,'Grupo 13. Tres entradas analogicas. Mini jack segun ficha EQ. No presupone compatibilidad con cualquier microfono. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','Audio line output',1,'salida'::sentido_puerto,'audio_linea'::senal,null,10,'Grupo 14. Conector sin especificar en el texto de esta guia. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','HDMI outputs',3,'salida'::sentido_puerto,'hdmi'::senal,'HDMI',1,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 7. Bocas numeradas 1 a 3. Audio y video 4Kp60. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','HDMI inputs',3,'entrada'::sentido_puerto,'hdmi'::senal,'HDMI',2,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 8. Bocas numeradas 1 a 3. Audio y video 4Kp30. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Network (Ethernet PoE)',3,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',3,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 4. Tres bocas de perifericos. No incluye la boca del panel tactil. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Touch panel',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',4,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 5. Boca del panel tactil PoE. No se suma otra vez como red de perifericos. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Network (Ethernet)',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',5,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 6. LAN del edificio. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','USB 3.0 type C',1,'bidireccional'::sentido_puerto,'usb'::senal,'USB-C',6,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 9. Una boca fisica aunque transporte varios tipos de contenido. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','USB 3.0 type A',4,'bidireccional'::sentido_puerto,'usb'::senal,'USB-A',7,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 10. Cuatro bocas fisicas. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Maintenance (micro USB)',1,'bidireccional'::sentido_puerto,'usb'::senal,'Micro-USB',8,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 12. Solo mantenimiento. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Microphone inputs',3,'entrada'::sentido_puerto,'microfono'::senal,'Mini jack',9,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 13. Tres entradas analogicas. Mini jack segun ficha EQ. No presupone compatibilidad con cualquier microfono. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','Audio line output',1,'salida'::sentido_puerto,'audio_linea'::senal,null,10,'Puertos del Codec EQ incluido. Cámara/control se documentan aparte. Composición del kit: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html. Grupo 14. Conector sin especificar en el texto de esta guia. Rotulo de la leyenda oficial (panel con iconos). Fuente pagina 5: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf'),
+('CISCO','QUAD CAMERA','CÁMARA','HDMI output',2,'salida'::sentido_puerto,'hdmi'::senal,'HDMI',1,'Leyenda oficial grupo HDMI output. Cámara física CS-QUADCAM2+ del montaje nuevo. El panel numera 2 a la izquierda y 1 a la derecha mirando los conectores. Usar boca 1 con ARC hacia HDMI IN 1 del Codec EQ. Fuente panel y conexión: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf pagina 16. Dos salidas confirmadas en https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/room-kit-pro-installation-guide-en-fr-es-pt-it-de.pdf pagina 34. Confirmar identidad física de unidades históricas'),
+('CISCO','QUAD CAMERA','CÁMARA','Camera control',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',2,'Leyenda oficial de control Ethernet. En el montaje nuevo conecta al primer RJ45 PoE++ del Codec EQ mirando su trasera de izquierda a derecha. La cámara usa fuente de alimentación propia. Fuente: https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf pagina 16. Confirmar identidad física de unidades históricas'),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','RJ45 Ethernet',1,'bidireccional'::sentido_puerto,'red'::senal,'RJ45',1,'Denominación del conector según fabricante. Representa el extremo RJ45 del cable unido de 11 m y no una toma hembra libre en el micrófono. Audio sobre IP y alimentación PoE 5 W. Conectar directamente a boca PoE compatible. No sumar otro cable de 11 m como compra adicional. Fuente: https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html apartados Connector y Power consumption');
+do $$ declare problemas text; begin
+  select string_agg(format('%s %s [%s] / %s: %s artículos',o.marca,o.modelo,o.categoria,o.nombre,
+    (select count(*) from articulos a where coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria)),E'
+')
+  into problemas from seed_puertos_origen o where
+    (select count(*) from articulos a where coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria) <> 1;
+  if problemas is not null then raise exception 'CSV de puertos: artículo inexistente o ambiguo' using errcode='23514', detail=problemas; end if;
+end $$;
+create temporary table seed_puertos on commit drop as
+select a.id as articulo_id,o.nombre,o.total,o.sentido,o.senal,o.conector,o.orden,o.notas
+from seed_puertos_origen o join articulos a on coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria;
+create unique index on seed_puertos(articulo_id,nombre);
+-- Serializar altas/cambios del catálogo; los locks de fila bloquean también FK y bocas concurrentes.
+lock table puertos in share row exclusive mode;
+do $$ begin perform id from puertos order by id for update; end $$;
+do $$ declare afectados text; begin
+  with cambios as (
+    select p.id,p.nombre,p.total,s.total as nuevo_total from puertos p
+    left join seed_puertos s on s.articulo_id=p.articulo_id and s.nombre=p.nombre
+    where p.fuente='csv' and (s.articulo_id is null or s.total<p.total)
+  ), usos as (
+    select p.id as puerto_id,p.nombre,p.nuevo_total,'conexion' as clase,c.id as referencia,
+      s.nombre as propietario,v.lado,b.ordinal
+    from cambios p join conexiones c on c.puerto_origen_id=p.id or c.puerto_destino_id=p.id
+    join salas s on s.id=c.sala_id
+    cross join lateral (values ('origen',c.puerto_origen_id),('destino',c.puerto_destino_id)) v(lado,puerto_id)
+    left join conexion_bocas b on b.conexion_id=c.id and b.lado::text=v.lado and b.puerto_id=p.id
+    where v.puerto_id=p.id and (p.nuevo_total is null or b.ordinal is null or b.ordinal>p.nuevo_total)
+    union
+    select p.id,p.nombre,p.nuevo_total,'conexion',b.conexion_id,s.nombre,b.lado::text,b.ordinal
+    from cambios p join conexion_bocas b on b.puerto_id=p.id
+    join conexiones c on c.id=b.conexion_id join salas s on s.id=c.sala_id
+    where p.nuevo_total is null or b.ordinal>p.nuevo_total
+    union
+    select p.id,p.nombre,p.nuevo_total,'plantilla',b.plantilla_conexion_id,t.nombre,b.lado::text,b.ordinal
+    from cambios p join plantilla_conexion_bocas b on b.puerto_id=p.id
+    join plantilla_conexiones c on c.id=b.plantilla_conexion_id join plantillas_sala t on t.id=c.plantilla_id
+    where p.nuevo_total is null or b.ordinal>p.nuevo_total
+    union
+    select p.id,p.nombre,p.nuevo_total,'ficha_tecnica',d.id,
+      concat_ws(' ',a.marca,a.modelo,d.clave),'documental',null::integer
+    from cambios p join articulo_datos_tecnicos d on d.puerto_id=p.id
+    join articulos a on a.id=d.articulo_id where p.nuevo_total is null
+  ) select string_agg(format('puerto %s [%s], %s %s [%s], lado %s, ordinal %s, nuevo total %s',
+    nombre,puerto_id,clase,propietario,referencia,lado,coalesce(ordinal::text,'desconocido'),coalesce(nuevo_total::text,'retirado')),E'
+' order by puerto_id,clase,referencia,lado)
+    into afectados from usos;
+  if afectados is not null then raise exception 'CSV de puertos incompatible con conexiones o fichas existentes' using errcode='23514', detail=afectados; end if;
+end $$;
+delete from puertos p where p.fuente='csv' and not exists
+  (select 1 from seed_puertos s where s.articulo_id=p.articulo_id and s.nombre=p.nombre);
+insert into puertos(articulo_id,nombre,total,sentido,senal,conector,orden,notas,fuente)
+select articulo_id,nombre,total,sentido,senal,conector,orden,notas,'csv' from seed_puertos
+on conflict(articulo_id,nombre) do update set total=excluded.total,sentido=excluded.sentido,
+  senal=excluded.senal,conector=excluded.conector,orden=excluded.orden,notas=excluded.notas
+where puertos.fuente='csv';
+-- END SINCRONIZACION PUERTOS
 
 -- Técnicos: 8 personas (data/tecnicos.csv)
 -- El CSV manda sobre lo suyo conservando el uuid. Lo de la app no se toca.
@@ -2210,63 +1924,26 @@ where pa.plantilla_id = ps.id
   and pa.categoria = 'MICRÓFONO'
   and pa.x_m is null and pa.y_m is null;
 
--- Tiradas tipo de plantilla (4)
-insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
-select ps.id, o.id, d.id, 'hdmi'::senal,
-       'falso_techo'::ruta_cable, 1, 'El HDMI del portatil entra en el Spark. Es el unico que sube a la mesa.'
-from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA DE CONEXIONES'
-join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
-where ps.nombre = 'SALA TP · aforo 8'
-  and not exists (
-    select 1 from plantilla_conexiones pc
-    where pc.plantilla_id = ps.id
-      and pc.origen_linea_id = o.id
-      and pc.destino_linea_id = d.id
-      and pc.senal = 'hdmi'::senal
-  );
-insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
-select ps.id, o.id, d.id, 'hdmi'::senal,
-       'directo'::ruta_cable, 2, 'Salida del Spark a la pantalla. Los dos van en la misma pared.'
-from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'VIDEOCONFERENCIA'
-join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'PANTALLA'
-where ps.nombre = 'SALA TP · aforo 8'
-  and not exists (
-    select 1 from plantilla_conexiones pc
-    where pc.plantilla_id = ps.id
-      and pc.origen_linea_id = o.id
-      and pc.destino_linea_id = d.id
-      and pc.senal = 'hdmi'::senal
-  );
-insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
-select ps.id, o.id, d.id, 'red'::senal,
-       'falso_techo'::ruta_cable, 3, 'RJ45 de 10 m. Ademas de datos, da corriente al panel por PoE.'
-from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'PANEL TÁCTIL'
-join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
-where ps.nombre = 'SALA TP · aforo 8'
-  and not exists (
-    select 1 from plantilla_conexiones pc
-    where pc.plantilla_id = ps.id
-      and pc.origen_linea_id = o.id
-      and pc.destino_linea_id = d.id
-      and pc.senal = 'red'::senal
-  );
-insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta, orden, notas)
-select ps.id, o.id, d.id, 'red'::senal,
-       'falso_techo'::ruta_cable, 4, 'RJ45 de la roseta de red del edificio para el portatil del usuario.'
-from plantillas_sala ps
-join plantilla_articulos o on o.plantilla_id = ps.id and o.categoria = 'CAJA DE CONEXIONES'
-join plantilla_articulos d on d.plantilla_id = ps.id and d.categoria = 'VIDEOCONFERENCIA'
-where ps.nombre = 'SALA TP · aforo 8'
-  and not exists (
-    select 1 from plantilla_conexiones pc
-    where pc.plantilla_id = ps.id
-      and pc.origen_linea_id = o.id
-      and pc.destino_linea_id = d.id
-      and pc.senal = 'red'::senal
-  );
+-- Tiradas documentales: conservan fuente literal, no crean conexiones fisicas.
+lock table plantilla_tiradas_documentales in share row exclusive mode;
+create temporary table tiradas_documentales_csv (fuente_clave text not null,tipologia text not null,aforo text not null,origen_categoria text not null,destino_categoria text not null,senal text not null,ruta text not null,orden text not null,notas text not null,nombre_plantilla text not null) on commit drop;
+insert into tiradas_documentales_csv values
+('tirada-001','SALA TP','8','CAJA CONEXIONES','VIDEOCONFERENCIA','hdmi','falso_techo','1','El HDMI del portatil entra en el Spark. Es el unico que sube a la mesa.','SALA TP · aforo 8'),
+('tirada-002','SALA TP','8','VIDEOCONFERENCIA','PANTALLA','hdmi','directo','2','Salida del Spark a la pantalla. Los dos van en la misma pared.','SALA TP · aforo 8'),
+('tirada-003','SALA TP','8','PANEL TÁCTIL','VIDEOCONFERENCIA','red','falso_techo','3','RJ45 de 10 m. Ademas de datos, da corriente al panel por PoE.','SALA TP · aforo 8'),
+('tirada-004','SALA TP','8','CAJA CONEXIONES','VIDEOCONFERENCIA','red','falso_techo','4','RJ45 de la roseta de red del edificio para el portatil del usuario.','SALA TP · aforo 8');
+do $$ declare faltan text; begin
+ select string_agg(f.fuente_clave,', ') into faltan from tiradas_documentales_csv f
+ where (select count(*) from plantillas_sala p where p.nombre=f.nombre_plantilla)<>1;
+ if faltan is not null then raise exception 'Tiradas documentales sin plantilla univoca: %',faltan; end if;
+ select string_agg(d.fuente_clave,', ') into faltan from plantilla_tiradas_documentales d
+ where not exists(select 1 from tiradas_documentales_csv f where f.fuente_clave=d.fuente_clave);
+ if faltan is not null then raise exception 'Fuente documental retirada: requiere revision explicita (%). No se borra historia',faltan; end if;
+end $$;
+insert into plantilla_tiradas_documentales (fuente_clave,tipologia,aforo,origen_categoria,destino_categoria,senal,ruta,orden,notas,plantilla_id)
+select f.fuente_clave,f.tipologia,f.aforo,f.origen_categoria,f.destino_categoria,f.senal,f.ruta,f.orden,f.notas,p.id from tiradas_documentales_csv f join plantillas_sala p on p.nombre=f.nombre_plantilla
+on conflict(fuente_clave) do update set
+ tipologia=excluded.tipologia,aforo=excluded.aforo,origen_categoria=excluded.origen_categoria,destino_categoria=excluded.destino_categoria,senal=excluded.senal,ruta=excluded.ruta,orden=excluded.orden,notas=excluded.notas,plantilla_id=excluded.plantilla_id;
 
 -- Enlaza cada línea de plantilla con el artículo del catálogo cuando el modelo coincide
 update plantilla_articulos pa
@@ -2276,4 +1953,105 @@ where pa.articulo_id is null
   and pa.modelo_texto is not null
   and upper(trim(coalesce(a.marca,'') || ' ' || a.modelo)) = upper(trim(pa.modelo_texto));
 
+-- BEGIN FICHAS TECNICAS
+create temporary table seed_datos_tecnicos_origen (
+  marca text, modelo text, categoria text, clave text, concepto text, tipo text, estado text,
+  valor jsonb, fuente_url text, documento text, apartado text, consultado_en date, puerto_nombre text, puerto_fuente text
+) on commit drop;
+insert into seed_datos_tecnicos_origen values
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','microfonia','Captación de voz','microfonia','verificado','{"captacion":"externa"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Product specifications - Audio inputs','2026-09-08',null,null),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','alimentacion','Alimentación eléctrica','alimentacion','verificado','{"descripcion":"100–240 V CA, 50/60 Hz"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Power supplies','2026-09-08',null,null),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','poe-presupuesto','Presupuesto PoE compartido','poe','verificado','{"rol":"pse","vatios":90,"estandar":"IEEE 802.3bt","compartido":true}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 13 - cuatro primeros Ethernet, presupuesto total','2026-09-08',null,null),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-hdmi-salidas','Salidas HDMI','puerto','verificado','{"nombre":"HDMI outputs","total":3,"sentido":"salida","senal":"hdmi","conector":"HDMI"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 7','2026-09-08','HDMI outputs','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-hdmi-entradas','Entradas HDMI','puerto','verificado','{"nombre":"HDMI inputs","total":3,"sentido":"entrada","senal":"hdmi","conector":"HDMI"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 8','2026-09-08','HDMI inputs','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-usb-c','Puerto USB-C','puerto','parcial','{"nombre":"USB 3.0 type C","total":1,"sentido":"bidireccional","senal":"usb","conector":"USB-C"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 9','2026-09-08','USB 3.0 type C','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-usb-a','Puertos USB-A','puerto','parcial','{"nombre":"USB 3.0 type A","total":4,"sentido":"bidireccional","senal":"usb","conector":"USB-A"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 10','2026-09-08','USB 3.0 type A','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-microfonos','Entradas de micrófono','puerto','parcial','{"nombre":"Microphone inputs","total":3,"sentido":"entrada","senal":"microfono","conector":null}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 13, conector pendiente','2026-09-08','Microphone inputs','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','puerto-linea','Salida de audio de línea','puerto','parcial','{"nombre":"Audio line output","total":1,"sentido":"salida","senal":"audio_linea","conector":null}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/codec-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Codec EQ Installation Guide D15548.01, 2025','Página 5 - grupo 14, conector pendiente','2026-09-08','Audio line output','csv'),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','camara-principal','Conexión HDMI de la cámara principal','restriccion','verificado','{"texto":"Quad Camera HDMI OUT 1 conecta a HDMI IN 1 del Codec EQ. El mismo cable lleva retorno de audio ARC a los altavoces de la cámara."}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf','Cisco Camera Guide D15296.23, marzo 2026','Página 16 - Connect Quad Camera to Codec EQ','2026-09-08',null,null),
+('CISCO','CODEC EQ','VIDEOCONFERENCIA','control-camara','Conexión Ethernet de control de cámara','restriccion','verificado','{"texto":"El diagrama de conexión lleva el RJ45 de Quad Camera al primer RJ45 PoE++ del Codec EQ, a la izquierda mirando la trasera y junto al interruptor. Los RJ45 periféricos del codec no muestran un icono de cámara."}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf','Cisco Camera Guide D15296.23, marzo 2026','Página 16 - diagrama de conexión RJ45, contrastado con Codec EQ p.5','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','alcance-sku','Referencia del kit documentado','restriccion','parcial','{"texto":"Composición documentada exclusivamente para CS-KIT-EQ-K9 First Light. Confirmar SKU antes de atribuirla a una unidad histórica."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - CS-KIT-EQ-K9','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','incluye-codec','Codec incluido','suministro','parcial','{"referencia":"CS-CODEC-EQ-K9+","cantidad":1,"longitud_m":null,"longitud_aplica":false,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - bundle CS-KIT-EQ-K9','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','incluye-camara','Cámara incluida','suministro','parcial','{"referencia":"CS-QUADCAM2+","cantidad":1,"longitud_m":null,"longitud_aplica":false,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - bundle CS-KIT-EQ-K9','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','incluye-panel','Panel de control incluido','suministro','parcial','{"referencia":"CS-T10-TS-L+","cantidad":1,"longitud_m":null,"longitud_aplica":false,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - bundle CS-KIT-EQ-K9','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','microfonia','Captación de voz','microfonia','parcial','{"captacion":"externa"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Quad Camera speaker tracking y micrófonos opcionales','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','adaptador-camara','Adaptador de alimentación de la cámara','suministro','parcial','{"referencia":"PSU-12VDC-70W-GR+","cantidad":1,"longitud_m":null,"longitud_aplica":false,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - Default Box Components, Quad Camera bundles','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','ethernet-panel-opcional','Cable Ethernet opcional del panel','suministro','verificado','{"referencia":"Cable Ethernet para Room Navigator","cantidad":1,"longitud_m":null,"longitud_aplica":true,"incluido":false}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/room-kit-eq-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Room Kit EQ Installation Guide','Página PDF 3, impresa 2–3 - cable opcional','2026-09-08',null,null),
+('CISCO','ROOM KIT EQ','VIDEOCONFERENCIA','hdmi-suministrado','Cable HDMI suministrado','suministro','sin_documentar','null',null,null,null,'2026-09-08',null,null),
+('CISCO','QUAD CAMERA','CÁMARA','cambio-referencia','Sustitución de referencia comercial','restriccion','verificado','{"texto":"CS-QUADCAM+ se sustituye por CS-QUADCAM2+ sin cambio funcional. No identifica automáticamente referencias ambiguas del inventario."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/telepresence-mx-series/quadcam-eol.html','Cisco EOL15049, 29-05-2023','Overview y tabla 2','2026-09-08',null,null),
+('CISCO','QUAD CAMERA','CÁMARA','captacion-seguimiento','Función de los micrófonos de seguimiento','restriccion','verificado','{"texto":"Los micrófonos integrados se documentan para seguimiento de hablante, no como captación de voz de la reunión."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Product features - Quad Camera','2026-09-08',null,null),
+('CISCO','QUAD CAMERA','CÁMARA','alimentacion','Alimentación eléctrica de la cámara','alimentacion','verificado','{"descripcion":"12 V CC, 5,83 A. Usar el adaptador de 70 W suministrado para la cámara."}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/room-kit-pro-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Room Kit Pro Installation Guide','Página 34 - conector H y alimentación','2026-09-08',null,null),
+('CISCO','QUAD CAMERA','CÁMARA','puerto-hdmi','Salidas HDMI de la cámara','puerto','verificado','{"nombre":"HDMI output","total":2,"sentido":"salida","senal":"hdmi","conector":"HDMI"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/room-kit/installation-guide/room-kit-pro-installation-guide-en-fr-es-pt-it-de.pdf','Cisco Room Kit Pro Installation Guide','Página 34 - grupo F, dos salidas HDMI','2026-09-08','HDMI output','csv'),
+('CISCO','QUAD CAMERA','CÁMARA','puerto-control','Puerto de control de cámara','puerto','verificado','{"nombre":"Camera control","total":1,"sentido":"bidireccional","senal":"red","conector":"RJ45"}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf','Cisco Camera Guide D15296.23, marzo 2026','Página 16 - conexión de control RJ45','2026-09-08','Camera control','csv'),
+('CISCO','QUAD CAMERA','CÁMARA','conexion-hdmi','Conexión HDMI y retorno de audio','restriccion','verificado','{"texto":"HDMI OUT 1 de cámara hacia HDMI IN 1 de Codec EQ, con retorno ARC para altavoces. No añadir un cable analógico para este retorno."}','https://www.cisco.com/c/dam/en/us/td/docs/telepresence/endpoint/camera/precisionhd/user_guide/cisco-conferencing-camera-guide.pdf','Cisco Camera Guide D15296.23, marzo 2026','Página 16 - Connect Quad Camera to Codec EQ','2026-09-08',null,null),
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','variante','Variante de panel documentada','restriccion','parcial','{"texto":"Ficha de la variante de mesa CS-T10-TS-L+. Confirmar variante física del panel antes de aplicar datos de montaje."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html','Cisco Room Kit EQ Data Sheet, 30-04-2026','Tabla 3 - bundle y Room Navigator de mesa','2026-09-08',null,null),
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','poe','Alimentación PoE del panel','poe','parcial','{"rol":"pd","vatios":null,"estandar":"IEEE 802.3af Class 0","compartido":false}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/webex-room-series/datasheet-c78-744227.html','Cisco Room Navigator for Table Data Sheet, 28-04-2026','Power - consumo exacto no especificado','2026-09-08',null,null),
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','puerto-network','Puerto de red del panel','puerto','parcial','{"nombre":"NETWORK","total":1,"sentido":"bidireccional","senal":"red","conector":"RJ45"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/webex-room-series/datasheet-c78-744227.html','Cisco Room Navigator for Table Data Sheet, 28-04-2026','Interfaces - Ethernet RJ45, literal NETWORK del catálogo','2026-09-08','NETWORK','csv'),
+('CISCO','ROOM NAVIGATOR','PANEL TÁCTIL','servicio','Puerto de servicio y conexión de red','restriccion','verificado','{"texto":"Puerto micro-USB reservado a servicio. La conexión Ethernet proporciona red y alimentación."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/webex-room-series/datasheet-c78-744227.html','Cisco Room Navigator for Table Data Sheet, 28-04-2026','Interfaces y Product overview','2026-09-08',null,null),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','poe','Alimentación PoE del micrófono','poe','parcial','{"rol":"pd","vatios":5,"estandar":null,"compartido":false}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Power consumption - 5 W PoE, estándar no especificado','2026-09-08',null,null),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','cable-unido','Cable Ethernet unido al micrófono','suministro','verificado','{"referencia":"Cable Ethernet unido al Table Microphone Pro, RJ45","cantidad":1,"longitud_m":11,"longitud_aplica":true,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Connector y Default components','2026-09-08',null,null),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','kit-montaje','Kit de montaje del micrófono','suministro','verificado','{"referencia":"Kit de montaje sobre mesa y empotrado","cantidad":1,"longitud_m":null,"longitud_aplica":false,"incluido":true}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Default components','2026-09-08',null,null),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','conector-red','Conector RJ45 del cable unido','puerto','parcial','{"nombre":"RJ45 Ethernet","total":1,"sentido":"bidireccional","senal":"red","conector":"RJ45"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Connector - conector del cable unido, denominación descriptiva','2026-09-08','RJ45 Ethernet','csv'),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','compatibilidad-eq','Compatibilidad con Room Kit EQ','restriccion','verificado','{"texto":"Compatibilidad documentada con Room Kit EQ. Microfonía digital sobre IP, distinta de las referencias Table Microphone mini-jack."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Product compatibility y Product overview','2026-09-08',null,null),
+('CISCO','TABLE MICROPHONE PRO','MICRÓFONO','longitud-utilizable','Comprobación del alcance del cable','restriccion','parcial','{"texto":"La inclusión del cable de 11 m no acredita que alcance: comprobar recorrido físico y holguras antes de instalar."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html','Cisco Table Microphone Pro Data Sheet, 28-04-2026','Connector - cable unido 11 m','2026-09-08',null,null),
+('SAMSUNG','QB65R','PANTALLA','alimentacion','Alimentación eléctrica de la pantalla','alimentacion','verificado','{"descripcion":"100–240 V CA (±10 %), 50/60 Hz"}','https://www.samsung.com/us/business/support/owners/product/qbr-series-digital-signage-qb65r/','Samsung Business QB65R Specification','Specification - Power Supply','2026-09-08',null,null),
+('SAMSUNG','QB65R','PANTALLA','entradas-hdmi','Entradas HDMI de la pantalla','puerto','parcial','{"nombre":"HDMI","total":2,"sentido":"entrada","senal":"hdmi","conector":"HDMI"}','https://www.samsung.com/us/business/support/owners/product/qbr-series-digital-signage-qb65r/','Samsung Business QB65R Specification','Connectivity - dos HDMI 2.0, serigrafía individual pendiente','2026-09-08',null,null),
+('SAMSUNG','QB65R','PANTALLA','variante','Modelo de pantalla documentado','restriccion','verificado','{"texto":"Ficha aplicable a QB65R. No transferir a QB65R-B sin documentación específica de esa variante."}','https://www.samsung.com/us/business/support/owners/product/qbr-series-digital-signage-qb65r/','Samsung Business QB65R Specification','Product model QB65R','2026-09-08',null,null),
+('SAMSUNG','QB65R','PANTALLA','entrada-hdmi-1-serigrafia','Serigrafía de la entrada HDMI 1','restriccion','verificado','{"texto":"La entrada física está rotulada HDMI IN 1 (ARC)."}','https://downloadcenter.samsung.com/content/UM/202209/20220906131556618/LFDQMREN-11_BY-MODEL_QBR_QBR-B_QBR-N_QMR_QMR-A_QMR-B_QER_QMR-T_WW_L42_220617.0.zip','Samsung Smart Signage User Manual By Model, revisión 11, inglés 220705.0','Página 7 - Ports, columna QB43R a QB85R-B que incluye QB65R','2026-09-08','HDMI IN 1','csv'),
+('CISCO','QUAD CAMERA','CÁMARA','identidad-instancia','Identificación de la cámara instalada','restriccion','parcial','{"texto":"Perfil de diseño para CS-QUADCAM2+ del kit CS-KIT-EQ-K9. El nombre genérico QUAD CAMERA no confirma el SKU de unidades históricas: inspeccionar el modelo físico antes de darlo por verificado. No extender a QUADCAM ni otras referencias ambiguas."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/telepresence-mx-series/quadcam-eol.html','Cisco EOL15049, 29-05-2023','Overview y tabla 2 - equivalencia comercial, identidad histórica pendiente de inspección','2026-09-08',null,null),
+('CISCO','ROOM BAR PRO','VIDEOCONFERENCIA','captacion-voz','Captación de voz','microfonia','verificado','{"captacion":"integrada"}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/webex-room-series/room-bar-pro-ds.html','Cisco Room Bar Pro Data Sheet','Product specifications - Microphone and loudspeaker system','2026-09-08',null,null),
+('CISCO','ROOM BAR PRO','VIDEOCONFERENCIA','alcance-captacion-integrada','Alcance de la captación integrada','restriccion','verificado','{"texto":"La matriz interna está optimizada para participantes sentados hasta 4 m. Cisco recomienda micrófonos externos a mayor distancia. La acústica y el ruido condicionan la captación."}','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/webex-room-series/room-bar-pro-ds.html','Cisco Room Bar Pro Data Sheet','Product specifications - Microphone and loudspeaker system','2026-09-08',null,null),
+('CISCO','WEBEX ROOM BAR PRO','VIDEOCONFERENCIA','captacion-voz','Captación de voz','microfonia','sin_documentar','null',null,null,null,null,null,null);
+do $$ declare errores text; begin
+  select string_agg(format('%s %s: %s', o.marca,o.modelo,o.clave), E'
+') into errores
+  from seed_datos_tecnicos_origen o where
+    (select count(*) from articulos a where coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria)<>1
+    or (o.puerto_nombre is not null and (select count(*) from puertos p join articulos a on a.id=p.articulo_id
+      where coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria and p.nombre=o.puerto_nombre
+        and (o.puerto_fuente='csv' or (o.puerto_fuente='app' and p.fuente='app')))<>1);
+  if errores is not null then raise exception 'Ficha técnica: artículo o puerto sin resolver' using errcode='23514', detail=errores; end if;
+end $$;
+insert into articulo_datos_tecnicos(articulo_id,clave,concepto,tipo,estado,valor,fuente_url,documento,apartado,consultado_en,puerto_id,fuente)
+select a.id,o.clave,o.concepto,o.tipo,o.estado,nullif(o.valor,'null'::jsonb),o.fuente_url,o.documento,o.apartado,o.consultado_en,p.id,'csv'
+from seed_datos_tecnicos_origen o join articulos a on coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria
+left join puertos p on p.articulo_id=a.id and p.nombre=o.puerto_nombre and (o.puerto_fuente='csv' or (o.puerto_fuente='app' and p.fuente='app'))
+on conflict(articulo_id,clave) do update set concepto=excluded.concepto,tipo=excluded.tipo,estado=excluded.estado,valor=excluded.valor,
+ fuente_url=excluded.fuente_url,documento=excluded.documento,apartado=excluded.apartado,
+ consultado_en=excluded.consultado_en,puerto_id=excluded.puerto_id where articulo_datos_tecnicos.fuente='csv';
+-- Una fuente retirada conserva su hecho: se marca desconocido, nunca compatible.
+update articulo_datos_tecnicos d set estado='sin_documentar',valor=null
+where d.fuente='csv' and not exists(select 1 from seed_datos_tecnicos_origen o join articulos a
+  on coalesce(a.marca,'')=coalesce(o.marca,'') and a.modelo=o.modelo and a.categoria=o.categoria
+  where a.id=d.articulo_id and o.clave=d.clave);
+-- END FICHAS TECNICAS
+-- Composición explícita CS-KIT-EQ-K9, versión 1; nunca convierte instancias históricas.
+do $composicion$ declare kit uuid; cid uuid; componente uuid; f jsonb; esperadas jsonb='[]'; actual jsonb; begin
+ select id into strict kit from articulos where coalesce(marca,'')='CISCO' and modelo='ROOM KIT EQ';
+ perform 1 from articulos where id=kit for update;
+ for f in select value from jsonb_array_elements('[{"kit_marca":"CISCO","kit_modelo":"ROOM KIT EQ","sku":"CS-KIT-EQ-K9","version":"1","estado_documental":"parcial","clave":"codec","componente_marca":"CISCO","componente_modelo":"CODEC EQ","identidad":"CS-CODEC-EQ-K9+","rol":"codec","cantidad":"1","inclusion":"incluido","fuente":"https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html"},{"kit_marca":"CISCO","kit_modelo":"ROOM KIT EQ","sku":"CS-KIT-EQ-K9","version":"1","estado_documental":"parcial","clave":"camara","componente_marca":"CISCO","componente_modelo":"QUAD CAMERA","identidad":"CS-QUADCAM2+","rol":"camara","cantidad":"1","inclusion":"incluido","fuente":"https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html"},{"kit_marca":"CISCO","kit_modelo":"ROOM KIT EQ","sku":"CS-KIT-EQ-K9","version":"1","estado_documental":"parcial","clave":"control","componente_marca":"CISCO","componente_modelo":"ROOM NAVIGATOR","identidad":"CS-T10-TS-L+","rol":"control","cantidad":"1","inclusion":"incluido","fuente":"https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html"},{"kit_marca":"CISCO","kit_modelo":"ROOM KIT EQ","sku":"CS-KIT-EQ-K9","version":"1","estado_documental":"parcial","clave":"cableado","componente_marca":"","componente_modelo":"","identidad":"Cableado suministrado pendiente de identificar","rol":"accesorio","cantidad":"1","inclusion":"por_determinar","fuente":"https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html"}]'::jsonb) loop
+  componente=null;
+  if f->>'componente_modelo'<>'' then
+   select id into strict componente from articulos where coalesce(marca,'')=f->>'componente_marca' and modelo=f->>'componente_modelo';
+  end if;
+  esperadas=esperadas||jsonb_build_array(jsonb_build_object('clave',f->>'clave','articulo_componente_id',componente,
+   'identidad',f->>'identidad','rol',f->>'rol','cantidad',(f->>'cantidad')::integer,'inclusion',f->>'inclusion','fuente',f->>'fuente'));
+ end loop;
+ select jsonb_agg(value order by value->>'clave') into esperadas from jsonb_array_elements(esperadas);
+ select id into cid from articulo_composiciones where articulo_kit_id=kit and version=1 for update;
+ if cid is not null then
+  select jsonb_agg(to_jsonb(l)-'id'-'composicion_id' order by l.clave) into actual from articulo_composicion_lineas l where composicion_id=cid;
+  if actual is distinct from esperadas or not exists(select 1 from articulo_composiciones where id=cid and publicada
+   and sku='CS-KIT-EQ-K9' and estado_documental='parcial' and fuente='https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html') then
+   raise exception 'Composicion publicada cambiada: nueva version requerida (CS-KIT-EQ-K9)';
+  end if;
+ else
+  insert into articulo_composiciones(articulo_kit_id,sku,version,estado_documental,fuente) values(kit,'CS-KIT-EQ-K9',1,'parcial','https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html') returning id into cid;
+  for f in select value from jsonb_array_elements(esperadas) loop
+   insert into articulo_composicion_lineas(composicion_id,clave,articulo_componente_id,identidad,rol,cantidad,inclusion,fuente)
+   values(cid,f->>'clave',(f->>'articulo_componente_id')::uuid,f->>'identidad',f->>'rol',(f->>'cantidad')::integer,f->>'inclusion',f->>'fuente');
+  end loop;
+  update articulo_composiciones set publicada=true where id=cid;
+ end if;
+end $composicion$;
 commit;

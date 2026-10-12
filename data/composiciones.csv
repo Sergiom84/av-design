@@ -1,0 +1,7 @@
+kit_marca;kit_modelo;sku;version;estado_documental;clave;componente_marca;componente_modelo;identidad;rol;cantidad;inclusion;fuente
+CISCO;ROOM KIT EQ;CS-KIT-EQ-K9;1;parcial;codec;CISCO;CODEC EQ;CS-CODEC-EQ-K9+;codec;1;incluido;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html
+CISCO;ROOM KIT EQ;CS-KIT-EQ-K9;1;parcial;camara;CISCO;QUAD CAMERA;CS-QUADCAM2+;camara;1;incluido;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html
+CISCO;ROOM KIT EQ;CS-KIT-EQ-K9;1;parcial;control;CISCO;ROOM NAVIGATOR;CS-T10-TS-L+;control;1;incluido;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html
+CISCO;ROOM KIT EQ;CS-KIT-EQ-K9;1;parcial;cableado;;;Cableado suministrado pendiente de identificar;accesorio;1;por_determinar;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/spark-room-kit-series/room-kit-eq-ds.html
+CISCO;TABLE MICROPHONE PRO;CS-MIC-ARRAY-T;1;parcial;cuerpo;CISCO;TABLE MICROPHONE PRO;Cuerpo del Table Microphone Pro;equipo;1;incluido;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html
+CISCO;TABLE MICROPHONE PRO;CS-MIC-ARRAY-T;1;parcial;cable-unido;;;Cable Ethernet unido al Table Microphone Pro, RJ45;cable;1;incluido;https://www.cisco.com/c/en/us/products/collateral/collaboration-endpoints/collaboration-peripherals/table-microphone-pro-ds.html

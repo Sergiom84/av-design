@@ -17,6 +17,8 @@
 /.next/
 /.next-e2e-diagrama/
 /.next-visual-qa/
+/.next-qa-integral/
+/.next-qa-integral-v2/
 /.playwright-cli/
 /out/
 
@@ -63,3 +65,4 @@ next-env.d.ts
 # Resguardo de scripts/mutaciones-lote1.mjs: solo existe mientras corre.
 scripts/.mutacion-en-curso/
 *.ajeno
+/.next-qa-plan40/

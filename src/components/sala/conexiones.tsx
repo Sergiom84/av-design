@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
 import { borrarConexion, guardarConexion } from '@/app/acciones';
 import { avisosDeConexion } from '@/lib/cable-schedule';
@@ -10,6 +11,7 @@ import {
   type Puerto,
   type Sala,
 } from '@/lib/tipos';
+import { etiquetaLatiguillo, latiguilloAsignableATirada, type CableSuministrado } from '@/lib/suministros';
 import { FormularioConexion } from './formulario-conexion';
 import { SelectorBocaConexion } from './selector-boca-conexion';
 
@@ -26,19 +28,21 @@ export function Conexiones({
   equipos,
   puertos,
   articulos,
+  latiguillos = [],
 }: {
   sala: Sala;
   conexiones: Conexion[];
   equipos: EquipoEnSala[];
   puertos: Puerto[];
   articulos: Articulo[];
+  latiguillos?: CableSuministrado[];
 }) {
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
   const puertosPorId = new Map(puertos.map((p) => [p.id, p]));
   const articulosPorId = new Map(articulos.map((a) => [a.id, a]));
   const cables = articulos.filter((a) => a.tipo === 'cable');
 
-  const puertosDeEquipo = (equipoId: string | undefined): Puerto[] => {
+  const puertosDeEquipo = (equipoId: string | null | undefined): Puerto[] => {
     const articulo = equipoId ? equiposPorId.get(equipoId)?.articulo_id : null;
     return articulo ? puertos.filter((p) => p.articulo_id === articulo) : [];
   };
@@ -50,16 +54,16 @@ export function Conexiones({
       ) : (
         <>
           {conexiones.map((c) => (
-            <form key={`f-${c.id}`} id={`conexion-${c.id}`} action={guardarConexion} className="hidden">
+            <FormularioMutacion feedbackExterno={true} key={`f-${c.id}`} id={`conexion-${c.id}`} action={guardarConexion} className="hidden">
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="sala_id" value={sala.id} />
-            </form>
+            </FormularioMutacion>
           ))}
           {conexiones.map((c) => (
-            <form key={`b-${c.id}`} id={`borrar-conexion-${c.id}`} action={borrarConexion} className="hidden">
+            <FormularioMutacion feedbackExterno={true} key={`b-${c.id}`} id={`borrar-conexion-${c.id}`} action={borrarConexion} className="hidden">
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="sala_id" value={sala.id} />
-            </form>
+            </FormularioMutacion>
           ))}
 
           <ContenedorTabla etiqueta="Conexiones">
@@ -72,6 +76,8 @@ export function Conexiones({
                 <th>Puerto</th>
                 <th>Señal</th>
                 <th>Cable</th>
+                <th>Suministro</th>
+                <th>Latiguillo</th>
                 <th>Ruta</th>
                 <th />
               </tr>
@@ -86,9 +92,9 @@ export function Conexiones({
                 );
                 return (
                   <tr key={c.id}>
-                    <td>{equiposPorId.get(c.origen_id)?.nombre ?? '—'}</td>
+                    <td>{c.origen_id ? equiposPorId.get(c.origen_id)?.nombre ?? '—' : 'Roseta'}</td>
                     <td><SelectorBocaConexion conexionId={c.id} lado="origen" puertos={puertosDeEquipo(c.origen_id)} puertoActual={c.puerto_origen_id} ordinalActual={c.puerto_origen_ordinal} /></td>
-                    <td>{equiposPorId.get(c.destino_id)?.nombre ?? '—'}</td>
+                    <td>{c.destino_id ? equiposPorId.get(c.destino_id)?.nombre ?? '—' : 'Roseta'}</td>
                     <td><SelectorBocaConexion conexionId={c.id} lado="destino" puertos={puertosDeEquipo(c.destino_id)} puertoActual={c.puerto_destino_id} ordinalActual={c.puerto_destino_ordinal} /></td>
                     <td>
                       <select
@@ -117,6 +123,34 @@ export function Conexiones({
                           <option key={a.id} value={a.id}>
                             {a.modelo}
                           </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        form={`conexion-${c.id}`}
+                        name="estado_suministro"
+                        defaultValue={c.estado_suministro ?? 'por_determinar'}
+                        aria-label="Suministro del cable"
+                      >
+                        <option value="por_determinar">Por determinar</option>
+                        <option value="adicional">Adicional</option>
+                        <option value="incluido">Incluido</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        form={`conexion-${c.id}`}
+                        name="cable_suministrado_id"
+                        defaultValue={c.cable_suministrado_id ?? ''}
+                        aria-label="Latiguillo suministrado"
+                        className="max-w-[12rem]"
+                      >
+                        <option value="">—</option>
+                        {latiguillos.filter((k) => latiguilloAsignableATirada(k, c, new Set(
+                          latiguillos.filter((otro) => conexiones.some((otra) => otra.id !== c.id && otra.cable_suministrado_id === otro.id)).map((otro) => otro.id),
+                        ))).map((k) => (
+                          <option key={k.id} value={k.id}>{etiquetaLatiguillo(k)}</option>
                         ))}
                       </select>
                     </td>
@@ -180,6 +214,7 @@ export function Conexiones({
           etiqueta: `${a.marca ?? ''} ${a.modelo}`.trim(),
           senal: a.senal,
         }))}
+        latiguillos={latiguillos}
       />
     </Tarjeta>
   );

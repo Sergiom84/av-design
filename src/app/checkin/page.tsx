@@ -25,7 +25,7 @@ export default async function CheckIn() {
   return (
     <>
       <Cabecera
-        titulo="Check-in"
+        titulo="Visitas previas"
         descripcion="La visita a la sala antes de montar. Se marca punto por punto desde el móvil, de pie en la sala."
         acciones={<Enlace href="/salas">Ver salas</Enlace>}
       />

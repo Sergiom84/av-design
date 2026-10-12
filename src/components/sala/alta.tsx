@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { useConservarFormulario } from '@/components/formulario-mutacion/use-conservar-formulario';
 import { crearSala, type EstadoAlta } from '@/app/acciones';
 import { Aviso, Boton, Campo, ContenedorTabla, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { MAXIMO_COPIAS, resumirSerie, serieDeNombres } from '@/lib/nombres-serie';
@@ -97,6 +98,7 @@ export function AltaDeSala({
     crearSala,
     { error: null },
   );
+  const { formulario } = useConservarFormulario();
 
   const inicial = plantillas.find((p) => p.id === plantillaInicial);
   const proyectoDePartida = proyectos.find((p) => p.id === proyectoInicial);
@@ -148,6 +150,7 @@ export function AltaDeSala({
         </div>
       )}
       <form
+        ref={formulario}
         id="alta-sala"
         action={enviarAlta}
         className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0"

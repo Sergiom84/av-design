@@ -11,6 +11,7 @@ const equipos = [
 ] as EquipoEnSala[];
 
 const conexiones = [{
+  detalle: { estado: 'legacy' },
   id: 'c1',
   sala_id: 's1',
   origen_id: 'e1',

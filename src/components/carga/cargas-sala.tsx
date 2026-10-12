@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, Campo, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import { crearCargaDesdeReservas } from '@/app/acciones-almacen';
@@ -58,7 +59,7 @@ export function CargasDeSala({
         </ContenedorTabla>
       )}
 
-      <form
+      <FormularioMutacion
         action={crearCargaDesdeReservas}
         className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-linea"
       >
@@ -79,7 +80,7 @@ export function CargasDeSala({
             ? 'Antes hay que reservar el material de la obra.'
             : `${reservasActivas} ${reservasActivas === 1 ? 'reserva activa' : 'reservas activas'}.`}
         </span>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

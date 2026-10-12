@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { crearProyecto } from '@/app/acciones-proyectos';
 import { Boton, Campo, Tarjeta } from '@/components/ui';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
@@ -31,7 +32,7 @@ export async function AltaDeProyecto({
       titulo="Nuevo proyecto"
       pie={`Nace con la localización "${LOCALIZACION_SIN_ASIGNAR}". Las demás se añaden desde su portada.`}
     >
-      <form action={crearProyecto} className="grid sm:grid-cols-2 gap-3 max-w-xl">
+      <FormularioMutacion action={crearProyecto} className="grid sm:grid-cols-2 gap-3 max-w-xl">
         <Campo etiqueta="Nombre">
           <input
             name="nombre"
@@ -88,7 +89,7 @@ export async function AltaDeProyecto({
         <div className="sm:col-span-2">
           <Boton>Crear proyecto</Boton>
         </div>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

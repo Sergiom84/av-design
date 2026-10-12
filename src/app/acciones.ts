@@ -3,7 +3,15 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type postgres from 'postgres';
+import { z } from 'zod';
+import { esUuid } from '@/lib/uuid';
+import type { ExtremoConexion } from '@/lib/tipos';
+import { bloquearYValidarExtremos, columnasExtremo, ConexionRechazada, esquemaExtremoConexion, escribirParejaConexion } from '@/lib/escritura-conexiones';
+import { copiarInfraestructuraYCables, exigirDisenoCopiable } from '@/lib/copiar-conexiones';
 import { sql } from '@/lib/db';
+import { esErrorConcurrencia, mensajeErrorSqlNegocio, transaccionConControl } from '@/lib/control-escritura';
+import { aplicarEstadoCableEnTx, desasignarCablesDeConexiones } from '@/lib/suministros-db';
+import type { EstadoSuministroCable } from '@/lib/suministros';
 import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
 import { coordenadasFueraDeSala, puertasFueraDePared } from '@/lib/plano-editor';
@@ -104,7 +112,7 @@ async function enLaSalaBloqueada<T>(
   salaId: string,
   cuerpo: (tx: Transaccion) => Promise<T>,
 ): Promise<T | null> {
-  const resultado = await sql.begin(async (tx) => {
+  const resultado = await transaccionConControl(sql, async (tx) => {
     const [sala] = await tx<Array<{ id: string; localizacion_id: string | null }>>`
       select id, localizacion_id from salas where id = ${salaId} for update`;
     if (!sala) return null;
@@ -312,7 +320,8 @@ export async function crearSala(
     if (mesaEnPlantilla) return { error: MENSAJE_MESA_EN_PLANTILLA };
   }
 
-  const resultado = await sql.begin(async (tx) => {
+  const resultado = await transaccionConControl(sql, async (tx) => {
+    if (plantillaId) await exigirDisenoCopiable(tx,'plantilla',plantillaId);
     // El equipamiento estándar de la plantilla se lee una vez y se copia a
     // todas las salas de la serie. Lo marcado como `no en todas` no se hereda.
     const lineas = plantillaId
@@ -336,40 +345,15 @@ export async function crearSala(
           where plantilla_id = ${plantillaId} and not opcional`
       : [];
 
-    // Las tiradas tipo de la plantilla. Se leen una vez y se copian a cada sala
-    // de la serie con los equipos de esa sala.
-    const tiradas = plantillaId
-      ? await tx<
-          Array<{
-            id: string;
-            origen_linea_id: string;
-            destino_linea_id: string;
-            articulo_cable_id: string | null;
-            senal: string;
-            ruta: string | null;
-            notas: string | null;
-            puerto_origen_id: string | null;
-            ordinal_origen: number | null;
-            puerto_destino_id: string | null;
-            ordinal_destino: number | null;
-          }>
-        >`select c.id, c.origen_linea_id, c.destino_linea_id, c.articulo_cable_id,
-                 c.senal, c.ruta, c.notas,
-                 bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
-                 bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
-          from plantilla_conexiones c
-          left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = c.id and bo.lado = 'origen'
-          left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = c.id and bd.lado = 'destino'
-          where c.plantilla_id = ${plantillaId}
-          order by c.orden, c.creado_en`
-      : [];
-
     const creadas: string[] = [];
 
     for (let i = 1; i <= copias; i++) {
       const [sala] = await tx<Array<{ id: string }>>`
         insert into salas ${tx({
           ...comun,
+          diagrama_iniciado_en: new Date(),
+          diagrama_origen: plantillaId ? 'plantilla' : 'desde_cero',
+          diagrama_plantilla_id: plantillaId,
           nombre: expandirPatron(patronNombre, i, copias),
           codigo: patronCodigo ? expandirPatron(patronCodigo, i, copias) : null,
         })}
@@ -585,29 +569,7 @@ export async function crearSala(
           where id = ${sala.id}`;
       }
 
-      // Una tirada cuyo equipo no se ha heredado —porque la línea estaba
-      // marcada "no en todas"— se salta. Insertarla apuntando a nada sería
-      // dejar la sala con una tirada rota.
-      for (const t of tiradas) {
-        const origen = equipoDeLinea.get(t.origen_linea_id);
-        const destino = equipoDeLinea.get(t.destino_linea_id);
-        if (!origen || !destino) continue;
-
-        const [conexion] = await tx<Array<{ id: string }>>`
-          insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta, notas)
-          values (${sala.id}, ${origen}, ${destino}, ${t.articulo_cable_id},
-                  ${t.senal}::senal,
-                  ${t.ruta}::ruta_cable,
-                  ${t.notas}) returning id`;
-        if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
-          await guardarDetalleBocas(tx, conexion.id, origen, destino, {
-            puertoOrigenId: t.puerto_origen_id,
-            ordinalOrigen: Number(t.ordinal_origen),
-            puertoDestinoId: t.puerto_destino_id,
-            ordinalDestino: Number(t.ordinal_destino),
-          });
-        }
-      }
+      if (plantillaId) await copiarInfraestructuraYCables(tx,'plantilla',plantillaId,sala.id,equipoDeLinea);
 
       creadas.push(sala.id);
     }
@@ -618,6 +580,8 @@ export async function crearSala(
     // deshecha: no queda ninguna sala de la serie, ni sus equipos, ni su
     // mobiliario.
     if (error instanceof AltaRechazada) return error;
+    if (esErrorConcurrencia(error)) return new AltaRechazada(error.message);
+    if (error instanceof ConexionRechazada) return new AltaRechazada(error.message);
     throw error;
   });
 
@@ -657,7 +621,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
-  const plantillaId = await sql.begin(async (tx) => {
+  const plantillaId = await transaccionConControl(sql, async (tx) => {
     // La cabecera y el montaje deben pertenecer a la misma versión de la sala.
     // `guardarDiagramaSala` toma este mismo cerrojo antes de cambiar medidas o
     // puertas: leer aquí dentro y con `for update` hace que la plantilla copie
@@ -665,6 +629,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
     const [sala] = await tx<Array<Record<string, unknown>>>`
       select * from salas where id = ${salaId} for update`;
     if (!sala) return null;
+    await exigirDisenoCopiable(tx,'sala',salaId);
 
     const base = nombrePedido ?? `${String(sala.nombre)} (plantilla)`;
     let id: string | undefined;
@@ -773,54 +738,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
       where ps.sala_id = ${salaId}
       order by ps.orden, ps.creado_en`;
 
-    // Las tiradas de la sala pasan a ser las tiradas tipo de la plantilla.
-    const conexiones = await tx<
-      Array<{
-        id: string;
-        origen_id: string;
-        destino_id: string;
-        articulo_cable_id: string | null;
-        senal: string;
-        ruta: string | null;
-        notas: string | null;
-        puerto_origen_id: string | null;
-        ordinal_origen: number | null;
-        puerto_destino_id: string | null;
-        ordinal_destino: number | null;
-      }>
-    >`select c.id, c.origen_id, c.destino_id, c.articulo_cable_id, c.senal, c.ruta, c.notas,
-             bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
-             bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
-      from conexiones c
-      left join conexion_bocas bo on bo.conexion_id = c.id and bo.lado = 'origen'
-      left join conexion_bocas bd on bd.conexion_id = c.id and bd.lado = 'destino'
-      where c.sala_id = ${salaId} order by c.creado_en, c.id`;
-
-    let orden = 0;
-    for (const c of conexiones) {
-      const origen = lineaDeEquipo.get(String(c.origen_id));
-      const destino = lineaDeEquipo.get(String(c.destino_id));
-      if (!origen || !destino) continue;
-      const [tirada] = await tx<Array<{ id: string }>>`
-        insert into plantilla_conexiones
-          (plantilla_id, origen_linea_id, destino_linea_id, articulo_cable_id, senal, ruta, notas, orden)
-        values (${id}, ${origen}, ${destino}, ${c.articulo_cable_id},
-                ${c.senal}::senal, ${c.ruta}::ruta_cable, ${c.notas}, ${orden}) returning id`;
-      await tx`insert into plantilla_conexion_puntos_paso
-          (plantilla_conexion_id, orden, x_m, y_m, z_m)
-        select ${tirada.id}, orden, x_m, y_m, z_m
-        from conexion_puntos_paso where conexion_id = ${c.id}
-        order by orden`;
-      if (c.puerto_origen_id && c.ordinal_origen && c.puerto_destino_id && c.ordinal_destino) {
-        const puertosDetalle = [c.puerto_origen_id, c.puerto_destino_id].sort();
-        await tx`select id from puertos where id in ${tx(puertosDetalle)} order by id for update`;
-        await tx`insert into plantilla_conexion_bocas
-          (plantilla_conexion_id, lado, linea_id, puerto_id, ordinal) values
-          (${tirada.id}, 'origen', ${origen}, ${c.puerto_origen_id}, ${c.ordinal_origen}),
-          (${tirada.id}, 'destino', ${destino}, ${c.puerto_destino_id}, ${c.ordinal_destino})`;
-      }
-      orden += 1;
-    }
+    await copiarInfraestructuraYCables(tx,'sala',salaId,id,lineaDeEquipo);
 
     return id;
   });
@@ -986,12 +904,12 @@ export async function ajustarCantidadEquipo(datos: FormData) {
   await exigirEdicion('salas');
   const id = String(datos.get('id'));
   const salaId = await salaIdDeEquipo(id);
-  if (!salaId || (await proyectoCerradoDeSala(salaId))) return;
+  if (!salaId) return;
   const paso = Number(datos.get('paso')) || 1;
-  await sql`
+  await enLaSalaBloqueada(salaId, async (tx) => { await tx`
     update sala_equipos
     set cantidad = greatest(1, cantidad + ${paso})
-    where id = ${id} and sala_id = ${salaId}`;
+    where id = ${id} and sala_id = ${salaId}`; });
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -1074,6 +992,50 @@ export async function guardarToma(datos: FormData) {
   revalidatePath('/salas/[id]', 'layout');
 }
 
+const esquemaBocasToma = z.array(z.object({
+  ordinal:z.number().int().min(1).max(1000), etiqueta:z.string().trim().max(200).nullable(),
+  conector:z.string().trim().min(1).max(200),
+  senal:z.enum(['hdmi','red','usb','audio_linea','audio_altavoz','microfono','alimentacion','control','otro']),
+}).strict()).max(1000);
+
+export type ResultadoBocasToma = {ok:true;version:number}|{ok:false;detalle:string};
+
+export async function guardarBocasToma(datos:FormData):Promise<ResultadoBocasToma> {
+  await exigirEdicion('salas');
+  const salaId=texto(datos.get('sala_id')),tomaId=texto(datos.get('toma_id'));
+  const version=numero(datos.get('versionEsperada'));
+  const capacidadTexto=texto(datos.get('capacidad_documentada'));
+  const capacidad=capacidadTexto===null?null:Number(capacidadTexto);
+  if(!salaId||!tomaId||!esUuid(salaId)||!esUuid(tomaId)||version===null||!Number.isInteger(version)||version<0||
+    (capacidad!==null&&(!Number.isInteger(capacidad)||capacidad<1||capacidad>1000))) return {ok:false,detalle:'Revisa la capacidad documentada y la versión de la sala.'};
+  let entrada:unknown;
+  try{entrada=JSON.parse(String(datos.get('bocas')??'[]'));}catch{return {ok:false,detalle:'Las bocas documentadas no tienen un formato válido.'};}
+  const r=esquemaBocasToma.safeParse(entrada);
+  if(!r.success||r.data.length!==(capacidad??0)||r.data.some((b,_,t)=>t.filter(x=>x.ordinal===b.ordinal).length!==1||b.ordinal>(capacidad??0)))return {ok:false,detalle:'Documenta exactamente las bocas 1 a N, con señal y conector.'};
+  try{
+    const resultado=await enLaSalaBloqueada(salaId,async tx=>{
+      const [sala]=await tx<Array<{diagrama_version:number}>>`select diagrama_version from salas where id=${salaId}`;
+      if(Number(sala.diagrama_version)!==version)return {ok:false as const,detalle:'La sala cambió en otra pestaña. Recarga antes de documentar las bocas.'};
+      const [toma]=await tx`select id from tomas_red where id=${tomaId} and sala_id=${salaId} for update`;
+      if(!toma)return {ok:false as const,detalle:'La roseta no pertenece a esta sala.'};
+      await tx`select id from toma_red_bocas where toma_red_id=${tomaId} order by id for update`;
+      await tx`delete from toma_red_bocas where toma_red_id=${tomaId} and ordinal>${capacidad??0}`;
+      await tx`update tomas_red set capacidad_documentada=${capacidad},codigo_confirmado=${datos.get('codigo_confirmado')==='on'} where id=${tomaId}`;
+      for(const boca of r.data)await tx`insert into toma_red_bocas(toma_red_id,ordinal,etiqueta,conector,senal) values (${tomaId},${boca.ordinal},${boca.etiqueta||null},${boca.conector},${boca.senal}::senal)
+        on conflict(toma_red_id,ordinal) do update set etiqueta=excluded.etiqueta,conector=excluded.conector,senal=excluded.senal`;
+      const [nueva]=await tx<Array<{diagrama_version:number}>>`update salas set diagrama_version=diagrama_version+1 where id=${salaId} returning diagrama_version`;
+      return {ok:true as const,version:Number(nueva.diagrama_version)};
+    });
+    if(!resultado)return {ok:false,detalle:'La sala no existe o su obra está cerrada.'};
+    if(resultado.ok)revalidatePath('/salas/[id]','layout');
+    return resultado;
+  }catch(error){
+    if(esErrorConcurrencia(error))return {ok:false,detalle:error.message};
+    if(['23503','23505','23514','40P01','40001'].includes((error as {code?:string}).code??''))return {ok:false,detalle:'No se puede retirar o cambiar una boca ocupada. Revisa sus conexiones.'};
+    throw error;
+  }
+}
+
 /** Los equipos que pinchaban en ella se quedan sin toma, no se borran. */
 export async function borrarToma(datos: FormData) {
   await exigirEdicion('salas');
@@ -1098,164 +1060,214 @@ export async function borrarToma(datos: FormData) {
 // legacy tienen que invalidar un borrador abierto para que no las pise con una
 // versión que ya no representa el mismo esquema de conexiones.
 
-type DetalleBocasFormulario = {
-  puertoOrigenId: string;
-  ordinalOrigen: number;
-  puertoDestinoId: string;
-  ordinalDestino: number;
-};
-
-function detalleBocasDelFormulario(datos: FormData): DetalleBocasFormulario | null {
-  const [puertoOrigenCombinado, ordinalOrigenCombinado] = String(datos.get('boca_origen') ?? '').split(':');
-  const [puertoDestinoCombinado, ordinalDestinoCombinado] = String(datos.get('boca_destino') ?? '').split(':');
-  const puertoOrigenId = texto(datos.get('puerto_origen_id')) ?? texto(puertoOrigenCombinado);
-  const puertoDestinoId = texto(datos.get('puerto_destino_id')) ?? texto(puertoDestinoCombinado);
-  const ordinalOrigen = numero(datos.get('puerto_origen_ordinal')) ?? numero(ordinalOrigenCombinado);
-  const ordinalDestino = numero(datos.get('puerto_destino_ordinal')) ?? numero(ordinalDestinoCombinado);
-  if (!puertoOrigenId || !puertoDestinoId || !Number.isInteger(ordinalOrigen) || !Number.isInteger(ordinalDestino)) return null;
-  return { puertoOrigenId, puertoDestinoId, ordinalOrigen: ordinalOrigen!, ordinalDestino: ordinalDestino! };
+function extremoDelFormulario(datos:FormData,lado:'origen'|'destino',equipoId:string|null):ExtremoConexion {
+  const toma=texto(datos.get(`toma_boca_${lado}_id`));
+  const [puertoCombinado,ordinalCombinado]=String(datos.get(`boca_${lado}`)??'').split(':');
+  const dato=toma?{tipo:'roseta',toma_boca_id:toma}:{tipo:'equipo',equipo_id:equipoId,
+    puerto_id:texto(datos.get(`puerto_${lado}_id`))??puertoCombinado,
+    ordinal:numero(datos.get(`puerto_${lado}_ordinal`))??Number(ordinalCombinado)};
+  const r=esquemaExtremoConexion.safeParse(dato);
+  if(!r.success)throw new ConexionRechazada('Elige una boca física de origen y otra de destino.');
+  return r.data;
 }
 
-async function bloquearExtremosBocas(
-  tx: Transaccion,
-  origenId: string,
-  destinoId: string,
-  detalle: DetalleBocasFormulario,
-): Promise<void> {
-  // Orden global: sala (enLaSalaBloqueada), equipos y puertos. En las altas
-  // se toma antes de insertar la conexión; así ni las FK implícitas ni dos
-  // altas cruzadas pueden invertir el orden de los cerrojos.
-  const equipos = [origenId, destinoId].sort();
-  const puertos = [detalle.puertoOrigenId, detalle.puertoDestinoId].sort();
-  await tx`select id from sala_equipos where id in ${tx(equipos)} order by id for update`;
-  await tx`select id from puertos where id in ${tx(puertos)} order by id for update`;
-}
-
-async function guardarDetalleBocas(
-  tx: Transaccion,
-  conexionId: string,
-  origenId: string,
-  destinoId: string,
-  detalle: DetalleBocasFormulario,
-): Promise<void> {
-  await bloquearExtremosBocas(tx, origenId, destinoId, detalle);
-  // El trigger legacy elimina cualquier pareja anterior. Después se escribe la
-  // pareja completa; el constraint diferido impide que sobreviva solo un lado.
-  await tx`update conexiones set
-      puerto_origen_id = ${detalle.puertoOrigenId},
-      puerto_destino_id = ${detalle.puertoDestinoId}
-    where id = ${conexionId}`;
-  await tx`delete from conexion_bocas where conexion_id = ${conexionId}`;
-  await tx`insert into conexion_bocas (conexion_id, lado, equipo_id, puerto_id, ordinal) values
-    (${conexionId}, 'origen', ${origenId}, ${detalle.puertoOrigenId}, ${detalle.ordinalOrigen}),
-    (${conexionId}, 'destino', ${destinoId}, ${detalle.puertoDestinoId}, ${detalle.ordinalDestino})`;
-}
-
-export async function anadirConexion(datos: FormData) {
-  await exigirEdicion('salas');
-  const salaId = String(datos.get('sala_id'));
-  const origen = String(datos.get('origen_id'));
-  const destino = String(datos.get('destino_id'));
-  const detalle = detalleBocasDelFormulario(datos);
-  if (!origen || !destino || origen === destino || !detalle) return;
-
-  const ruta = texto(datos.get('ruta'));
-  await enLaSalaBloqueada(salaId, async (tx) => {
-    await bloquearExtremosBocas(tx, origen, destino, detalle);
-    const [conexion] = await tx<Array<{ id: string }>>`
-      insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id,
-                              senal, ruta, longitud_manual_m)
-      select ${salaId}, ${origen}, ${destino}, ${texto(datos.get('articulo_cable_id'))},
-             ${texto(datos.get('senal')) ?? 'otro'}::senal, ${ruta}::ruta_cable,
-             ${numero(datos.get('longitud_manual_m'))}
-      where exists (select 1 from sala_equipos where id = ${origen} and sala_id = ${salaId})
-        and exists (select 1 from sala_equipos where id = ${destino} and sala_id = ${salaId})
-      returning id`;
-    if (!conexion) return;
-    await guardarDetalleBocas(tx, conexion.id, origen, destino, detalle);
-    await subirVersionDelPlano(tx, salaId);
-  });
-  revalidatePath('/salas/[id]', 'layout');
-}
-
-/** Variante para `useActionState`: solo traduce la colisión física conocida. */
-export async function anadirConexionConEstado(
-  _anterior: EstadoConexion,
-  datos: FormData,
-): Promise<EstadoConexion> {
-  await exigirEdicion('salas');
-  if (!detalleBocasDelFormulario(datos)) {
-    return { error: 'Elige una boca física de origen y otra de destino.' };
+async function validarCableFormulario(tx:Transaccion,datos:FormData) {
+  const entrada=texto(datos.get('longitud_manual_m')),manual=numero(datos.get('longitud_manual_m'));
+  if(entrada!==null&&(manual===null||manual<=0))throw new ConexionRechazada('La longitud manual debe ser un número positivo.');
+  const cableId=texto(datos.get('articulo_cable_id'));
+  if(cableId){
+    if(!esUuid(cableId))throw new ConexionRechazada('El cable no es válido.');
+    const [cable]=await tx`select id from articulos where id=${cableId} and activo and tipo='cable' for share`;
+    if(!cable)throw new ConexionRechazada('Elige un artículo de cable activo.');
   }
-  try {
-    await anadirConexion(datos);
-    return { error: null };
-  } catch (error) {
-    const postgresError = error as { code?: string; constraint_name?: string };
-    if (postgresError.code === '23505' && postgresError.constraint_name === 'conexion_bocas_boca_unica') {
-      return { error: 'Esa boca física ya está ocupada por otra conexión.' };
-    }
+}
+
+function estadoSuministroDelFormulario(datos:FormData):{estado:EstadoSuministroCable;cableId:string|null}|null {
+  const bruto=texto(datos.get('estado_suministro'));
+  if(bruto==null)return null;
+  if(bruto!=='incluido'&&bruto!=='adicional'&&bruto!=='por_determinar')throw new ConexionRechazada('El estado de suministro del cable no es válido.');
+  const cableId=texto(datos.get('cable_suministrado_id'));
+  if(cableId&&!esUuid(cableId))throw new ConexionRechazada('El latiguillo no es válido.');
+  if(bruto==='incluido'&&!cableId)throw new ConexionRechazada('Incluido exige un latiguillo físico de la sala.');
+  return {estado:bruto,cableId:bruto==='incluido'?cableId:null};
+}
+
+function rechazoConexion(error:unknown):EstadoConexion|null {
+  if(esErrorConcurrencia(error))return {error:error.message};
+  if(error instanceof ConexionRechazada)return {error:error.message};
+  const sql=mensajeErrorSqlNegocio(error);
+  if(sql)return {error:sql};
+  const codigo=(error as {code?:string}).code;
+  if(codigo==='23505')return {error:'Esa boca física ya está ocupada por otra conexión.'};
+  if(['23503','23514','22P02','40P01','40001'].includes(codigo??''))return {error:'No se puede guardar esa pareja de bocas. Comprueba pertenencia, ocupación y latiguillo.'};
+  return null;
+}
+
+export async function anadirConexion(datos:FormData) {
+  await exigirEdicion('salas');
+  const salaId=texto(datos.get('sala_id'));
+  if(!salaId||!esUuid(salaId))throw new ConexionRechazada('La sala no es válida.');
+  const origen=extremoDelFormulario(datos,'origen',texto(datos.get('origen_id')));
+  const destino=extremoDelFormulario(datos,'destino',texto(datos.get('destino_id')));
+  await enLaSalaBloqueada(salaId,async tx=>{
+    await validarCableFormulario(tx,datos);
+    await bloquearYValidarExtremos(tx,salaId,[origen,destino]);
+    const o=columnasExtremo(origen),d=columnasExtremo(destino);
+    const [c]=await tx<Array<{id:string}>>`insert into conexiones(sala_id,origen_id,destino_id,puerto_origen_id,puerto_destino_id,articulo_cable_id,senal,ruta,longitud_manual_m)
+      values (${salaId},${o.equipo_id},${d.equipo_id},${o.puerto_id},${d.puerto_id},${texto(datos.get('articulo_cable_id'))},${texto(datos.get('senal'))??'otro'}::senal,${texto(datos.get('ruta'))}::ruta_cable,${numero(datos.get('longitud_manual_m'))}) returning id`;
+    await escribirParejaConexion(tx,c.id,origen,destino);
+    const decision=estadoSuministroDelFormulario(datos);
+    if(decision)await aplicarEstadoCableEnTx(tx,c.id,decision.estado,decision.cableId);
+    await subirVersionDelPlano(tx,salaId);
+  });
+  revalidatePath('/salas/[id]','layout');
+}
+
+export async function anadirConexionConEstado(_anterior:EstadoConexion,datos:FormData):Promise<EstadoConexion> {
+  await exigirEdicion('salas');
+  try {await anadirConexion(datos);return {error:null};}
+  catch(error){
+    const rechazo=rechazoConexion(error);
+    if(rechazo)return rechazo;
     throw error;
   }
 }
 
-/** La sala real de una conexión, leída de la fila, no del `sala_id` del formulario: mismo criterio que `salaIdDeEquipo`. */
-async function salaIdDeConexion(conexionId: string): Promise<string | null> {
-  const [f] = await sql<Array<{ sala_id: string }>>`
-    select sala_id from conexiones where id = ${conexionId}`;
-  return f ? String(f.sala_id) : null;
+async function salaIdDeConexion(conexionId:string):Promise<string|null> {
+  if(!esUuid(conexionId))return null;
+  const [c]=await sql<Array<{sala_id:string}>>`select sala_id from conexiones where id=${conexionId}`;
+  return c?.sala_id??null;
 }
 
-/**
- * Detallar una conexión que ya existe. Hace falta porque hay tiradas dadas de
- * alta antes de que hubiera catálogo de puertos: se les añaden ahora sin
- * volver a crearlas, que cambiaría su identificador de cable.
- */
-export async function guardarConexion(datos: FormData) {
+export async function guardarConexion(datos:FormData):Promise<EstadoConexion> {
   await exigirEdicion('salas');
-  const id = String(datos.get('id'));
-  const salaId = await salaIdDeConexion(id);
-  const detalle = detalleBocasDelFormulario(datos);
-  if (!salaId || !detalle) return;
-  await enLaSalaBloqueada(salaId, async (tx) => {
-    const [conexion] = await tx<Array<{ origen_id: string; destino_id: string }>>`
-      select origen_id, destino_id from conexiones where id = ${id} and sala_id = ${salaId} for update`;
-    if (!conexion) return;
-    await tx`update conexiones set
-        articulo_cable_id = ${texto(datos.get('articulo_cable_id'))},
-        senal = ${texto(datos.get('senal')) ?? 'otro'}::senal,
-        ruta = ${texto(datos.get('ruta'))}::ruta_cable,
-        longitud_manual_m = ${numero(datos.get('longitud_manual_m'))}
-      where id = ${id}`;
-    await guardarDetalleBocas(tx, id, conexion.origen_id, conexion.destino_id, detalle);
-    await subirVersionDelPlano(tx, salaId);
-  });
-  revalidatePath('/salas/[id]', 'layout');
+  try {
+    const id=String(datos.get('id')),salaId=await salaIdDeConexion(id);
+    if(!salaId)throw new ConexionRechazada('La conexión ya no existe.');
+    await enLaSalaBloqueada(salaId,async tx=>{
+      await validarCableFormulario(tx,datos);
+      const [c]=await tx<Array<{origen_id:string|null;destino_id:string|null}>>`select origen_id,destino_id from conexiones where id=${id} and sala_id=${salaId} for update`;
+      if(!c)throw new ConexionRechazada('La conexión ya no existe.');
+      const origen=extremoDelFormulario(datos,'origen',c.origen_id),destino=extremoDelFormulario(datos,'destino',c.destino_id);
+      await bloquearYValidarExtremos(tx,salaId,[origen,destino]);
+      await tx`update conexiones set articulo_cable_id=${texto(datos.get('articulo_cable_id'))},senal=${texto(datos.get('senal'))??'otro'}::senal,ruta=${texto(datos.get('ruta'))}::ruta_cable,longitud_manual_m=${numero(datos.get('longitud_manual_m'))} where id=${id}`;
+      await escribirParejaConexion(tx,id,origen,destino);
+      const decision=estadoSuministroDelFormulario(datos);
+      if(decision)await aplicarEstadoCableEnTx(tx,id,decision.estado,decision.cableId);
+      await subirVersionDelPlano(tx,salaId);
+    });
+    revalidatePath('/salas/[id]','layout');
+    return {error:null};
+  } catch(error) {
+    const rechazo=rechazoConexion(error);
+    if(rechazo)return rechazo;
+    throw error;
+  }
 }
 
-export async function borrarConexion(datos: FormData) {
+export type ResultadoConversionToma = {ok:true;id:string;version:number}|{ok:false;detalle:string};
+
+export async function convertirAsignacionToma(datos:FormData):Promise<ResultadoConversionToma> {
   await exigirEdicion('salas');
-  const id = String(datos.get('id'));
-  const salaId = await salaIdDeConexion(id);
-  if (!salaId) return;
-  await enLaSalaBloqueada(salaId, async (tx) => {
-    const [conexion] = await tx<Array<{ id: string }>>`
-      select id from conexiones where id = ${id} and sala_id = ${salaId} for update`;
-    if (!conexion) return;
-    await tx`delete from conexiones where id = ${id}`;
-    await subirVersionDelPlano(tx, salaId);
-  });
-  revalidatePath('/salas/[id]', 'layout');
+  const salaId=texto(datos.get('sala_id')),equipoId=texto(datos.get('equipo_id'));
+  const version=numero(datos.get('versionEsperada')),puertoId=texto(datos.get('puerto_id')),bocaId=texto(datos.get('toma_boca_id'));
+  const ordinal=numero(datos.get('ordinal')),cableId=texto(datos.get('articulo_cable_id'));
+  const senal=texto(datos.get('senal'))??'red',ruta=texto(datos.get('ruta')),manual=numero(datos.get('longitud_manual_m'));
+  if(!salaId||!equipoId||!puertoId||!bocaId||![salaId,equipoId,puertoId,bocaId].every(esUuid)||(cableId&&!esUuid(cableId))||version===null||!Number.isInteger(version)||version<0||ordinal===null||!Number.isInteger(ordinal)||ordinal<1||
+    (texto(datos.get('longitud_manual_m'))!==null&&(manual===null||manual<=0)))return {ok:false,detalle:'Revisa la sala, las bocas y la longitud manual.'};
+  try{
+    const resultado=await enLaSalaBloqueada(salaId,async tx=>{
+      const [sala]=await tx<Array<{diagrama_version:number}>>`select diagrama_version from salas where id=${salaId}`;
+      const [equipo]=await tx<Array<{toma_red_id:string|null;toma_red_conexion_id:string|null}>>`select toma_red_id,toma_red_conexion_id from sala_equipos where id=${equipoId} and sala_id=${salaId}`;
+      if(!equipo?.toma_red_id)throw new ConexionRechazada('El equipo no tiene una asignación documental a roseta.');
+      const [boca]=await tx`select id from toma_red_bocas where id=${bocaId} and toma_red_id=${equipo.toma_red_id}`;
+      if(!boca)throw new ConexionRechazada('La boca elegida no corresponde a la roseta asignada.');
+      const equivalentes=await tx<Array<{id:string;articulo_cable_id:string|null;senal:string;ruta:string|null;longitud_manual_m:string|null}>>`
+        select c.id,c.articulo_cable_id,c.senal,c.ruta,c.longitud_manual_m from conexiones c
+        join conexion_bocas e on e.conexion_id=c.id and e.equipo_id=${equipoId} and e.puerto_id=${puertoId} and e.ordinal=${ordinal}
+        join conexion_bocas t on t.conexion_id=c.id and t.lado<>e.lado and t.toma_boca_id=${bocaId}
+        where c.sala_id=${salaId} order by c.id for update of c`;
+      const existente=equivalentes[0];
+      const identica=existente&&existente.articulo_cable_id===cableId&&existente.senal===senal&&existente.ruta===ruta&&
+        (existente.longitud_manual_m===null?null:Number(existente.longitud_manual_m))===manual;
+      if(equipo.toma_red_conexion_id){
+        if(!identica||existente.id!==equipo.toma_red_conexion_id)throw new ConexionRechazada('La asignación ya tiene otro cable o recorrido. Edita esa conexión antes de cambiarla.');
+        return {ok:true as const,id:existente.id,version:Number(sala.diagrama_version)};
+      }
+      if(Number(sala.diagrama_version)!==version)throw new ConexionRechazada('La sala cambió en otra pestaña. Recarga antes de convertir la asignación.');
+      if(existente&&!identica)throw new ConexionRechazada('Ya existe una conexión entre esas bocas con otro cable o recorrido. Revisa la existente.');
+      const origen:ExtremoConexion={tipo:'equipo',equipo_id:equipoId,puerto_id:puertoId,ordinal};
+      const destino:ExtremoConexion={tipo:'roseta',toma_boca_id:bocaId};
+      await bloquearYValidarExtremos(tx,salaId,[origen,destino]);
+      if(cableId&&!(await tx`select id from articulos where id=${cableId} and activo and tipo='cable'`).length)throw new ConexionRechazada('Elige una referencia de cable activa.');
+      let id=existente?.id;
+      if(!id){
+        const [nueva]=await tx<Array<{id:string}>>`insert into conexiones(sala_id,origen_id,puerto_origen_id,articulo_cable_id,senal,ruta,longitud_manual_m) values (${salaId},${equipoId},${puertoId},${cableId},${senal}::senal,${ruta}::ruta_cable,${manual}) returning id`;
+        id=nueva.id;await escribirParejaConexion(tx,id,origen,destino);
+      }
+      await tx`update sala_equipos set toma_red_conexion_id=${id} where id=${equipoId}`;
+      const [nueva]=await tx<Array<{diagrama_version:number}>>`update salas set diagrama_version=diagrama_version+1 where id=${salaId} returning diagrama_version`;
+      return {ok:true as const,id,version:Number(nueva.diagrama_version)};
+    });
+    if(!resultado)return {ok:false,detalle:'La sala no existe o su obra está cerrada.'};
+    revalidatePath('/salas/[id]','layout');return resultado;
+  }catch(error){
+    if(esErrorConcurrencia(error))return {ok:false,detalle:error.message};
+    if(error instanceof ConexionRechazada)return {ok:false,detalle:error.message};
+    if(['23503','23505','23514','22P02','40P01','40001'].includes((error as {code?:string}).code??''))return {ok:false,detalle:'No se puede convertir la asignación: revisa bocas, ocupación y recorrido.'};
+    throw error;
+  }
+}
+
+export async function borrarConexion(datos: FormData): Promise<EstadoConexion> {
+  await exigirEdicion('salas');
+  try {
+    const id = String(datos.get('id'));
+    const salaId = await salaIdDeConexion(id);
+    if (!salaId) return {error:null};
+    await enLaSalaBloqueada(salaId, async (tx) => {
+      const [conexion] = await tx<Array<{ id: string }>>`
+        select id from conexiones where id = ${id} and sala_id = ${salaId} for update`;
+      if (!conexion) return;
+      await desasignarCablesDeConexiones(tx, [id]);
+      await tx`delete from conexiones where id = ${id}`;
+      await subirVersionDelPlano(tx, salaId);
+    });
+    revalidatePath('/salas/[id]', 'layout');
+    return {error:null};
+  } catch (error) {
+    const rechazo = rechazoConexion(error);
+    if (rechazo) return rechazo;
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------- parámetros
 export async function guardarParametros(datos: FormData) {
   await exigirEdicion('parametros');
-  for (const [clave, valor] of datos.entries()) {
-    const v = numero(valor);
-    if (v == null) continue;
-    await sql`update parametros set valor = ${v} where clave = ${clave}`;
+  const holgura = datos.get('holgura_roseta');
+  const holguraVacia = holgura === null || (typeof holgura === 'string' && holgura.trim() === '');
+  const valorHolgura = holguraVacia ? null : numero(holgura);
+  if (!holguraVacia && (valorHolgura === null || !Number.isFinite(valorHolgura) || valorHolgura < 0)) {
+    throw new Error('La holgura de roseta debe ser un número de metros mayor o igual que cero.');
   }
+  await sql.begin(async (tx) => {
+    for (const [clave, valor] of datos.entries()) {
+      if (clave === 'holgura_roseta') continue;
+      const v = numero(valor);
+      if (v == null) continue;
+      await tx`update parametros set valor = ${v} where clave = ${clave}`;
+    }
+    if (datos.has('holgura_roseta')) {
+      if (valorHolgura === null) {
+        await tx`delete from parametros where clave = 'holgura_roseta'`;
+      } else {
+        await tx`insert into parametros (clave, valor, unidad, descripcion)
+          values ('holgura_roseta', ${valorHolgura}, 'm', 'Holgura por extremo de roseta')
+          on conflict (clave) do update set valor = excluded.valor`;
+      }
+    }
+  });
   revalidatePath('/parametros');
   revalidatePath('/');
 }
@@ -1302,25 +1314,41 @@ export async function anadirLineaPlantilla(datos: FormData) {
  * repetía en el HTML el identificador de la línea y el de su acción. Con más
  * de cien líneas en `/plantillas` eso pesaba más que el propio contenido.
  */
+async function enLaPlantillaDeFilaBloqueada(
+  tabla: 'plantilla_articulos' | 'plantilla_conexiones', id: string,
+  operar: (tx: postgres.TransactionSql<Record<string, unknown>>) => Promise<void>,
+) {
+  await sql.begin(async (tx) => {
+    const [fila] = await tx<Array<{ plantilla_id: string }>>`select plantilla_id from ${tx(tabla)} where id=${id}`;
+    if (!fila) return;
+    const [plantilla] = await tx`select id from plantillas_sala where id=${fila.plantilla_id} for update`;
+    if (!plantilla) return;
+    // Releer tras esperar: la fila puede haber desaparecido durante el bloqueo.
+    if (!(await tx`select id from ${tx(tabla)} where id=${id} and plantilla_id=${fila.plantilla_id} for update`).length) return;
+    await operar(tx);
+  });
+}
+
 export async function operarLineaPlantilla(datos: FormData) {
   await exigirEdicion('plantillas');
   const id = String(datos.get('id'));
 
+  await enLaPlantillaDeFilaBloqueada('plantilla_articulos', id, async (tx) => {
   switch (texto(datos.get('operacion'))) {
     case 'mas':
     case 'menos': {
       const paso = datos.get('operacion') === 'mas' ? 1 : -1;
-      await sql`
+      await tx`
         update plantilla_articulos
         set cantidad = greatest(1, cantidad + ${paso})
         where id = ${id}`;
       break;
     }
     case 'quitar':
-      await sql`delete from plantilla_articulos where id = ${id}`;
+      await tx`delete from plantilla_articulos where id = ${id}`;
       break;
     case 'guardar':
-      await sql`
+      await tx`
         update plantilla_articulos set
           cantidad = ${Math.max(1, Math.round(numero(datos.get('cantidad')) ?? 1))},
           opcional = ${datos.get('opcional') === 'on'},
@@ -1333,6 +1361,7 @@ export async function operarLineaPlantilla(datos: FormData) {
     default:
       return;
   }
+  });
 
   revalidatePath('/plantillas');
 }
@@ -1342,44 +1371,53 @@ export async function operarLineaPlantilla(datos: FormData) {
  * existan y no sean el mismo. Lo demás avisa pero no bloquea, igual que en la
  * sala: puede haber un adaptador por medio.
  */
-export async function anadirTiradaPlantilla(datos: FormData) {
+export async function anadirTiradaPlantilla(datos:FormData) {
   await exigirEdicion('plantillas');
-  const plantillaId = String(datos.get('plantilla_id'));
-  const [origen, puertoOrigen, ordinalOrigenTexto] = String(datos.get('boca_origen') ?? '').split(':');
-  const [destino, puertoDestino, ordinalDestinoTexto] = String(datos.get('boca_destino') ?? '').split(':');
-  const ordinalOrigen = Number(ordinalOrigenTexto);
-  const ordinalDestino = Number(ordinalDestinoTexto);
-  if (!origen || !destino || origen === destino || !puertoOrigen || !puertoDestino ||
-      !Number.isInteger(ordinalOrigen) || !Number.isInteger(ordinalDestino)) return;
-
-  await sql.begin(async (tx) => {
-    const [plantilla] = await tx<Array<{ id: string }>>`
-      select id from plantillas_sala where id = ${plantillaId} for update`;
-    if (!plantilla) return;
-    const lineas = [origen, destino].sort();
-    const puertos = [puertoOrigen, puertoDestino].sort();
-    await tx`select id from plantilla_articulos where id in ${tx(lineas)} order by id for update`;
-    await tx`select id from puertos where id in ${tx(puertos)} order by id for update`;
-    const [tirada] = await tx<Array<{ id: string }>>`
-      insert into plantilla_conexiones (plantilla_id, origen_linea_id, destino_linea_id, senal, ruta)
-      select ${plantillaId}, ${origen}, ${destino},
-             ${texto(datos.get('senal')) ?? 'otro'}::senal,
-             ${texto(datos.get('ruta'))}::ruta_cable
-      where exists (select 1 from plantilla_articulos where id = ${origen} and plantilla_id = ${plantillaId})
-        and exists (select 1 from plantilla_articulos where id = ${destino} and plantilla_id = ${plantillaId})
-      returning id`;
-    if (!tirada) return;
-    await tx`insert into plantilla_conexion_bocas
-      (plantilla_conexion_id, lado, linea_id, puerto_id, ordinal) values
-      (${tirada.id}, 'origen', ${origen}, ${puertoOrigen}, ${ordinalOrigen}),
-      (${tirada.id}, 'destino', ${destino}, ${puertoDestino}, ${ordinalDestino})`;
+  const plantillaId=String(datos.get('plantilla_id'));
+  const parsear=(valor:FormDataEntryValue|null):ExtremoConexion=>{
+    const partes=String(valor??'').split(':');
+    const bruto=partes[0]==='roseta'&&partes.length===2?{tipo:'roseta',toma_boca_id:partes[1]}
+      :partes.length===3?{tipo:'equipo',equipo_id:partes[0],puerto_id:partes[1],ordinal:Number(partes[2])}:null;
+    const r=esquemaExtremoConexion.safeParse(bruto);
+    if(!r.success)throw new ConexionRechazada('Elige las dos bocas físicas de la tirada.');
+    return r.data;
+  };
+  if(!esUuid(plantillaId))throw new ConexionRechazada('La plantilla no es válida.');
+  const origen=parsear(datos.get('boca_origen')),destino=parsear(datos.get('boca_destino'));
+  const documentalId=texto(datos.get('documental_id')),existenteId=texto(datos.get('conexion_existente_id'));
+  if((documentalId&&!esUuid(documentalId))||(existenteId&&!esUuid(existenteId)))throw new ConexionRechazada('La tirada elegida no es válida.');
+  await sql.begin(async tx=>{
+    const [plantilla]=await tx`select id from plantillas_sala where id=${plantillaId} for update`;
+    if(!plantilla)throw new ConexionRechazada('La plantilla ya no existe.');
+    if(existenteId&&!(await tx`select id from plantilla_conexiones where id=${existenteId} and plantilla_id=${plantillaId} for update`).length)throw new ConexionRechazada('La conexión elegida pertenece a otra plantilla.');
+    if(documentalId){
+      const [doc]=await tx<Array<{conexion_resuelta_id:string|null}>>`select conexion_resuelta_id from plantilla_tiradas_documentales where id=${documentalId} and plantilla_id=${plantillaId} for update`;
+      if(!doc)throw new ConexionRechazada('La fuente documental pertenece a otra plantilla.');
+      if(doc.conexion_resuelta_id&&doc.conexion_resuelta_id!==existenteId)throw new ConexionRechazada('Esta fuente ya está resuelta. Selecciona su tirada para editarla.');
+    }
+    if(!existenteId&&(await tx`select id from plantilla_conexiones where plantilla_id=${plantillaId} and detalle_extremos='legacy'`).length)throw new ConexionRechazada('Hay tiradas históricas sin bocas. Selecciona explícitamente la que vas a documentar antes de crear otra.');
+    await bloquearYValidarExtremos(tx,plantillaId,[origen,destino],true);
+    const o=columnasExtremo(origen),d=columnasExtremo(destino);
+    let id=existenteId;
+    if(!id){
+      const [nueva]=await tx<Array<{id:string}>>`insert into plantilla_conexiones(plantilla_id,origen_linea_id,destino_linea_id,senal,ruta,longitud_manual_m) values (${plantillaId},${o.equipo_id},${d.equipo_id},${texto(datos.get('senal'))??'otro'}::senal,${texto(datos.get('ruta'))}::ruta_cable,${numero(datos.get('longitud_manual_m'))}) returning id`;
+      id=nueva.id;
+    }else{
+      await tx`update plantilla_conexiones set senal=${texto(datos.get('senal'))??'otro'}::senal,ruta=${texto(datos.get('ruta'))}::ruta_cable where id=${id}`;
+      if(datos.has('longitud_manual_m'))await tx`update plantilla_conexiones set longitud_manual_m=${numero(datos.get('longitud_manual_m'))} where id=${id}`;
+    }
+    await escribirParejaConexion(tx,id,origen,destino,true);
+    if(documentalId)await tx`update plantilla_tiradas_documentales set conexion_resuelta_id=${id} where id=${documentalId}`;
   });
   revalidatePath('/plantillas');
 }
 
 export async function quitarTiradaPlantilla(datos: FormData) {
   await exigirEdicion('plantillas');
-  await sql`delete from plantilla_conexiones where id = ${String(datos.get('id'))}`;
+  const id = String(datos.get('id'));
+  await enLaPlantillaDeFilaBloqueada('plantilla_conexiones', id, async (tx) => {
+    await tx`delete from plantilla_conexiones where id = ${id}`;
+  });
   revalidatePath('/plantillas');
 }
 
@@ -1394,9 +1432,9 @@ function longitudes(v: FormDataEntryValue | null): number[] | null {
   return partes.length ? partes : null;
 }
 
-async function proveedorId(nombre: string | null): Promise<string | null> {
+async function proveedorId(nombre: string | null, tx: Transaccion): Promise<string | null> {
   if (!nombre) return null;
-  const [p] = await sql<Array<{ id: string }>>`
+  const [p] = await tx<Array<{ id: string }>>`
     insert into proveedores (nombre) values (${nombre})
     on conflict (nombre) do update set nombre = excluded.nombre
     returning id`;
@@ -1406,9 +1444,10 @@ async function proveedorId(nombre: string | null): Promise<string | null> {
 export async function guardarArticulo(datos: FormData) {
   await exigirEdicion('catalogo');
   const id = String(datos.get('id'));
-  const idProveedor = await proveedorId(texto(datos.get('proveedor')));
+  await transaccionConControl(sql, async tx => {
+  const idProveedor = await proveedorId(texto(datos.get('proveedor')), tx);
 
-  await sql`
+  await tx`
     update articulos set
       marca                    = ${texto(datos.get('marca'))},
       modelo                   = ${texto(datos.get('modelo')) ?? 'Sin modelo'},
@@ -1430,6 +1469,7 @@ export async function guardarArticulo(datos: FormData) {
       bobina_m                 = ${numero(datos.get('bobina_m'))},
       diametro_mm              = ${numero(datos.get('diametro_mm'))}
     where id = ${id}`;
+  });
 
   revalidatePath(`/articulo/${id}`);
   revalidatePath('/catalogo');
@@ -1438,9 +1478,10 @@ export async function guardarArticulo(datos: FormData) {
 
 export async function crearArticulo(datos: FormData) {
   await exigirEdicion('catalogo');
-  const idProveedor = await proveedorId(texto(datos.get('proveedor')));
-  const [a] = await sql<Array<{ id: string }>>`
-    insert into articulos ${sql({
+  const a = await transaccionConControl(sql, async tx => {
+  const idProveedor = await proveedorId(texto(datos.get('proveedor')), tx);
+  const [nuevo] = await tx<Array<{ id: string }>>`
+    insert into articulos ${tx({
       tipo: texto(datos.get('tipo')) ?? 'equipo',
       marca: texto(datos.get('marca')),
       modelo: texto(datos.get('modelo')) ?? 'Sin modelo',
@@ -1455,6 +1496,8 @@ export async function crearArticulo(datos: FormData) {
       proveedor_id: idProveedor,
     })}
     returning id`;
+  return nuevo;
+  });
 
   revalidatePath('/catalogo');
   redirect(`/articulo/${a.id}`);

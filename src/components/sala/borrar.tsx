@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import Link from 'next/link';
 import { Aviso, Boton, Enlace, Tarjeta } from '@/components/ui';
 import { borrarSala } from '@/app/acciones';
@@ -36,10 +37,10 @@ export function BorrarSala({
           sin sala, como el material legado. No se puede deshacer.
         </Aviso>
         <div className="flex gap-3 items-center">
-          <form action={borrarSala}>
+          <FormularioMutacion action={borrarSala}>
             <input type="hidden" name="id" value={salaId} />
             <Boton variante="peligro">Borrar definitivamente</Boton>
-          </form>
+          </FormularioMutacion>
           <Enlace href={`/salas/${salaId}`}>Cancelar</Enlace>
         </div>
       </div>

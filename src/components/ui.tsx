@@ -99,7 +99,7 @@ export function ContenedorTabla({
   etiqueta?: string;
 }) {
   return (
-    <div className="contenedor-tabla" role="group" aria-label={etiqueta}>
+    <div className="contenedor-tabla" role="group" aria-label={etiqueta} tabIndex={0}>
       {children}
     </div>
   );

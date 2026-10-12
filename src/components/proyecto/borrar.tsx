@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import Link from 'next/link';
 import { Aviso, Boton, Enlace, Tarjeta } from '@/components/ui';
 import { borrarProyecto } from '@/app/acciones-proyectos';
@@ -38,10 +39,10 @@ export function BorrarProyecto({
           deshacer.
         </Aviso>
         <div className="flex gap-3 items-center">
-          <form action={borrarProyecto}>
+          <FormularioMutacion action={borrarProyecto}>
             <input type="hidden" name="id" value={proyectoId} />
             <Boton variante="peligro">Borrar definitivamente</Boton>
-          </form>
+          </FormularioMutacion>
           <Enlace href={`/proyectos/${proyectoId}`}>Cancelar</Enlace>
         </div>
       </div>

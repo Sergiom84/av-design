@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import Link from 'next/link';
 import { Boton, Campo, ContenedorTabla, Estado, Tarjeta, Vacio } from '@/components/ui';
 import { crearLocalizacion } from '@/app/acciones-proyectos';
@@ -83,13 +84,13 @@ export function LocalizacionesDelProyecto({
           titulo="Nueva localización"
           pie="El edificio y la planta dentro de la sede de la obra. La sala no vuelve a preguntarlos."
         >
-          <form action={crearLocalizacion} className="flex flex-wrap items-end gap-3">
+          <FormularioMutacion action={crearLocalizacion} className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="proyecto_id" value={proyectoId} />
             <Campo etiqueta="Nombre">
               <input name="nombre" required placeholder="Edificio B · Planta 3" className="w-64" />
             </Campo>
             <Boton variante="secundario">Añadir</Boton>
-          </form>
+          </FormularioMutacion>
         </Tarjeta>
       )}
     </div>

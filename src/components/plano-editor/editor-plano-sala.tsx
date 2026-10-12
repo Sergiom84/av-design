@@ -46,6 +46,7 @@ import { BibliotecaElementos } from './biblioteca';
 import { GuardiaSalida } from './guardia-salida';
 import { PanelMovil } from './panel-movil';
 import { InspectorSala } from './inspector-sala';
+import { BocasRoseta } from './bocas-roseta';
 import { PanelPropiedadesPlano, resumenDeSeleccion } from './panel-propiedades-plano';
 import { ControlesCapas } from './controles-capas';
 import { MenuContextualPlano, type MenuContextualAbierto } from './menu-contextual-plano';
@@ -177,6 +178,11 @@ export function EditorPlanoSala({
   const propiedades = useRef<HTMLDivElement | null>(null);
 
   const soloLectura = cerrado;
+  const patch = useMemo(() => ({
+    ...construirPatch(sala.id, version, original, borrador),
+    rutas_cambio: rutasCambiadas(rutasOriginales, rutas),
+  }), [sala.id, version, original, borrador, rutasOriginales, rutas]);
+  const hayCambios = tieneCambios(patch) || patch.rutas_cambio.length > 0;
 
   // Si la sala cambia en el servidor —recarga, o la revalidación que dispara
   // el propio guardado— y no hay nada a medio escribir, el editor adopta lo
@@ -187,7 +193,7 @@ export function EditorPlanoSala({
   const [versionVista, setVersionVista] = useState(sala.diagrama_version);
   if (
     versionVista !== sala.diagrama_version &&
-    (recargandoConflicto || (estado !== 'sucio' && estado !== 'conflicto'))
+    (recargandoConflicto || (!hayCambios && !guardando && estado !== 'conflicto'))
   ) {
     setVersionVista(sala.diagrama_version);
     setOriginal(desdeServidor);
@@ -213,12 +219,6 @@ export function EditorPlanoSala({
   // debería haber vuelto la ficha de la sala. Se comprueba aquí, en el sitio
   // donde se sabe lo que hay.
   const seleccionValida = seleccionVigente(seleccion, borrador);
-
-  const patch = useMemo(() => ({
-    ...construirPatch(sala.id, version, original, borrador),
-    rutas_cambio: rutasCambiadas(rutasOriginales, rutas),
-  }), [sala.id, version, original, borrador, rutasOriginales, rutas]);
-  const hayCambios = tieneCambios(patch) || patch.rutas_cambio.length > 0;
 
   const aplicar = useCallback(
     (siguiente: BorradorPlano, { agrupar = false }: { agrupar?: boolean } = {}) => {
@@ -594,7 +594,10 @@ export function EditorPlanoSala({
     [escena],
   );
 
+  const tomaSeleccionada = seleccionValida?.tipo === 'toma'
+    ? tomas.find((toma) => toma.id === seleccionValida.id) : undefined;
   const inspector = (
+    <>
     <PanelPropiedadesPlano
       seleccion={seleccionValida}
       borrador={borrador}
@@ -603,12 +606,19 @@ export function EditorPlanoSala({
       alCambiar={aplicar}
       alQuitar={() => setSeleccion(null)}
     />
+    {tomaSeleccionada && !soloLectura && <BocasRoseta
+      key={`${tomaSeleccionada.id}:${sala.diagrama_version}`}
+      toma={tomaSeleccionada} version={version} bloqueado={edicionBloqueada || hayCambios}
+      alGuardar={setVersion}
+    />}
+    </>
   );
 
   const editorRutas = (
     <PanelRutasCable
       conexiones={conexiones}
       equipos={equipos}
+      tomas={tomas}
       rutas={rutas}
       conexionSeleccionada={conexionRuta}
       puntoSeleccionado={puntoRuta}

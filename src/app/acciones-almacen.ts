@@ -4,10 +4,112 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { faltaParaSala } from '@/lib/datos-almacen';
-import { estadoPorRecepcion } from '@/lib/compras';
+import { comprarLineas, recibirCompra, ErrorCompra, exigirAutorCompra, bloquearObraCompra, bloquearPedidoCompra } from '@/lib/operaciones-compras';
 import { movimientosDeCierre, movimientosDeSalida } from '@/lib/carga';
-import type { EstadoPedido, LineaCarga } from '@/lib/tipos';
+import type { LineaCarga } from '@/lib/tipos';
 import { exigirEdicion } from '@/lib/sesion-servidor';
+import { operarReservaKit, ErrorReservaKit, type EstadoReservaKit } from '@/lib/operaciones-reserva';
+import { operarCargaKit, ErrorCargaKit, type EstadoCargaKit } from '@/lib/operaciones-carga';
+import { esErrorConcurrencia, mensajeErrorSqlNegocio, transaccionConControl } from '@/lib/control-escritura';
+
+export async function reservarKitConEstado(_previo:EstadoReservaKit,datos:FormData):Promise<EstadoReservaKit>{
+  const autor=await exigirEdicion('almacen');
+  try{
+    await operarReservaKit(sql,{operacionId:String(datos.get('operacion_id')),operacion:'reservar',suministroId:String(datos.get('suministro_id')),autor});
+  }catch(error){
+    if(esErrorConcurrencia(error)||error instanceof ErrorReservaKit||error instanceof ErrorCompra)return {error:error.message};
+    if(error instanceof Error && (error.message==='El identificador ya se usó con otros datos.'||('code'in error&&error.code==='23514')))return {error:error.message};
+    throw error;
+  }
+  refrescarAlmacen();revalidatePath('/salas/[id]','layout');return {error:null};
+}
+export async function liberarKitConEstado(_previo:EstadoReservaKit,datos:FormData):Promise<EstadoReservaKit>{
+  const autor=await exigirEdicion('almacen');
+  try{
+    await operarReservaKit(sql,{operacionId:String(datos.get('operacion_id')),operacion:'liberar',reservaId:String(datos.get('reserva_id')),autor});
+  }catch(error){
+    if(esErrorConcurrencia(error)||error instanceof ErrorReservaKit||error instanceof ErrorCompra)return {error:error.message};
+    if(error instanceof Error && (error.message==='El identificador ya se usó con otros datos.'||('code'in error&&error.code==='23514')))return {error:error.message};
+    throw error;
+  }
+  refrescarAlmacen();revalidatePath('/salas/[id]','layout');return {error:null};
+}
+
+function errorCarga(error: unknown): EstadoCargaKit | null {
+  if (esErrorConcurrencia(error) || error instanceof ErrorCargaKit || error instanceof ErrorReservaKit || error instanceof ErrorCompra)
+    return {error: error.message};
+  if (error instanceof Error && (error.message === 'El identificador ya se usó con otros datos.' || ('code' in error && error.code === '23514')))
+    return {error: error.message};
+  return null;
+}
+
+export async function prepararCargaKitConEstado(_previo: EstadoCargaKit, datos: FormData): Promise<EstadoCargaKit> {
+  const autor = await exigirEdicion('carga');
+  try {
+    const resultado = await operarCargaKit(sql, {
+      operacionId: String(datos.get('operacion_id')),
+      operacion: 'preparar',
+      reservaId: String(datos.get('reserva_id')),
+      autor,
+    });
+    refrescarAlmacen();
+    revalidatePath('/carga');
+    revalidatePath('/salas/[id]', 'layout');
+    redirect(`/carga/${resultado.cargaId}`);
+  } catch (error) {
+    const visible = errorCarga(error);
+    if (visible) return visible;
+    throw error;
+  }
+}
+
+export async function marcarCargaKitConEstado(_previo: EstadoCargaKit, datos: FormData): Promise<EstadoCargaKit> {
+  const autor = await exigirEdicion('carga');
+  const cargaId = String(datos.get('carga_id'));
+  const crudo = datos.get('valor');
+  if (crudo !== 'true' && crudo !== 'false') return {error: 'Marcar exige un valor explícito.'};
+  try {
+    await operarCargaKit(sql, {
+      operacionId: String(datos.get('operacion_id')),
+      operacion: 'marcar',
+      lineaId: String(datos.get('linea_id')),
+      valor: crudo === 'true',
+      autor,
+    });
+  } catch (error) {
+    const visible = errorCarga(error);
+    if (visible) return visible;
+    throw error;
+  }
+  revalidatePath(`/carga/${cargaId}`);
+  revalidatePath('/carga');
+  revalidatePath('/salas/[id]', 'layout');
+  return {error: null};
+}
+
+export async function confirmarCargaKitConEstado(_previo: EstadoCargaKit, datos: FormData): Promise<EstadoCargaKit> {
+  const autor = await exigirEdicion('carga');
+  const cargaId = String(datos.get('carga_id'));
+  try {
+    await operarCargaKit(sql, {
+      operacionId: String(datos.get('operacion_id')),
+      operacion: 'servir',
+      cargaId,
+      ubicacionId: String(datos.get('ubicacion_id')),
+      autor,
+    });
+  } catch (error) {
+    const visible = errorCarga(error);
+    if (visible) return visible;
+    throw error;
+  }
+  revalidatePath(`/carga/${cargaId}`);
+  revalidatePath('/carga');
+  refrescarAlmacen();
+  revalidatePath('/almacen/movimientos');
+  revalidatePath('/salas/[id]', 'layout');
+  return {error: null};
+}
 
 /**
  * Escritura del almacén, las reservas, los pedidos y las cargas.
@@ -111,22 +213,24 @@ export async function reservarLoDisponible(datos: FormData) {
   await exigirEdicion('almacen');
   const salaId = String(datos.get('sala_id'));
   const quien = texto(datos.get('quien'));
-  const falta = await faltaParaSala(salaId);
+  await transaccionConControl(sql, async tx=>{
+  const falta = await faltaParaSala(salaId,undefined,tx);
   if (!falta) return;
 
   for (const linea of falta.necesidad) {
     const yaReservado = falta.reservadoAqui.get(linea.articulo_id) ?? 0;
-    const porApartar = linea.cantidad - yaReservado;
+    const porApartar = linea.cantidad - yaReservado - (falta.servidoAqui.get(linea.articulo_id) ?? 0);
     if (porApartar <= 0) continue;
     const disponible = falta.disponibilidad.get(linea.articulo_id)?.disponible ?? 0;
     const cantidad = Math.min(porApartar, disponible);
     if (cantidad <= 0) continue;
 
-    await sql`
+    await tx`
       insert into reservas (sala_id, articulo_id, cantidad, notas, quien)
       values (${salaId}, ${linea.articulo_id}, ${cantidad},
               'Reserva automática de lo disponible', ${quien})`;
   }
+  });
 
   refrescarAlmacen();
   revalidatePath('/salas/[id]', 'layout');
@@ -135,7 +239,6 @@ export async function reservarLoDisponible(datos: FormData) {
 /** Soltar la reserva: el material vuelve a estar disponible para otra obra. */
 export async function liberarReserva(datos: FormData) {
   await exigirEdicion('almacen');
-  const salaId = String(datos.get('sala_id'));
   await sql`
     update reservas set estado = 'liberada'
     where id = ${String(datos.get('id'))} and estado = 'activa'`;
@@ -145,8 +248,13 @@ export async function liberarReserva(datos: FormData) {
 
 export async function borrarReserva(datos: FormData) {
   await exigirEdicion('almacen');
-  const salaId = String(datos.get('sala_id'));
-  await sql`delete from reservas where id = ${String(datos.get('id'))}`;
+  try {
+    await sql`delete from reservas where id = ${String(datos.get('id'))}`;
+  } catch (error) {
+    const mensaje = mensajeErrorSqlNegocio(error);
+    if (mensaje) return { error: mensaje };
+    throw error;
+  }
   refrescarAlmacen();
   revalidatePath('/salas/[id]', 'layout');
 }
@@ -159,17 +267,15 @@ export async function borrarReserva(datos: FormData) {
  * hace tres meses tiene que seguir contando lo que costó entonces.
  */
 export async function crearPedidoDesdeFalta(datos: FormData) {
-  await exigirEdicion('compras');
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const salaId = String(datos.get('sala_id'));
   const proveedorPedido = texto(datos.get('proveedor'));
-  const falta = await faltaParaSala(salaId);
-  if (!falta) return;
-
-  const grupos = proveedorPedido
-    ? falta.grupos.filter((g) => g.proveedor === proveedorPedido)
-    : falta.grupos;
-
-  const creados = await sql.begin(async (tx) => {
+  const creados = await transaccionConControl(sql, async (tx) => {
+    await bloquearObraCompra(tx, salaId);
+    const falta = await faltaParaSala(salaId);
+    if (!falta) return [];
+    const grupos = proveedorPedido ? falta.grupos.filter((g) => g.proveedor === (proveedorPedido === '__sin_proveedor__' ? null : proveedorPedido)) : falta.grupos;
     // El pedido hereda la obra de la sala que lo origina. Con la sala suelta
     // (legado) el pedido queda sin proyecto, que sigue siendo válido.
     const [obra] = await tx<Array<{ proyecto_id: string | null }>>`
@@ -200,9 +306,10 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
       for (const l of grupo.lineas) {
         await tx`
           insert into pedido_lineas
-            (pedido_id, articulo_id, cantidad, precio_unitario, precio_orientativo)
+            (pedido_id, articulo_id, cantidad, precio_unitario, precio_orientativo, notas)
           values (${pedido.id}, ${l.articulo_id}, ${l.cantidad},
-                  ${l.precio_unitario}, ${l.precio_orientativo})`;
+                  ${l.precio_unitario}, ${l.precio_orientativo},
+                  ${falta.necesidad.find((n) => n.articulo_id === l.articulo_id)?.detalle.join('\n') ?? null})`;
       }
       ids.push(pedido.id);
     }
@@ -217,36 +324,40 @@ export async function crearPedidoDesdeFalta(datos: FormData) {
 }
 
 export async function cambiarEstadoPedido(datos: FormData) {
-  await exigirEdicion('compras');
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const id = String(datos.get('id'));
-  const estado = (texto(datos.get('estado')) ?? 'borrador') as EstadoPedido;
-  if (estado === 'pedido') {
-    const [orientativo] = await sql<Array<{ existe: boolean }>>`
-      select exists(
-        select 1 from pedido_lineas
-        where pedido_id = ${id} and precio_orientativo
-      ) as existe`;
-    if (orientativo?.existe) return;
+  // Recibido se deriva exclusivamente de las entradas, nunca de un botón.
+  if (datos.get('estado') !== 'pedido') return;
+  try {
+    await comprarLineas(sql, id, usuario, texto(datos.get('linea_id')) ?? undefined);
+  } catch (e) {
+    if (e instanceof ErrorCompra) redirect(`/compras/${id}?error=${encodeURIComponent(e.message)}`);
+    throw e;
   }
-  await sql`
-    update pedidos set
-      estado = ${estado}::estado_pedido,
-      fecha  = coalesce(fecha, case when ${estado} = 'pedido' then current_date end)
-    where id = ${id}`;
   revalidatePath('/compras');
   revalidatePath(`/compras/${id}`);
-  refrescarAlmacen();
+  revalidatePath('/proyectos/[id]', 'page');
+  revalidatePath('/salas/[id]', 'layout');
 }
 
 export async function guardarPedido(datos: FormData) {
-  await exigirEdicion('compras');
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const id = String(datos.get('id'));
-  await sql`
-    update pedidos set
-      referencia = ${texto(datos.get('referencia'))},
-      fecha      = ${texto(datos.get('fecha'))}::date,
-      notas      = ${texto(datos.get('notas'))}
-    where id = ${id}`;
+  await transaccionConControl(sql, async (tx) => {
+    await bloquearPedidoCompra(tx, id);
+    const nombre = texto(datos.get('proveedor'));
+    const [proveedor] = nombre ? await tx`insert into proveedores (nombre) values (${nombre})
+      on conflict (nombre) do update set nombre = excluded.nombre returning id` : [];
+    await tx`update pedidos set referencia = ${texto(datos.get('referencia'))},
+      proveedor_id = ${proveedor?.id ?? null},
+      fecha = ${texto(datos.get('fecha'))}::date,
+      notas = ${texto(datos.get('notas'))},
+      entrega_prevista = ${texto(datos.get('entrega_prevista'))}::date,
+      ubicacion_prevista_id = ${texto(datos.get('ubicacion_prevista_id'))}::uuid
+      where id = ${id}`;
+  });
   revalidatePath(`/compras/${id}`);
   revalidatePath('/compras');
 }
@@ -259,111 +370,84 @@ export async function guardarPedido(datos: FormData) {
  * desactualizado, que es el problema de partida.
  */
 export async function recibirLineaPedido(datos: FormData) {
-  await exigirEdicion('compras');
-  const lineaId = String(datos.get('id'));
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const pedidoId = String(datos.get('pedido_id'));
-  const cantidad = numero(datos.get('cantidad'));
-  const ubicacionId = texto(datos.get('ubicacion_id'));
-  if (!cantidad || cantidad <= 0) return;
-
-  await sql.begin(async (tx) => {
-    const [linea] = await tx<Array<{ articulo_id: string }>>`
-      update pedido_lineas
-      set cantidad_recibida = cantidad_recibida + ${cantidad}
-      where id = ${lineaId}
-      returning articulo_id`;
-    if (!linea) return;
-
-    const [pedido] = await tx<Array<{ estado: EstadoPedido; sala_id: string | null; referencia: string | null }>>`
-      select estado, sala_id, referencia from pedidos where id = ${pedidoId}`;
-
-    const [orientativo] = await tx<Array<{ existe: boolean }>>`
-      select exists(
-        select 1 from pedido_lineas
-        where pedido_id = ${pedidoId} and precio_orientativo
-      ) as existe`;
-    if (orientativo?.existe) return;
-
-    await tx`
-      insert into movimientos (articulo_id, ubicacion_id, tipo, cantidad, sala_id, motivo, quien)
-      values (${linea.articulo_id}, ${ubicacionId}, 'entrada', ${cantidad},
-              ${pedido?.sala_id ?? null},
-              ${`Recepción de pedido${pedido?.referencia ? ` · ${pedido.referencia}` : ''}`},
-              ${texto(datos.get('quien'))})`;
-
-    const lineas = await tx<Array<{ cantidad: string; cantidad_recibida: string }>>`
-      select cantidad, cantidad_recibida from pedido_lineas where pedido_id = ${pedidoId}`;
-
-    const nuevo = estadoPorRecepcion(
-      pedido?.estado ?? 'borrador',
-      lineas.map((l) => ({
-        cantidad: Number(l.cantidad),
-        cantidad_recibida: Number(l.cantidad_recibida),
-      })),
-    );
-    await tx`update pedidos set estado = ${nuevo}::estado_pedido where id = ${pedidoId}`;
-  });
-
+  try {
+    await recibirCompra(sql, {
+    pedidoId, lineaId: String(datos.get('id')),
+    cantidad: numero(datos.get('cantidad')) ?? 0,
+    ubicacionId: texto(datos.get('ubicacion_id')) ?? '', autor: usuario,
+    recepcionId: texto(datos.get('recepcion_id')) ?? '',
+    });
+  } catch (e) {
+    if (e instanceof ErrorCompra) redirect(`/compras/${pedidoId}?error=${encodeURIComponent(e.message)}`);
+    throw e;
+  }
   revalidatePath(`/compras/${pedidoId}`);
   revalidatePath('/compras');
+  revalidatePath('/salas/[id]', 'layout');
+  revalidatePath('/proyectos/[id]', 'page');
   refrescarAlmacen();
   revalidatePath('/almacen/movimientos');
 }
 
-/** Recibir de golpe todo lo que falta del pedido. Lo normal cuando llega entero. */
 export async function recibirPedidoCompleto(datos: FormData) {
-  await exigirEdicion('compras');
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const pedidoId = String(datos.get('id'));
-  const ubicacionId = texto(datos.get('ubicacion_id'));
-  const quien = texto(datos.get('quien'));
-
-  await sql.begin(async (tx) => {
-    const [orientativo] = await tx<Array<{ existe: boolean }>>`
-      select exists(
-        select 1 from pedido_lineas
-        where pedido_id = ${pedidoId} and precio_orientativo
-      ) as existe`;
-    if (orientativo?.existe) return;
-    const [pedido] = await tx<Array<{ sala_id: string | null; referencia: string | null }>>`
-      select sala_id, referencia from pedidos where id = ${pedidoId}`;
-
-    const lineas = await tx<
-      Array<{ id: string; articulo_id: string; cantidad: string; cantidad_recibida: string }>
-    >`select id, articulo_id, cantidad, cantidad_recibida
-      from pedido_lineas where pedido_id = ${pedidoId}`;
-
-    for (const l of lineas) {
-      const pendiente = Number(l.cantidad) - Number(l.cantidad_recibida);
-      if (pendiente <= 0) continue;
-      await tx`
-        update pedido_lineas set cantidad_recibida = cantidad where id = ${l.id}`;
-      await tx`
-        insert into movimientos (articulo_id, ubicacion_id, tipo, cantidad, sala_id, motivo, quien)
-        values (${l.articulo_id}, ${ubicacionId}, 'entrada', ${pendiente},
-                ${pedido?.sala_id ?? null},
-                ${`Recepción de pedido${pedido?.referencia ? ` · ${pedido.referencia}` : ''}`},
-                ${quien})`;
-    }
-
-    await tx`update pedidos set estado = 'recibido' where id = ${pedidoId}`;
-  });
-
+  try {
+    await recibirCompra(sql, {
+    pedidoId, ubicacionId: texto(datos.get('ubicacion_id')) ?? '', autor: usuario,
+    recepcionId: texto(datos.get('recepcion_id')) ?? '',
+    });
+  } catch (e) {
+    if (e instanceof ErrorCompra) redirect(`/compras/${pedidoId}?error=${encodeURIComponent(e.message)}`);
+    throw e;
+  }
   revalidatePath(`/compras/${pedidoId}`);
   revalidatePath('/compras');
+  revalidatePath('/salas/[id]', 'layout');
+  revalidatePath('/proyectos/[id]', 'page');
   refrescarAlmacen();
   revalidatePath('/almacen/movimientos');
+}
+
+export async function registrarOfertaLinea(datos: FormData) {
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
+  const pedidoId = String(datos.get('pedido_id'));
+  const precio = numero(datos.get('precio'));
+  const referencia = texto(datos.get('oferta'));
+  if (precio == null || precio < 0 || !referencia) return;
+  await transaccionConControl(sql, async (tx) => {
+    await bloquearPedidoCompra(tx, pedidoId);
+    await tx`update pedido_lineas set precio_unitario = ${precio}, precio_orientativo = false,
+      notas = concat_ws(E'\n', nullif(notas, ''), ${`Oferta final: ${referencia}`}::text) where id = ${String(datos.get('id'))}
+      and pedido_id = ${pedidoId} and comprado_en is null and cantidad_recibida = 0`;
+  });
+  revalidatePath(`/compras/${pedidoId}`);
 }
 
 export async function borrarLineaPedido(datos: FormData) {
-  await exigirEdicion('compras');
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
   const pedidoId = String(datos.get('pedido_id'));
-  await sql`delete from pedido_lineas where id = ${String(datos.get('id'))}`;
+  await transaccionConControl(sql, async (tx) => {
+    await bloquearPedidoCompra(tx, pedidoId);
+    await tx`delete from pedido_lineas where id = ${String(datos.get('id'))} and pedido_id = ${pedidoId} and comprado_en is null and cantidad_recibida = 0`;
+  });
   revalidatePath(`/compras/${pedidoId}`);
 }
 
 export async function borrarPedido(datos: FormData) {
-  await exigirEdicion('compras');
-  await sql`delete from pedidos where id = ${String(datos.get('id'))}`;
+  const usuario = await exigirEdicion('compras');
+  exigirAutorCompra(usuario);
+  const pedidoId = String(datos.get('id'));
+  await transaccionConControl(sql, async (tx) => {
+    await bloquearPedidoCompra(tx, pedidoId);
+    await tx`delete from pedidos p where id = ${pedidoId} and not exists (select 1 from pedido_lineas l where l.pedido_id = p.id and (l.comprado_en is not null or l.cantidad_recibida > 0))`;
+  });
   revalidatePath('/compras');
   redirect('/compras');
 }
@@ -379,7 +463,7 @@ export async function crearCargaDesdeReservas(datos: FormData) {
   const salaId = String(datos.get('sala_id'));
   const nombre = texto(datos.get('nombre'));
 
-  const cargaId = await sql.begin(async (tx) => {
+  const cargaId = await transaccionConControl(sql, async (tx) => {
     const [sala] = await tx<Array<{ nombre: string }>>`
       select nombre from salas where id = ${salaId}`;
     if (!sala) return null;
@@ -438,7 +522,7 @@ export async function confirmarCarga(datos: FormData) {
   const ubicacionId = texto(datos.get('ubicacion_id'));
   const quien = texto(datos.get('quien'));
 
-  await sql.begin(async (tx) => {
+  await transaccionConControl(sql, async (tx) => {
     const [carga] = await tx<Array<{ nombre: string; sala_id: string }>>`
       select nombre, sala_id from cargas where id = ${cargaId} and estado = 'preparacion'`;
     if (!carga) return;
@@ -503,7 +587,7 @@ export async function cerrarCarga(datos: FormData) {
   const ubicacionId = texto(datos.get('ubicacion_id'));
   const quien = texto(datos.get('quien'));
 
-  await sql.begin(async (tx) => {
+  await transaccionConControl(sql, async (tx) => {
     const [carga] = await tx<Array<{ nombre: string; sala_id: string }>>`
       select nombre, sala_id from cargas where id = ${cargaId} and estado = 'cargada'`;
     if (!carga) return;

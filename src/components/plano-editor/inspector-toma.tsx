@@ -34,10 +34,9 @@ export function InspectorToma({
         )}
       </div>
 
-      {(toma.x_m == null || toma.y_m == null) && (
+      {(toma.x_m == null || toma.y_m == null || toma.z_m == null) && (
         <Aviso tono="neutro">
-          Sin situar en el plano. Sigue dada de alta en la sala: escribe X e Y o
-          arrástrala desde el lienzo cuando se sepa dónde está.
+          Posición incompleta. Completa X, Y y Z para calcular el cable hasta esta roseta.
         </Aviso>
       )}
 

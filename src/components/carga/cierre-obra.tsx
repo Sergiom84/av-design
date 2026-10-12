@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
 import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import { cerrarCarga, guardarCierreLinea } from '@/app/acciones-almacen';
@@ -51,7 +52,7 @@ export function CierreDeObra({
                 salieron {l.cantidad} {l.unidad}
               </span>
             </div>
-            <form
+            <FormularioMutacion
               action={guardarCierreLinea}
               className="flex flex-wrap items-end gap-2"
             >
@@ -85,7 +86,7 @@ export function CierreDeObra({
                 />
               </Campo>
               {!cerrada && <Boton variante="secundario">Guardar</Boton>}
-            </form>
+            </FormularioMutacion>
           </li>
         ))}
       </ul>
@@ -95,7 +96,7 @@ export function CierreDeObra({
           Obra cerrada. Los movimientos de devolución y baja ya están en el almacén.
         </p>
       ) : (
-        <form
+        <FormularioMutacion
           action={cerrarCarga}
           className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-linea"
         >
@@ -116,7 +117,7 @@ export function CierreDeObra({
           <span className="text-tinta-tenue pb-1">
             {ETIQUETA_CARGA[carga.estado]} · se generan los movimientos de vuelta.
           </span>
-        </form>
+        </FormularioMutacion>
       )}
     </Tarjeta>
   );

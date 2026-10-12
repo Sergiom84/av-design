@@ -1,11 +1,13 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
+import { randomUUID } from 'node:crypto';
 import { Aviso, Boton, Campo, ContenedorTabla, Dato, Enlace, Tarjeta } from '@/components/ui';
-import { QuienTecnico } from '@/components/ciclo-vida/quien';
 import {
   borrarLineaPedido,
   cambiarEstadoPedido,
   guardarPedido,
   recibirLineaPedido,
   recibirPedidoCompleto,
+  registrarOfertaLinea,
 } from '@/app/acciones-almacen';
 import { pendienteDeRecibir } from '@/lib/compras';
 import { ETIQUETA_PEDIDO, type LineaPedido, type Pedido, type Ubicacion } from '@/lib/tipos';
@@ -14,9 +16,15 @@ import { ETIQUETA_PEDIDO, type LineaPedido, type Pedido, type Ubicacion } from '
 export function CabeceraPedido({
   pedido,
   tienePreciosOrientativos,
+  compraPendiente,
+  ubicaciones,
+  proyecto,
 }: {
   pedido: Pedido;
   tienePreciosOrientativos: boolean;
+  compraPendiente: boolean;
+  ubicaciones: Ubicacion[];
+  proyecto?: { id: string; nombre: string } | null;
 }) {
   return (
     <Tarjeta titulo="Pedido">
@@ -27,6 +35,8 @@ export function CabeceraPedido({
           valor={
             pedido.sala_id ? (
               <Enlace href={`/salas/${pedido.sala_id}`}>{pedido.sala}</Enlace>
+            ) : proyecto ? (
+              <Enlace href={`/proyectos/${proyecto.id}`}>{proyecto.nombre}</Enlace>
             ) : (
               'Reposición de almacén'
             )
@@ -36,8 +46,11 @@ export function CabeceraPedido({
         <Dato etiqueta="Fecha" valor={pedido.fecha ?? '—'} />
       </div>
 
-      <form action={guardarPedido} className="flex flex-wrap items-end gap-3">
+      <FormularioMutacion key={JSON.stringify(pedido)} action={guardarPedido} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="id" value={pedido.id} />
+        <Campo etiqueta="Empresa (opcional)">
+          <input name="proveedor" defaultValue={pedido.proveedor ?? ''} />
+        </Campo>
         <Campo etiqueta="Referencia">
           <input
             name="referencia"
@@ -48,29 +61,28 @@ export function CabeceraPedido({
         <Campo etiqueta="Fecha">
           <input name="fecha" type="date" defaultValue={pedido.fecha ?? ''} />
         </Campo>
+        <Campo etiqueta="Entrega estimada">
+          <input name="entrega_prevista" type="date" defaultValue={pedido.entrega_prevista ?? ''} />
+        </Campo>
+        <Campo etiqueta="Almacén de entrega">
+          <select name="ubicacion_prevista_id" defaultValue={pedido.ubicacion_prevista_id ?? ''}>
+            <option value="">Por confirmar</option>
+            {ubicaciones.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+          </select>
+        </Campo>
         <Campo etiqueta="Notas">
           <input name="notas" defaultValue={pedido.notas ?? ''} className="min-w-[14rem]" />
         </Campo>
         <Boton variante="secundario">Guardar</Boton>
-      </form>
+      </FormularioMutacion>
 
-      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-linea">
-        {(['borrador', 'pedido', 'recibido'] as const).map((estado) => (
-          <form key={estado} action={cambiarEstadoPedido}>
-            <input type="hidden" name="id" value={pedido.id} />
-            <input type="hidden" name="estado" value={estado} />
-            <Boton
-              variante={pedido.estado === estado ? 'principal' : 'secundario'}
-              disabled={
-                pedido.estado === estado ||
-                (tienePreciosOrientativos && (estado === 'pedido' || estado === 'recibido'))
-              }
-            >
-              {ETIQUETA_PEDIDO[estado]}
-            </Boton>
-          </form>
-        ))}
-      </div>
+      <FormularioMutacion action={cambiarEstadoPedido} className="mt-4">
+        <input type="hidden" name="id" value={pedido.id} />
+        <input type="hidden" name="estado" value="pedido" />
+        <Boton disabled={tienePreciosOrientativos || !compraPendiente}>
+          Registrar compra de todo lo pendiente
+        </Boton>
+      </FormularioMutacion>
       {tienePreciosOrientativos && (
         <p className="text-sm text-aviso mt-3">
           Añade una oferta final para poder mandar y recibir este pedido.
@@ -91,10 +103,14 @@ export function LineasPedido({
   pedido,
   lineas,
   ubicaciones,
+  soloRecepcion = false,
+  lineasKit = [],
 }: {
   pedido: Pedido;
   lineas: LineaPedido[];
   ubicaciones: Ubicacion[];
+  soloRecepcion?: boolean;
+  lineasKit?: string[];
 }) {
   const orientativas = lineas.filter((l) => l.precio_orientativo);
   const total = lineas
@@ -104,7 +120,7 @@ export function LineasPedido({
 
   return (
     <Tarjeta
-      titulo="Líneas"
+      titulo="Checklist de compra y recepción"
       pie={`Total ${total.toFixed(2)} € · ${pendientes.length} de ${lineas.length} líneas pendientes de recibir`}
     >
       {orientativas.length > 0 && (
@@ -123,6 +139,7 @@ export function LineasPedido({
         <thead>
           <tr>
             <th>Referencia</th>
+            <th>Compra</th>
             <th className="num">Pedido</th>
             <th className="num">Recibido</th>
             <th className="num">Pendiente</th>
@@ -138,6 +155,17 @@ export function LineasPedido({
               <tr key={l.id}>
                 <td>
                   <Enlace href={`/articulo/${l.articulo_id}`}>{l.descripcion}</Enlace>
+                  {l.notas && <p className="text-tinta-tenue whitespace-pre-line">{l.notas}</p>}
+                </td>
+                <td>
+                  {l.comprado_en ? <span>Comprado · {l.comprado_en}<br />{l.comprado_por ?? 'Autor no registrado (histórico)'}</span> : (
+                    <FormularioMutacion action={cambiarEstadoPedido}>
+                      <input type="hidden" name="id" value={pedido.id} />
+                      <input type="hidden" name="linea_id" value={l.id} />
+                      <input type="hidden" name="estado" value="pedido" />
+                      <Boton variante="secundario" disabled={soloRecepcion || l.precio_orientativo}>Marcar comprado</Boton>
+                    </FormularioMutacion>
+                  )}
                 </td>
                 <td className="num">
                   {l.cantidad} {l.unidad}
@@ -151,27 +179,39 @@ export function LineasPedido({
                   {l.precio_orientativo && (
                     <span className="text-aviso ml-1">orientativo</span>
                   )}
+                  {!l.comprado_en && <details className="mt-2 text-left">
+                    <summary className="cursor-pointer min-h-11">Registrar oferta final</summary>
+                    <fieldset disabled={soloRecepcion}><FormularioMutacion action={registrarOfertaLinea} className="space-y-2">
+                      <input type="hidden" name="id" value={l.id} />
+                      <input type="hidden" name="pedido_id" value={pedido.id} />
+                      <Campo etiqueta="Precio unitario (€)"><input name="precio" type="number" min="0" step="0.01" required className="w-32" /></Campo>
+                      <Campo etiqueta="Referencia de la oferta"><input name="oferta" required maxLength={300} className="w-48" /></Campo>
+                      <Boton variante="secundario">Guardar oferta</Boton>
+                    </FormularioMutacion></fieldset>
+                  </details>}
                 </td>
                 <td>
-                  {pendiente > 0 && pedido.estado !== 'borrador' && !l.precio_orientativo ? (
-                    <form
+                  {pendiente > 0 && l.comprado_en && !l.precio_orientativo ? (
+                    <FormularioMutacion
                       action={recibirLineaPedido}
                       className="flex flex-wrap items-end gap-2"
                     >
+                      <input type="hidden" name="recepcion_id" value={randomUUID()} />
                       <input type="hidden" name="id" value={l.id} />
                       <input type="hidden" name="pedido_id" value={pedido.id} />
                       <input
                         name="cantidad"
                         type="number"
-                        step="0.01"
-                        min="0.01"
+                        step={lineasKit.includes(l.id) ? '1' : '0.01'}
+                        min={lineasKit.includes(l.id) ? '1' : '0.01'}
                         defaultValue={pendiente}
+                        max={pendiente}
                         className="w-20"
                         aria-label={`Cantidad recibida de ${l.descripcion}`}
                       />
                       <select
                         name="ubicacion_id"
-                        defaultValue={ubicaciones.find((u) => !u.es_furgoneta)?.id ?? ''}
+                        defaultValue={pedido.ubicacion_prevista_id ?? ubicaciones.find((u) => !u.es_furgoneta)?.id ?? ''}
                         aria-label="Ubicación de entrada"
                       >
                         {ubicaciones.map((u) => (
@@ -181,23 +221,23 @@ export function LineasPedido({
                         ))}
                       </select>
                       <Boton variante="secundario">Recibir</Boton>
-                    </form>
+                    </FormularioMutacion>
                   ) : (
                     <span className="text-tinta-tenue">
                       {l.precio_orientativo
                         ? 'Oferta final pendiente'
-                        : pedido.estado === 'borrador'
-                          ? 'Mándalo primero'
+                        : !l.comprado_en
+                          ? 'Compra pendiente'
                           : 'Completa'}
                     </span>
                   )}
                 </td>
                 <td>
-                  <form action={borrarLineaPedido}>
+                  <FormularioMutacion action={borrarLineaPedido}>
                     <input type="hidden" name="id" value={l.id} />
                     <input type="hidden" name="pedido_id" value={pedido.id} />
-                    <Boton variante="peligro">Quitar</Boton>
-                  </form>
+                    <Boton variante="peligro" disabled={soloRecepcion || Boolean(l.comprado_en) || l.cantidad_recibida > 0}>Quitar</Boton>
+                  </FormularioMutacion>
                 </td>
               </tr>
             );
@@ -206,16 +246,17 @@ export function LineasPedido({
       </table>
       </ContenedorTabla>
 
-      {pendientes.length > 0 && pedido.estado !== 'borrador' && orientativas.length === 0 && (
-        <form
+      {pendientes.length > 0 && pendientes.every((l) => l.comprado_en && !l.precio_orientativo) && (
+        <FormularioMutacion
           action={recibirPedidoCompleto}
           className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-linea"
         >
+          <input type="hidden" name="recepcion_id" value={randomUUID()} />
           <input type="hidden" name="id" value={pedido.id} />
           <Campo etiqueta="Ubicación de entrada">
             <select
               name="ubicacion_id"
-              defaultValue={ubicaciones.find((u) => !u.es_furgoneta)?.id ?? ''}
+              defaultValue={pedido.ubicacion_prevista_id ?? ubicaciones.find((u) => !u.es_furgoneta)?.id ?? ''}
             >
               {ubicaciones.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -224,11 +265,8 @@ export function LineasPedido({
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Quién">
-            <QuienTecnico rol="recepcion" />
-          </Campo>
           <Boton>Recibir todo lo pendiente</Boton>
-        </form>
+        </FormularioMutacion>
       )}
     </Tarjeta>
   );

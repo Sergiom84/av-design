@@ -1,3 +1,5 @@
+import { sesionActual } from '@/lib/sesion-servidor';
+import { puede } from '@/lib/usuarios';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import { SinConfigurar } from '@/components/sin-configurar';
@@ -7,7 +9,7 @@ import { Medidas } from '@/components/sala/medidas';
 import { BorrarSala } from '@/components/sala/borrar';
 import { CicloDeVidaSala } from '@/components/ciclo-vida/tarjeta-sala';
 import { avisosDeEntrega, proyectoCerrado } from '@/lib/ciclo-vida';
-import { cicloDeSala, listarTecnicosConRoles } from '@/lib/datos-ciclo';
+import { cicloDeSala, listarTecnicosConRoles, seguimientoDeSala } from '@/lib/datos-ciclo';
 import { resumirMontaje, type Semaforo } from '@/lib/revision';
 import { ETIQUETA_ESTADO_SALA, TONO_ESTADO_SALA, estadoDeSalaEnPortada } from '@/lib/proyecto';
 import { Dato, Estado, Tarjeta, type TonoEstado } from '@/components/ui';
@@ -42,15 +44,17 @@ export default async function ResumenSala({
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const { borrar, editar } = await searchParams;
+  const { borrar, editar, seguimiento_error } = await searchParams;
   const ficha = await fichaConAlmacen(id);
   if (!ficha) notFound();
 
   const { sala, equipos, muebles, conexiones, tomas, resultados, puntosMontaje } = ficha;
 
-  const [ciclo, { tecnicos, roles }] = await Promise.all([
+  const [ciclo, { tecnicos, roles }, seguimiento, usuario] = await Promise.all([
     cicloDeSala(sala.id, sala.proyecto_id ?? null),
     listarTecnicosConRoles(),
+    seguimientoDeSala(sala.id),
+    sesionActual(),
   ]);
 
   const cerrado = proyectoCerrado(ciclo.hitosProyecto);
@@ -113,6 +117,10 @@ export default async function ResumenSala({
 
       <CicloDeVidaSala
         salaId={sala.id}
+        seguimiento={seguimiento}
+        compras={ciclo.compras}
+        editable={!!usuario && !usuario.ficticio && !usuario.debeCambiarClave && puede(usuario.permisos, 'salas', 'editar')}
+        error={typeof seguimiento_error === 'string' ? seguimiento_error : undefined}
         hitosProyecto={ciclo.hitosProyecto}
         hitosSala={ciclo.hitosSala}
         recepciones={ciclo.recepciones}

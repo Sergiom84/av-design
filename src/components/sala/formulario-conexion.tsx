@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useActionState, useMemo, useState } from 'react';
+import { useConservarFormulario } from '@/components/formulario-mutacion/use-conservar-formulario';
 import { Aviso, Boton, Campo } from '@/components/ui';
 import { anadirConexionConEstado } from '@/app/acciones';
 import { avisosDeConexion } from '@/lib/cable-schedule';
@@ -13,6 +14,7 @@ import {
   type Puerto,
   type Senal,
 } from '@/lib/tipos';
+import { etiquetaLatiguillo, type CableSuministrado, type EstadoSuministroCable } from '@/lib/suministros';
 
 export interface EquipoElegible {
   id: string;
@@ -41,11 +43,13 @@ export function FormularioConexion({
   equipos,
   puertos,
   cables,
+  latiguillos = [],
 }: {
   salaId: string;
   equipos: EquipoElegible[];
   puertos: Puerto[];
   cables: CableElegible[];
+  latiguillos?: CableSuministrado[];
 }) {
   const [origenId, setOrigenId] = useState('');
   const [destinoId, setDestinoId] = useState('');
@@ -55,7 +59,13 @@ export function FormularioConexion({
   const [ordinalDestino, setOrdinalDestino] = useState<number | null>(null);
   const [cableId, setCableId] = useState('');
   const [senal, setSenal] = useState<Senal>('hdmi');
-  const [estado, accion] = useActionState(anadirConexionConEstado, { error: null });
+  const [estadoSuministro, setEstadoSuministro] = useState<EstadoSuministroCable>('por_determinar');
+  const { conservar: conservarRef, formulario } = useConservarFormulario();
+  const [estado, accion] = useActionState(async (anterior: {error:string|null}, datos: FormData) => {
+    const resultado = await anadirConexionConEstado(anterior, datos);
+    conservarRef.current = resultado.error !== null;
+    return resultado;
+  }, { error: null });
 
   const porArticulo = useMemo(() => {
     const mapa = new Map<string, Puerto[]>();
@@ -131,6 +141,8 @@ export function FormularioConexion({
 
   return (
     <form
+      ref={formulario}
+      onSubmit={() => { conservarRef.current = true; }}
       action={accion}
       className="mt-4 pt-4 border-t border-linea space-y-3"
     >
@@ -212,6 +224,28 @@ export function FormularioConexion({
             ))}
           </select>
         </Campo>
+        <Campo etiqueta="Suministro del cable">
+          <select
+            name="estado_suministro"
+            value={estadoSuministro}
+            onChange={(e) => setEstadoSuministro(e.target.value as EstadoSuministroCable)}
+            aria-label="Suministro del cable"
+          >
+            <option value="por_determinar">Por determinar</option>
+            <option value="adicional">Adicional (compra)</option>
+            <option value="incluido">Incluido (latiguillo)</option>
+          </select>
+        </Campo>
+        {estadoSuministro === 'incluido' && (
+          <Campo etiqueta="Latiguillo suministrado">
+            <select name="cable_suministrado_id" aria-label="Latiguillo suministrado">
+              <option value="">Elegir latiguillo</option>
+              {latiguillos.map((k) => (
+                <option key={k.id} value={k.id}>{etiquetaLatiguillo(k)}</option>
+              ))}
+            </select>
+          </Campo>
+        )}
         <Campo etiqueta="Ruta">
           <select name="ruta" defaultValue="">
             <option value="">Por defecto de la sala</option>

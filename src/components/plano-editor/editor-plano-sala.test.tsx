@@ -15,7 +15,7 @@
 
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
-import { createElement, type ReactElement } from 'react';
+import { act, createElement, type ReactElement } from 'react';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
@@ -29,8 +29,10 @@ import {
   type Montaje,
 } from '@/pruebas/dom';
 import type { ResultadoGuardado } from '@/app/acciones-diagrama';
-import type { Sala } from '@/lib/tipos';
+import type { Sala, EquipoEnSala, TomaRed } from '@/lib/tipos';
 import { EditorPlanoSala } from './editor-plano-sala';
+import { PanelPropiedadesPlano } from './panel-propiedades-plano';
+import { borradorDesde, type BorradorPlano, type PatchPlano } from '@/lib/plano-editor';
 
 const SALA: Sala = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -115,7 +117,7 @@ interface Editor {
 async function editor(
   guardarPlano: (patch: unknown) => Promise<ResultadoGuardado>,
   sala: Sala = SALA,
-  { cerrado = false }: { cerrado?: boolean } = {},
+  { cerrado = false, equipos = [], tomas = [] }: { cerrado?: boolean; equipos?: EquipoEnSala[]; tomas?: TomaRed[] } = {},
 ): Promise<Editor> {
   const contador: Enrutador = { refrescos: 0, ido: [] };
   const vista = (salaActual: Sala) =>
@@ -129,9 +131,9 @@ async function editor(
         createElement('a', { href: RUTA_RESUMEN, id: 'pestana-resumen' }, 'Resumen'),
         createElement(EditorPlanoSala, {
           sala: salaActual,
-          equipos: [],
+          equipos,
           conexiones: [],
-          tomas: [],
+          tomas,
           puertas: [],
           muebles: [MUEBLE],
           categoriasMobiliario: ['Sillas'],
@@ -170,6 +172,108 @@ after(async () => {
   for (const m of montados) await m.desmontar();
 });
 
+describe('el inspector al cambiar de objeto con un campo en foco', () => {
+  for (const tipo of ['equipo', 'mueble', 'puerta', 'toma'] as const) {
+    it(`${tipo}: descarta el texto local del anterior y muestra la coordenada del seleccionado`, async () => {
+      let borrador: BorradorPlano = {
+        ...borradorDesde(SALA, [], []),
+        equipos: [3, 0].map((x_m, i) => ({
+          id: String(i), articulo_id: 'ref', nombre: `Equipo ${i}`, cantidad: 1,
+          extremo: 'pared', x_m, y_m: 0, z_m: 0, posicion_confirmada: true,
+          rotacion_grados: 0, toma_red_id: null, es_nuevo: false,
+        })),
+        mobiliario: [3, 0].map((x_m, i) => ({ ...MUEBLE, id: String(i), x_m, es_nuevo: false })),
+        puertas: [3, 0].map((posicion_m, i) => ({
+          id: String(i), pared: 'norte', posicion_m, anchura_m: 0.9,
+          altura_m: 2, orden: i, es_nuevo: false,
+        })),
+        tomas: [3, 0].map((x_m, i) => ({
+          capacidad_documentada: null, bocas: [], codigo_referencia: null, codigo_confirmado: false,
+          esquema_x: null, esquema_y: null,
+          id: String(i), codigo: String(i), x_m, y_m: 0, z_m: 0, ubicacion: null, notas: null,
+        })),
+      };
+      const vista = (id: string) => createElement(PanelPropiedadesPlano, {
+        seleccion: { tipo, id }, borrador, posicionesDibujadas: new Map(), soloLectura: false,
+        alCambiar: (siguiente: BorradorPlano) => { borrador = siguiente; }, alQuitar: () => {},
+      });
+      const m = await montar(vista('0'));
+      try {
+        const campo = () => {
+          const etiqueta = tipo === 'puerta' ? 'Posición en la pared (m)' : 'X (m)';
+          const label = [...m.contenedor.querySelectorAll('label')].find(
+            (l) => l.firstElementChild?.textContent === etiqueta,
+          );
+          const input = label?.querySelector('input');
+          assert.ok(input, `existe ${etiqueta}`);
+          return input;
+        };
+        const anterior = campo();
+        await moverFoco(null, anterior);
+        await escribir(anterior, '3,');
+        await m.repintar(vista('0'));
+        assert.equal(campo(), anterior, 'editar el mismo objeto conserva el campo');
+        assert.equal(campo().value, '3,', 'la coma se conserva mientras escribe');
+        assert.equal(m.documento.activeElement, anterior);
+
+        // Cambio de selección sin blur previo: reproduce el estado local
+        // retenido; no pretende simular el timing de los clics del navegador.
+        await m.repintar(vista('1'));
+        assert.equal(campo().value, '0', 'la coordenada pertenece al nuevo objeto');
+        await moverFoco(null, campo());
+        await escribir(campo(), '2,5');
+        const objetos = tipo === 'equipo' ? borrador.equipos
+          : tipo === 'mueble' ? borrador.mobiliario
+          : tipo === 'puerta' ? borrador.puertas : borrador.tomas;
+        const coordenadas = objetos.map((o) => 'posicion_m' in o ? o.posicion_m : o.x_m);
+        assert.deepEqual(coordenadas, [3, 2.5], 'editar después afecta solo al seleccionado');
+      } finally { await m.desmontar(); }
+    });
+  }
+});
+
+describe('el editor envía los cambios del inspector de equipos', () => {
+  for (const campo of ['Extremo', 'Toma de red'] as const) {
+    it(`${campo} aislado habilita Guardar y viaja en el patch sin mover X`, async () => {
+      const id = '44444444-4444-4444-8444-444444444444';
+      const tomaId = '55555555-5555-4555-8555-555555555555';
+      const enviados: PatchPlano[] = [];
+      const e = registrar(await editor(async (p) => {
+        enviados.push(p as PatchPlano);
+        return { ok: true, version: 2, ids: {} };
+      }, SALA, {
+        equipos: [{ id, sala_id: SALA.id, articulo_id: id, nombre: 'QA Codec', cantidad: 1,
+          extremo: 'pantalla', posicion: { x_m: 0, y_m: 0, z_m: 0 },
+          posicion_confirmada: true, rotacion_grados: 0, toma_red_id: null }],
+        tomas: [{ id: tomaId, sala_id: SALA.id, codigo: 'QA-RJ-01', ubicacion: null,
+          capacidad_documentada: null, bocas: [], codigo_referencia: null, codigo_confirmado: false,
+          esquema_x: null, esquema_y: null,
+          x_m: 1, y_m: 1, z_m: 0, notas: null }],
+      }));
+      assert.equal(e.boton('Guardar cambios')?.disabled, true);
+      const fila = e.boton('QA Codec'); assert.ok(fila); await pulsar(fila);
+      const label = [...e.m.contenedor.querySelectorAll('label')].find(
+        (l) => l.firstElementChild?.textContent === campo,
+      );
+      const select = label?.querySelector('select'); assert.ok(select);
+      await act(async () => {
+        select.value = campo === 'Extremo' ? 'rack' : tomaId;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const guardar = e.boton('Guardar cambios'); assert.ok(guardar);
+      assert.equal(guardar.disabled, false, 'el cambio aislado ensucia el editor');
+      await pulsar(guardar);
+      assert.equal(enviados.length, 1);
+      assert.equal(enviados[0].equipos.length, 1);
+      assert.equal(enviados[0].equipos[0].x_m, 0);
+      assert.equal(enviados[0].equipos[0].extremo, campo === 'Extremo' ? 'rack' : 'pantalla');
+      assert.equal(enviados[0].equipos[0].toma_red_id, campo === 'Toma de red' ? tomaId : null);
+      assert.equal(e.boton('Guardar cambios')?.disabled, true);
+      assert.equal(select.value, campo === 'Extremo' ? 'rack' : tomaId);
+    });
+  }
+});
+
 /** Selecciona la silla de la lista de objetos. */
 async function seleccionarSilla(e: Editor) {
   const fila = [...e.m.contenedor.querySelectorAll('button')].find((b) =>
@@ -195,6 +299,21 @@ async function ensuciar(e: Editor) {
 }
 
 describe('el editor tras un conflicto', () => {
+  it('un rechazo inválido y props nuevas no descartan el borrador', async () => {
+    const e = registrar(await editor(async () => ({
+      ok: false, motivo: 'invalido', detalle: 'Datos inválidos para guardar.',
+    })));
+    await ensuciar(e);
+    await pulsar(e.boton('Guardar cambios')!);
+    await esperar(30);
+    const mantieneNombre = () => [...e.m.contenedor.querySelectorAll('input')]
+      .some((input) => input.value === 'Silla de confidente');
+    assert.equal(mantieneNombre(), true);
+    await e.repintarSala({ ...SALA, diagrama_version: 2 });
+    await esperar();
+    assert.equal(mantieneNombre(), true);
+    assert.equal(e.boton('Guardar cambios')?.disabled, false);
+  });
   const conflicto = async (): Promise<ResultadoGuardado> => ({
     ok: false,
     motivo: 'conflicto',

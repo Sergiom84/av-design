@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { hayConfiguracion } from '@/lib/db';
 import { listarCategorias, listarMarcas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
@@ -21,7 +22,7 @@ export default async function NuevoArticulo() {
         descripcion="Lo mínimo para darla de alta. El precio, las características y las observaciones se rellenan después en su ficha."
       />
 
-      <form action={crearArticulo} className="max-w-3xl space-y-6">
+      <FormularioMutacion action={crearArticulo} className="max-w-3xl space-y-6">
         <Tarjeta>
           <div className="grid sm:grid-cols-2 gap-3">
             <Campo etiqueta="Tipo">
@@ -78,7 +79,7 @@ export default async function NuevoArticulo() {
         </Tarjeta>
 
         <Boton>Crear referencia</Boton>
-      </form>
+      </FormularioMutacion>
     </>
   );
 }

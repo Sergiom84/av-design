@@ -33,9 +33,11 @@ export default async function DiagramaSala({ params }: PageProps<'/salas/[id]/di
     version={ficha.sala.diagrama_version}
     conexiones={ficha.conexiones}
     equipos={ficha.equipos}
+    tomas={ficha.tomas}
     puertos={ficha.puertos}
     parametros={ficha.parametros}
     articulos={ficha.articulos.filter((a) => a.tipo === 'cable' || ficha.equipos.some((e) => e.articulo_id === a.id))}
+    latiguillos={ficha.suministro.cables}
     cerrado={datosPlano.cerrado}
     guardar={guardarEditorConexiones}
   />;

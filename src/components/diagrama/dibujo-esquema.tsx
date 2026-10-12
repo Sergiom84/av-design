@@ -233,6 +233,15 @@ export function DibujoEsquema({
           </g>
         ))}
 
+        {escena.rosetas.map((b) => <g key={b.toma_id} aria-label={`Roseta ${b.etiqueta}`}>
+          <rect x={b.x} y={b.y} width={b.ancho} height={b.alto} rx={8} fill="var(--superficie)" stroke="var(--tinta)" strokeWidth={1.25} />
+          <text x={b.x + 8} y={b.y + 16} fontSize={TIPO.rotulo} fill="var(--acento)">{b.etiqueta}</text>
+          {b.bocas.map((f) => <g key={f.toma_boca_id}>
+            <line x1={b.x - MEDIDAS_DIAGRAMA.largo_conector} x2={b.x} y1={f.y} y2={f.y} stroke={f.conectado ? COLOR_SENAL[f.senal] : 'var(--linea-fuerte)'} />
+            <text x={b.x + 8} y={f.y + 3.5} fontSize={TIPO.serigrafia} fill="var(--tinta)" fontFamily="var(--fuente-mono)">{f.nombre}</text>
+            <text x={b.x - 24} y={f.y - 3} fontSize={TIPO.conector} fill="var(--tinta-tenue)">{f.conector}</text>
+          </g>)}
+        </g>)}
         {escena.bloques.map((b) => (
           <Bloque key={b.equipo_id} bloque={b} />
         ))}

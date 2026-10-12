@@ -12,6 +12,7 @@ import { Aviso, Cabecera, Enlace } from '@/components/ui';
 import { tablasDeCicloListas } from '@/lib/datos-ciclo';
 import { ListaDeProyectos } from '@/components/proyecto/lista';
 import { AltaDeProyecto } from '@/components/proyecto/alta';
+import { exigirUsuario } from '@/lib/sesion-servidor';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,8 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { nueva } = await searchParams;
-  const abrirAlta = nueva === '1';
+  const editable = (await exigirUsuario()).permisos.proyectos === 'editar';
+  const abrirAlta = editable && nueva === '1';
 
   const [proyectos, salasSinProyecto, sedes, codigos, cicloListo] = await Promise.all([
     listarProyectos(),
@@ -40,7 +42,7 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
         titulo="Proyectos"
         descripcion="La obra agrupa salas por localización. Una sala sin proyecto sigue siendo válida: se adopta desde la portada cuando toque."
         acciones={
-          abrirAlta ? (
+          !editable ? null : abrirAlta ? (
             <Enlace href="/proyectos">Cerrar alta</Enlace>
           ) : (
             <Link href="/proyectos?nueva=1" className="boton boton-principal">

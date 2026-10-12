@@ -1,27 +1,34 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, Campo, ContenedorTabla, Tarjeta, Vacio } from '@/components/ui';
+import Link from 'next/link';
 import { anadirToma, borrarToma, guardarToma } from '@/app/acciones';
-import { UBICACIONES_TOMA, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
+import { UBICACIONES_TOMA, type EquipoEnSala, type TomaRed, type Puerto, type Conexion } from '@/lib/tipos';
+import { ConvertirAsignacionToma } from './convertir-asignacion-toma';
 
 /**
  * Las rosetas de red del edificio en esta sala: "este Room Navigator pincha en
  * la toma 12". El código es el número que hay escrito en la placa, no un
  * identificador nuestro.
  *
- * Decisión deliberada de esta iteración: la toma NO es extremo de tirada.
- * Es dónde pincha un equipo y una columna informativa de la tabla de cables.
- * Convertirla en extremo obligaría a que `calcularConexion()` aceptara puntos
- * que no son equipos, y `src/lib/calculo-cable.ts` es lógica probada y
- * congelada. Cuando haga falta medir de equipo a roseta, se decide entonces y
- * pasa antes por `calculo-cable.test.ts`, como manda el contrato del proyecto.
+ * Las bocas se documentan en Plano y se conectan desde Diagrama. La placa
+ * sigue siendo infraestructura de la sala, sin convertirse en equipo AV.
  */
 export function TomasDeRed({
   salaId,
   tomas,
   equipos,
+  puertos,
+  conexiones,
+  version,
+  cerrado,
 }: {
   salaId: string;
   tomas: TomaRed[];
   equipos: EquipoEnSala[];
+  puertos: Puerto[];
+  conexiones: Conexion[];
+  version: number;
+  cerrado: boolean;
 }) {
   const equiposPorToma = new Map<string, string[]>();
   for (const e of equipos) {
@@ -45,14 +52,15 @@ export function TomasDeRed({
   return (
     <Tarjeta
       titulo="Tomas de red"
-      pie="El código es lo que pone en la placa de la roseta. La posición es documental: la tirada se calcula entre equipos, no hasta la toma."
+      pie="El código debe coincidir con la placa. Documenta sus bocas en Plano para conectarlas en Diagrama."
     >
+      {tomas.length > 0 && <p className="mb-3"><Link href={`/salas/${salaId}/plano`}>Documentar bocas en Plano</Link></p>}
       {tomas.length === 0 ? (
         <Vacio>Sin tomas de red. Añade la primera abajo.</Vacio>
       ) : (
         <>
           {tomas.map((t) => (
-            <form
+            <FormularioMutacion feedbackExterno={true}
               key={`b-${t.id}`}
               id={`borrar-toma-${t.id}`}
               action={borrarToma}
@@ -60,7 +68,7 @@ export function TomasDeRed({
             >
               <input type="hidden" name="id" value={t.id} />
               <input type="hidden" name="sala_id" value={salaId} />
-            </form>
+            </FormularioMutacion>
           ))}
 
           <ContenedorTabla etiqueta="Tomas de red">
@@ -81,7 +89,7 @@ export function TomasDeRed({
               {tomas.map((t) => (
                 <tr key={t.id}>
                   <td colSpan={6} className="p-0">
-                    <form
+                    <FormularioMutacion
                       action={guardarToma}
                       id={`toma-${t.id}`}
                       className="flex flex-wrap items-end gap-2 px-3 py-2"
@@ -120,10 +128,14 @@ export function TomasDeRed({
                         aria-label="Notas de la roseta"
                       />
                       <Boton variante="secundario">Guardar</Boton>
-                    </form>
+                    </FormularioMutacion>
                   </td>
                   <td className="text-tinta-tenue">
-                    {equiposPorToma.get(t.id)?.join(', ') ?? '—'}
+                    {equiposPorToma.has(t.id) ? <div className="space-y-3">
+                      {equipos.filter((e) => e.toma_red_id === t.id).map((e) =>
+                        <ConvertirAsignacionToma key={e.id} equipo={e} toma={t} puertos={puertos} conexiones={conexiones}
+                          version={version} cerrado={cerrado} />)}
+                    </div> : '—'}
                   </td>
                   <td>
                     <Boton form={`borrar-toma-${t.id}`} variante="peligro">
@@ -138,7 +150,7 @@ export function TomasDeRed({
         </>
       )}
 
-      <form
+      <FormularioMutacion
         action={anadirToma}
         className="flex flex-wrap items-end gap-2 mt-4 pt-4 border-t border-linea"
       >
@@ -164,7 +176,7 @@ export function TomasDeRed({
           <input name="notas" className="min-w-[12rem]" />
         </Campo>
         <Boton>Añadir toma</Boton>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

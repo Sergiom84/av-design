@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Aviso, Boton, Campo, Estado, Tarjeta, Vacio } from '@/components/ui';
 import {
   ajustarCantidadEquipo,
@@ -5,8 +6,12 @@ import {
   borrarEquipo,
   guardarEquipo,
 } from '@/app/acciones';
-import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
-import { ETIQUETA_EXTREMO, type EquipoEnSala, type TomaRed } from '@/lib/tipos';
+import { AltaEquipo } from '@/components/asistente-equipamiento/alta-equipo';
+import { AvisosSeleccion, AvisosTecnicos, DatosEquipo } from '@/components/asistente-equipamiento/asistencia';
+import { seleccionDeSala } from '@/lib/asistente-equipamiento';
+import type { DatoTecnico } from '@/lib/ficha-tecnica';
+import { revisarTecnicamente, type MetrosDeConexion } from '@/lib/revision-tecnica';
+import { ETIQUETA_EXTREMO, type Conexion, type EquipoEnSala, type TomaRed, type Puerto } from '@/lib/tipos';
 
 type Catalogo = Map<string, { marca: string | null; modelo: string; categoria: string }>;
 
@@ -50,13 +55,36 @@ export function Equipamiento({
   tomas,
   cerrado = false,
   catalogo,
+  puertos = [],
+  conexiones = [],
+  hechos = {},
+  metros = {},
+  accionAnadir = anadirEquipo,
+  accionGuardar = guardarEquipo,
 }: {
   salaId: string;
   equipos: EquipoEnSala[];
   tomas: TomaRed[];
   cerrado?: boolean;
   catalogo: Catalogo;
+  puertos?: Puerto[];
+  conexiones?: Conexion[];
+  hechos?: Record<string, DatoTecnico[]>;
+  metros?: Record<string, MetrosDeConexion>;
+  accionAnadir?: typeof anadirEquipo;
+  accionGuardar?: typeof guardarEquipo;
 }) {
+  const seleccion = seleccionDeSala(equipos, catalogo);
+  const mapaHechos = new Map(Object.entries(hechos));
+  const avisosTecnicos = revisarTecnicamente({
+    salaId,
+    equipos,
+    conexiones,
+    puertos,
+    catalogo,
+    hechos: mapaHechos,
+    metros: new Map(Object.entries(metros)),
+  });
   const opcionesToma = (
     <>
       <option value="">— sin toma —</option>
@@ -72,6 +100,8 @@ export function Equipamiento({
   if (cerrado) {
     return (
       <Tarjeta titulo="Equipos en la sala">
+        <AvisosSeleccion equipos={seleccion} hechos={mapaHechos} />
+        <AvisosTecnicos avisos={avisosTecnicos} />
         <div className="mb-4">
           <Aviso tono="neutro">
             El proyecto está cerrado: el equipamiento no se toca. Para corregir algo se
@@ -83,11 +113,12 @@ export function Equipamiento({
         ) : (
           <div className="divide-y divide-linea-suave">
             {equipos.map((e) => (
-              <div key={e.id} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
+              <div key={e.id} id={`equipo-${e.id}`} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
                 <span className="font-medium">
                   {e.cantidad}× {e.nombre}
                 </span>
                 <Referencia equipo={e} catalogo={catalogo} />
+                <DatosEquipo equipo={seleccion.find((s) => s.articulo_id === e.articulo_id) ?? e} puertos={puertos} hechos={e.articulo_id ? hechos[e.articulo_id] : []} />
                 <span className="text-tinta-tenue">{ETIQUETA_EXTREMO[e.extremo]}</span>
                 {/* Mismo criterio que el formulario: sin colocar no hay
                     coordenada que enseñar. «X 0 · Y 0 · Z 0» se leía como una
@@ -109,14 +140,7 @@ export function Equipamiento({
 
   return (
     <Tarjeta titulo="Equipos en la sala">
-      <form
-        action={anadirEquipo}
-        className="flex flex-wrap items-end gap-2 pb-4 mb-4 border-b border-linea"
-      >
-        <input type="hidden" name="sala_id" value={salaId} />
-        {/* Sin `requerido`: hoy se puede añadir un equipo suelto que no está en
-            el catálogo, y `anadirEquipo` lo admite. */}
-        <BuscadorArticulo etiqueta="Añadir del catálogo" tipo="equipo" />
+      <AltaEquipo salaId={salaId} equipos={seleccion} accion={accionAnadir} hechos={hechos}>
         <Campo etiqueta="Extremo">
           <select name="extremo" defaultValue="pantalla">
             {Object.entries(ETIQUETA_EXTREMO).map(([v, et]) => (
@@ -148,41 +172,45 @@ export function Equipamiento({
             </select>
           </Campo>
         )}
-        <Boton>Añadir equipo</Boton>
-      </form>
+      </AltaEquipo>
+      <AvisosTecnicos avisos={avisosTecnicos} />
 
       {equipos.length === 0 ? (
         <Vacio>Sin equipos. Añade el primero arriba.</Vacio>
       ) : (
         <div className="divide-y divide-linea-suave">
           {equipos.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-end gap-3 py-3">
+            <div key={e.id} id={`equipo-${e.id}`} className="flex flex-wrap items-end gap-3 py-3">
               <span className="self-center min-w-0 max-w-full">
                 <Referencia equipo={e} catalogo={catalogo} />
               </span>
               <span className="inline-flex items-center gap-1 shrink-0">
-                <form action={ajustarCantidadEquipo} className="inline">
+                <FormularioMutacion action={ajustarCantidadEquipo} className="inline">
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="sala_id" value={salaId} />
                   <input type="hidden" name="paso" value="-1" />
                   <Boton variante="secundario" aria-label="Quitar una unidad">
                     −
                   </Boton>
-                </form>
+                </FormularioMutacion>
                 <span className="w-8 text-center tabular-nums">{e.cantidad}</span>
-                <form action={ajustarCantidadEquipo} className="inline">
+                <FormularioMutacion action={ajustarCantidadEquipo} className="inline">
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="sala_id" value={salaId} />
                   <input type="hidden" name="paso" value="1" />
                   <Boton variante="secundario" aria-label="Añadir una unidad">
                     +
                   </Boton>
-                </form>
+                </FormularioMutacion>
               </span>
 
-              <form
-                action={guardarEquipo}
-                className="flex flex-wrap items-end gap-2 flex-1 min-w-[16rem]"
+              <span className="min-w-0 [overflow-wrap:anywhere] font-medium">{e.nombre}</span>
+              <DatosEquipo equipo={{ articulo_id: e.articulo_id, nombre: e.nombre, cantidad: e.cantidad, referencia: e.articulo_id ? catalogo.get(e.articulo_id) : undefined }} puertos={puertos} hechos={e.articulo_id ? hechos[e.articulo_id] : []} />
+              <details className="w-full min-w-0">
+                <summary className="cursor-pointer py-2 focus-visible:outline-2 focus-visible:outline-acento">Editar nombre, posición y toma de red</summary>
+              <FormularioMutacion
+                action={accionGuardar}
+                className="flex flex-wrap items-end gap-2 flex-1 min-w-0"
               >
                 <input type="hidden" name="id" value={e.id} />
                 <input type="hidden" name="sala_id" value={salaId} />
@@ -190,7 +218,7 @@ export function Equipamiento({
                 <input
                   name="nombre"
                   defaultValue={e.nombre}
-                  className="flex-1 min-w-[12rem]"
+                  className="flex-1 min-w-0 max-w-full"
                   aria-label="Nombre del equipo"
                 />
                 <select name="extremo" defaultValue={e.extremo} aria-label="Tipo de extremo">
@@ -224,13 +252,14 @@ export function Equipamiento({
                   {opcionesToma}
                 </select>
                 <Boton variante="secundario">Guardar</Boton>
-              </form>
+              </FormularioMutacion>
 
-              <form action={borrarEquipo} className="shrink-0">
+              </details>
+              <FormularioMutacion action={borrarEquipo} className="shrink-0">
                 <input type="hidden" name="id" value={e.id} />
                 <input type="hidden" name="sala_id" value={salaId} />
                 <Boton variante="peligro">Quitar</Boton>
-              </form>
+              </FormularioMutacion>
             </div>
           ))}
         </div>

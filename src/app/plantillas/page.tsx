@@ -4,6 +4,7 @@ import { SinConfigurar } from '@/components/sin-configurar';
 import { Aviso, Cabecera } from '@/components/ui';
 import { FichaDePlantilla } from '@/components/plantilla/ficha';
 import { PrioridadDePlantillas } from '@/components/plantilla/prioridad';
+import { tiradasDocumentales, bocasRosetasPlantillas } from '@/lib/datos-tiradas-documentales';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,9 +21,11 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
   const { abierta } = await searchParams;
   const idAbierta = typeof abierta === 'string' ? abierta : null;
   // Las tiradas de las diecisiete en una consulta, no una por plantilla.
-  const [plantillas, tiradas] = await Promise.all([
+  const [plantillas, tiradas, documentales, bocasRosetas] = await Promise.all([
     listarPlantillas(),
     tiradasDePlantillas(),
+    tiradasDocumentales(),
+    bocasRosetasPlantillas(),
   ]);
   const puertos = await puertosDeArticulos(
     plantillas.flatMap((p) => p.lineas.map((l) => l.articulo_id).filter((id): id is string => Boolean(id))),
@@ -54,6 +57,8 @@ export default async function Plantillas({ searchParams }: PageProps<'/plantilla
             plantilla={p}
             lineas={p.lineas}
             tiradas={tiradas.filter((t) => t.plantilla_id === p.id)}
+            documentales={documentales.filter((t) => t.plantilla_id === p.id)}
+            bocasRosetas={bocasRosetas.filter((b) => b.plantilla_id === p.id)}
             puertos={puertos}
             orden={i + 1}
             abierta={p.id === idAbierta}

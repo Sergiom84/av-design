@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, Campo, Tarjeta } from '@/components/ui';
 import { registrarMovimiento } from '@/app/acciones-almacen';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
@@ -23,7 +24,7 @@ export function AltaMovimiento({
       titulo="Registrar movimiento"
       pie="El signo lo pone el tipo: entrada y devolución suman, salida y baja restan. El ajuste de inventario es el único que admite cantidad negativa."
     >
-      <form action={registrarMovimiento} className="flex flex-wrap items-end gap-3">
+      <FormularioMutacion action={registrarMovimiento} className="flex flex-wrap items-end gap-3">
         <BuscadorArticulo etiqueta="Referencia" requerido className="w-full sm:w-[18rem]" />
         <Campo etiqueta="Tipo">
           <select name="tipo" defaultValue="entrada">
@@ -73,7 +74,7 @@ export function AltaMovimiento({
           <input name="quien" className="w-32" />
         </Campo>
         <Boton>Registrar</Boton>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

@@ -2,12 +2,13 @@
 
 import { useId } from 'react';
 import { Boton, Campo } from '@/components/ui';
-import type { Conexion, EquipoEnSala } from '@/lib/tipos';
+import type { Conexion, EquipoEnSala, TomaRed } from '@/lib/tipos';
 import { anadirPunto, borrarPunto, limitarPuntoRuta, moverPunto, rutaDe, type RutaCableBorrador } from './rutas-cable';
 
 export function PanelRutasCable({
   conexiones,
   equipos,
+  tomas = [],
   rutas,
   conexionSeleccionada,
   puntoSeleccionado,
@@ -21,6 +22,7 @@ export function PanelRutasCable({
 }: {
   conexiones: readonly Conexion[];
   equipos: readonly EquipoEnSala[];
+  tomas?: readonly TomaRed[];
   rutas: readonly RutaCableBorrador[];
   conexionSeleccionada: string | null;
   puntoSeleccionado: number | null;
@@ -40,8 +42,20 @@ export function PanelRutasCable({
   const ruta = conexionSeleccionada ? rutaDe(rutas, conexionSeleccionada) : undefined;
   const punto = puntoSeleccionado == null ? undefined : ruta?.puntos[puntoSeleccionado];
 
+  function nombreExtremo(conexion: Conexion, lado: 'origen' | 'destino') {
+    if (conexion.detalle.estado === 'completo') {
+      const extremo = conexion.detalle[lado];
+      if (extremo.tipo === 'roseta') {
+        const toma = tomas.find((t) => t.bocas.some((b) => b.id === extremo.toma_boca_id));
+        const boca = toma?.bocas.find((b) => b.id === extremo.toma_boca_id);
+        return toma && boca ? `${toma.codigo} · ${boca.etiqueta ?? `Boca ${boca.ordinal}`}` : 'Roseta sin localizar';
+      }
+    }
+    const id = conexion[`${lado}_id`];
+    return id ? nombres.get(id) ?? lado : lado;
+  }
   const etiqueta = (conexion: Conexion) =>
-    `${nombres.get(conexion.origen_id) ?? 'Origen'} → ${nombres.get(conexion.destino_id) ?? 'Destino'} · ${conexion.senal}`;
+    `${nombreExtremo(conexion, 'origen')} → ${nombreExtremo(conexion, 'destino')} · ${conexion.senal}`;
 
   const cambiarCoordenada = (clave: 'x_m' | 'y_m' | 'z_m', valor: number) => {
     if (!ruta || !punto || puntoSeleccionado == null || !Number.isFinite(valor)) return;

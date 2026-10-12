@@ -1,7 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { escribirSeguimiento, type OrdenSeguimiento } from '@/lib/ciclo-vida-seguimiento-db';
+import { ErrorSeguimiento, PUNTOS_PRUEBA_FINAL } from '@/lib/ciclo-vida-seguimiento';
 import { sql } from '@/lib/db';
+import { esErrorConcurrencia, transaccionConControl } from '@/lib/control-escritura';
 import { avisosDeEntrega } from '@/lib/ciclo-vida';
 import { fichaConAlmacen } from '@/app/salas/[id]/datos-ficha';
 import { exigirEdicion } from '@/lib/sesion-servidor';
@@ -10,21 +14,6 @@ const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
   return s === '' ? null : s;
 };
-
-/**
- * Un proyecto cerrado es de solo lectura para su estructura. Reabrirlo es
- * borrar el cierre desde su portada, y eso deja rastro.
- */
-async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
-  const [f] = await sql<Array<{ cerrado: boolean }>>`
-    select exists (
-      select 1 from hitos_proyecto h
-      join localizaciones l on l.proyecto_id = h.proyecto_id
-      join salas s on s.localizacion_id = l.id
-      where s.id = ${salaId} and h.tipo = 'cierre'
-    ) as cerrado`;
-  return Boolean(f?.cerrado);
-}
 
 /** Una escritura nueva exige técnico activo y con el rol del hecho. */
 async function tecnicoValido(tecnicoId: string, rol: string): Promise<boolean> {
@@ -37,61 +26,67 @@ async function tecnicoValido(tecnicoId: string, rol: string): Promise<boolean> {
   return Boolean(f?.ok);
 }
 
-/**
- * Escritura de los hitos de P1. Un hito no se edita: si se registró mal, se
- * borra y se registra de nuevo, como un movimiento de almacén. El `unique`
- * del esquema garantiza un hito de cada tipo, así que el registro repetido
- * no duplica: no hace nada y el que estaba se queda.
- *
- * Las invariantes se comprueban aquí, no solo en el formulario: el `required`
- * del navegador se salta con un POST manipulado o una pantalla vieja.
- */
-export async function registrarHitoSala(datos: FormData) {
-  await exigirEdicion('salas');
-  const salaId = texto(datos.get('sala_id'));
-  const tipo = texto(datos.get('tipo'));
-  if (!salaId || !tipo || !['instalacion', 'entrega'].includes(tipo)) return;
-  const notas = texto(datos.get('notas'));
-
-  // Quién lo hizo es el dato que P1 vino a registrar: sin técnico válido no
-  // hay hito nuevo. Los históricos con técnico borrado siguen siendo válidos.
-  const tecnicoId = texto(datos.get('tecnico_id'));
-  if (!tecnicoId || !(await tecnicoValido(tecnicoId, 'instalacion'))) return;
-  if (await proyectoCerradoDeSala(salaId)) return;
-
-  if (tipo === 'entrega' && !notas) {
-    // La entrega con bloqueos del semáforo exige nota: decisión consciente.
-    // Se recalcula aquí con el mismo `revisarMontaje` que pinta la ficha,
-    // porque el `required` del formulario es solo del navegador.
-    const ficha = await fichaConAlmacen(salaId);
-    if (!ficha || avisosDeEntrega(ficha.puntosMontaje).exigeNota) return;
+async function ejecutarSeguimiento(autor: Awaited<ReturnType<typeof exigirEdicion>>, orden: OrdenSeguimiento, devolverEstado = false): Promise<{ error: string | null }> {
+  try {
+    await escribirSeguimiento(sql, autor, orden, async () => {
+      const ficha = await fichaConAlmacen(orden.salaId);
+      if (!ficha) throw new ErrorSeguimiento('La sala no existe.');
+      return avisosDeEntrega(ficha.puntosMontaje);
+    });
+  } catch (error) {
+    if (esErrorConcurrencia(error) && devolverEstado) return {error:error.message};
+    if (error instanceof ErrorSeguimiento) {
+      if (devolverEstado) return { error: error.message };
+      redirect(`/salas/${orden.salaId}?seguimiento_error=${encodeURIComponent(error.message)}`);
+    }
+    throw error;
   }
-
-  await sql`
-    insert into hitos_sala (sala_id, tipo, tecnico_id, fecha, notas)
-    values (${salaId}, ${tipo}, ${tecnicoId},
-            ${texto(datos.get('fecha')) ?? sql`current_date`},
-            ${notas})
-    on conflict (sala_id, tipo) do nothing`;
   revalidatePath('/salas/[id]', 'layout');
   revalidatePath('/proyectos');
   revalidatePath('/proyectos/[id]', 'page');
+  if (devolverEstado) return { error: null };
+  redirect(`/salas/${orden.salaId}`);
+}
+
+type EstadoFormularioPrueba = { error: string | null };
+
+export async function guardarPruebaConEstado(_anterior: EstadoFormularioPrueba, datos: FormData) {
+  const autor = await exigirEdicion('salas');
+  const salaId = texto(datos.get('sala_id'));
+  const operacion = texto(datos.get('operacion'));
+  if (!salaId || (operacion !== 'checklist' && operacion !== 'prueba_final')) return { error: 'Operación no válida.' };
+  const puntos = PUNTOS_PRUEBA_FINAL.map(({ clave }) => ({ clave,
+    resultado: texto(datos.get(`resultado_${clave}`)) ?? 'pendiente', nota: texto(datos.get(`nota_${clave}`)) ?? '' }));
+  return ejecutarSeguimiento(autor, { operacion, salaId, puntos,
+    version: Number(datos.get('version')), fecha: texto(datos.get('fecha')) ?? '', tecnicoId: texto(datos.get('tecnico_id')) }, true);
+}
+
+export async function registrarHitoSala(datos: FormData) {
+  const autor = await exigirEdicion('salas');
+  const salaId = texto(datos.get('sala_id'));
+  const tipo = texto(datos.get('tipo'));
+  if (!salaId || (tipo !== 'instalacion' && tipo !== 'entrega')) throw new Error('Hito no válido.');
+  await ejecutarSeguimiento(autor, { operacion: tipo, salaId, fecha: texto(datos.get('fecha')) ?? '',
+    tecnicoId: texto(datos.get('tecnico_id')), nota: texto(datos.get('notas')) ?? '', acepta: texto(datos.get('acepta')) ?? '' });
 }
 
 export async function borrarHitoSala(datos: FormData) {
-  await exigirEdicion('salas');
+  const autor = await exigirEdicion('salas');
   const salaId = texto(datos.get('sala_id'));
-  const id = texto(datos.get('id'));
-  if (!salaId || !id) return;
-  // Con la obra cerrada la entrega de una sala no se toca: primero se
-  // reabre el proyecto borrando su cierre.
-  if (await proyectoCerradoDeSala(salaId)) return;
-  // El hito se borra solo si es de esta sala: un formulario alterado no puede
-  // borrar el de otra.
-  await sql`delete from hitos_sala where id = ${id} and sala_id = ${salaId}`;
-  revalidatePath('/salas/[id]', 'layout');
-  revalidatePath('/proyectos');
-  revalidatePath('/proyectos/[id]', 'page');
+  if (!salaId) throw new Error('Falta sala.');
+  await ejecutarSeguimiento(autor, { operacion: 'borrar_hito', salaId, hitoId: texto(datos.get('id')) ?? '', nota: texto(datos.get('notas')) ?? '' });
+}
+
+export async function guardarSeguimientoSala(datos: FormData) {
+  const autor = await exigirEdicion('salas');
+  const salaId = texto(datos.get('sala_id'));
+  const operacion = texto(datos.get('operacion'));
+  if (!salaId || !['plan', 'checklist', 'prueba_final', 'reabrir_prueba'].includes(operacion ?? '')) throw new Error('Operación no válida.');
+  const puntos = PUNTOS_PRUEBA_FINAL.map(({ clave }) => ({ clave,
+    resultado: texto(datos.get(`resultado_${clave}`)) ?? 'pendiente', nota: texto(datos.get(`nota_${clave}`)) ?? '' }));
+  await ejecutarSeguimiento(autor, { operacion: operacion as OrdenSeguimiento['operacion'], salaId,
+    version: Number(datos.get('version')), fecha: texto(datos.get('fecha')) ?? '',
+    tecnicoId: texto(datos.get('tecnico_id')), nota: texto(datos.get('notas')) ?? '', puntos });
 }
 
 export async function registrarHitoProyecto(datos: FormData) {
@@ -104,7 +99,7 @@ export async function registrarHitoProyecto(datos: FormData) {
   const tecnicoId = texto(datos.get('tecnico_id'));
   if (!tecnicoId || !(await tecnicoValido(tecnicoId, 'inicio'))) return;
 
-  await sql.begin(async (tx) => {
+  await transaccionConControl(sql, async (tx) => {
     // Mismo orden de cerrojos que las acciones que escriben en el plano
     // (`enLaSalaBloqueada`, en `acciones.ts`): PRIMERO las filas de `salas`,
     // después lo demás. Cerrar una obra convierte todas sus salas en solo

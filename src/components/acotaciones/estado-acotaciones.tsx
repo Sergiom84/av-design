@@ -33,7 +33,7 @@ export function EstadoAcotaciones({ salaId, escena }: { salaId: string; escena: 
           No se acotan datos estimados: {escena.equiposSinPosicion} equipos y {escena.tomasSinPosicion} tomas siguen sin posición medida.
         </Aviso>
       )}
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6 min-[1700px]:grid-cols-2">
         {escena.elevaciones.map((vista) => (
           <Tarjeta key={vista.pared} titulo={vista.titulo} pie="Las cotas salen de las coordenadas guardadas en Plano.">
             <ContenedorTabla etiqueta={`Elevación ${vista.titulo}`}>

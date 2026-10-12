@@ -41,7 +41,7 @@ const SECCIONES: {
   { id: 'proyectos', href: '/proyectos', etiqueta: 'Proyectos', Icono: IconoProyectos },
   { id: 'salas', href: '/salas', etiqueta: 'Salas', Icono: IconoSalas },
   { id: 'plantillas', href: '/plantillas', etiqueta: 'Plantillas', Icono: IconoPlantillas },
-  { id: 'checkin', href: '/checkin', etiqueta: 'Check-in', Icono: IconoCheckin },
+  { id: 'checkin', href: '/checkin', etiqueta: 'Visitas previas', Icono: IconoCheckin },
   { id: 'catalogo', href: '/catalogo', etiqueta: 'Catálogo', Icono: IconoCatalogo },
   { id: 'almacen', href: '/almacen', etiqueta: 'Almacén', Icono: IconoAlmacen },
   { id: 'compras', href: '/compras', etiqueta: 'Compras', Icono: IconoCompras },

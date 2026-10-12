@@ -43,7 +43,7 @@ export default async function Parametros() {
                       <input
                         name={p.clave}
                         type="number"
-                        step="0.01"
+                        step={p.clave === 'tipo_cambio_usd_eur' ? 'any' : '0.01'}
                         min="0"
                         defaultValue={p.valor}
                         className="w-28 num"
@@ -53,6 +53,16 @@ export default async function Parametros() {
                     <td className="text-tinta-tenue">{p.unidad ?? ''}</td>
                   </tr>
                 ))}
+                {!parametros.some((p) => p.clave === 'holgura_roseta') && (
+                  <tr>
+                    <td>Holgura de roseta</td>
+                    <td className="num">
+                      <input name="holgura_roseta" type="number" step="0.01" min="0"
+                        placeholder="Sin definir" className="w-28 num" aria-label="holgura_roseta" />
+                    </td>
+                    <td className="text-tinta-tenue">m</td>
+                  </tr>
+                )}
               </tbody>
             </table>
             </ContenedorTabla>

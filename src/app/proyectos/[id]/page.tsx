@@ -26,6 +26,7 @@ import { PasosDeProyecto } from '@/components/proyecto/pasos';
 import { LocalizacionesDelProyecto } from '@/components/proyecto/localizaciones';
 import { AdopcionDeSalas } from '@/components/proyecto/adopcion';
 import { BorrarProyecto } from '@/components/proyecto/borrar';
+import { exigirUsuario } from '@/lib/sesion-servidor';
 
 const TONO_ESTADO_PROYECTO: Record<EstadoProyecto, TonoEstado> = {
   sin_iniciar: 'neutro',
@@ -52,6 +53,8 @@ export default async function PortadaProyecto({
   searchParams,
 }: PageProps<'/proyectos/[id]'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
+  const usuario = await exigirUsuario();
+  const editable = usuario.permisos.proyectos === 'editar';
 
   const { id } = await params;
   const { borrar } = await searchParams;
@@ -99,7 +102,7 @@ export default async function PortadaProyecto({
       <PasosDeProyecto
         proyectoId={proyecto.id}
         pasos={pasos}
-        cerrado={estado === 'cerrado'}
+        cerrado={estado === 'cerrado' || !editable}
       />
 
       {estado === 'cerrado' && (
@@ -144,9 +147,9 @@ export default async function PortadaProyecto({
           <LocalizacionesDelProyecto
             proyectoId={proyecto.id}
             grupos={grupos}
-            cerrado={estado === 'cerrado'}
+            cerrado={estado === 'cerrado' || !editable}
           />
-          {estado !== 'cerrado' && (
+          {editable && estado !== 'cerrado' && (
             <AdopcionDeSalas
               localizaciones={proyecto.localizaciones}
               salasSueltas={salasSueltas}
@@ -156,6 +159,7 @@ export default async function PortadaProyecto({
 
         <div className="space-y-6 min-w-0">
           <HitosDeProyecto
+            editable={editable}
             proyectoId={proyecto.id}
             hitos={hitos}
             tecnicos={tecnicos}
@@ -202,7 +206,7 @@ export default async function PortadaProyecto({
             )}
           </Tarjeta>
 
-          {estado !== 'cerrado' && (
+          {editable && estado !== 'cerrado' && (
             <BorrarProyecto proyectoId={proyecto.id} confirmar={borrar === 'proyecto'} />
           )}
         </div>

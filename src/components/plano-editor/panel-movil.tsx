@@ -33,7 +33,7 @@ export function PanelMovil({
       <summary className="flex items-center justify-between gap-3 px-4 py-3 min-h-[44px] cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento">
         <span className="min-w-0 [overflow-wrap:anywhere]">{resumen}</span>
         <span className="text-acento font-medium whitespace-nowrap">
-          {abierto ? 'Cerrar' : 'Editar'}
+          {abierto ? 'Cerrar' : 'Añadir y editar'}
         </span>
       </summary>
       <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">{children}</div>

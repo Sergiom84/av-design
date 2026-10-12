@@ -4,6 +4,7 @@ import type { LineaPlantilla, PlantillaSala, Puerto, TiradaPlantilla } from '@/l
 import { EquipamientoDePlantilla } from './equipamiento';
 import { MedidasDePlantilla } from './medidas';
 import { TiradasDePlantilla } from './tiradas';
+import type { TiradaDocumental, BocaRosetaPlantilla } from '@/lib/datos-tiradas-documentales';
 
 /**
  * Una plantilla: su equipamiento estándar a la izquierda y sus medidas a la
@@ -20,6 +21,8 @@ export function FichaDePlantilla({
   plantilla,
   lineas,
   tiradas,
+  documentales = [],
+  bocasRosetas = [],
   puertos,
   orden,
   abierta,
@@ -27,6 +30,8 @@ export function FichaDePlantilla({
   plantilla: PlantillaSala & { lineas: LineaPlantilla[] };
   lineas: LineaPlantilla[];
   tiradas: TiradaPlantilla[];
+  documentales?: TiradaDocumental[];
+  bocasRosetas?: BocaRosetaPlantilla[];
   puertos: Puerto[];
   orden: number;
   abierta: boolean;
@@ -55,6 +60,9 @@ export function FichaDePlantilla({
                 ? 'sin tiradas tipo'
                 : `${tiradas.length} tiradas tipo`}
             </span>
+            {documentales.some((t) => !t.completa) && <span>
+              {documentales.filter((t) => !t.completa).length} tiradas pendientes de documentar
+            </span>}
             <Link
               href={`/salas/nueva?plantilla=${p.id}`}
               className="enlace"
@@ -85,6 +93,8 @@ export function FichaDePlantilla({
                     plantillaId={p.id}
                     lineas={lineas}
                     tiradas={tiradas}
+                    documentales={documentales}
+                    bocasRosetas={bocasRosetas}
                     puertos={puertos}
                   />
                 </div>

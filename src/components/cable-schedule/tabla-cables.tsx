@@ -57,6 +57,7 @@ export function TablaCables({
               <th>Ruta</th>
               <th className="num">Metros</th>
               <th>Desglose</th>
+              <th>Suministro</th>
               <th>Cable asignado</th>
             </tr>
           </thead>
@@ -81,12 +82,22 @@ export function TablaCables({
                 </td>
                 <td className="text-tinta-tenue whitespace-nowrap">
                   {f.metros == null
-                    ? 'Faltan las medidas de la sala'
+                      ? f.motivo_calculo_pendiente ?? 'Pendiente de cálculo'
                     : f.manual
                       ? 'Longitud metida a mano'
                       : `${f.recorrido_m?.toFixed(2)} recorrido + ` +
                         `${f.holgura_origen_m?.toFixed(2)} + ${f.holgura_destino_m?.toFixed(2)} holgura` +
                         (f.margen_m ? ` + ${f.margen_m.toFixed(2)} margen` : '')}
+                </td>
+                <td>
+                  {f.etiqueta_suministro ?? '—'}
+                  {f.estado_suministro === 'incluido' && (
+                    <span className="block text-tinta-tenue">
+                      {f.longitud_utilizable_m != null
+                        ? `${f.longitud_utilizable_m} m suministrados`
+                        : 'Longitud suministrada pendiente'}
+                    </span>
+                  )}
                 </td>
                 <td>
                   {f.articulo_cable ?? <span className="text-alerta">sin asignar</span>}

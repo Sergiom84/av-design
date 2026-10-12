@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, Campo, Enlace, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { guardarSala } from '@/app/acciones';
 import { ETIQUETA_RUTA, type Sala } from '@/lib/tipos';
@@ -59,7 +60,7 @@ export function Medidas({
 
   return (
     <Tarjeta titulo="Medidas y ruta" acciones={<Enlace href={`/salas/${sala.id}`}>Cancelar</Enlace>}>
-      <form action={guardarSala} className="space-y-3">
+      <FormularioMutacion action={guardarSala} className="space-y-3">
         <input type="hidden" name="id" value={sala.id} />
         <Campo etiqueta="Nombre">
           <input name="nombre" defaultValue={sala.nombre} className="w-full" />
@@ -211,7 +212,7 @@ export function Medidas({
         </Campo>
 
         <Boton>Guardar</Boton>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

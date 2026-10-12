@@ -51,6 +51,7 @@ export function PanelPropiedadesPlano({
     if (!equipo) return null;
     return (
       <InspectorEquipo
+        key={equipo.id}
         equipo={equipo}
         borrador={borrador}
         posicionDibujada={posicionesDibujadas.get(equipo.id) ?? null}
@@ -64,6 +65,7 @@ export function PanelPropiedadesPlano({
   if (seleccion.tipo === 'mueble') {
     return (
       <InspectorMueble
+        key={seleccion.id}
         borrador={borrador}
         id={seleccion.id}
         alCambiar={alCambiar}
@@ -78,6 +80,7 @@ export function PanelPropiedadesPlano({
     if (!puerta) return null;
     return (
       <InspectorPuerta
+        key={puerta.id}
         puerta={puerta}
         borrador={borrador}
         alCambiar={alCambiar}
@@ -90,7 +93,7 @@ export function PanelPropiedadesPlano({
   const toma = borrador.tomas.find((x) => x.id === seleccion.id);
   if (!toma) return null;
   return (
-    <InspectorToma toma={toma} borrador={borrador} alCambiar={alCambiar} soloLectura={soloLectura} />
+    <InspectorToma key={toma.id} toma={toma} borrador={borrador} alCambiar={alCambiar} soloLectura={soloLectura} />
   );
 }
 

@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Boton, Campo, Tarjeta } from '@/components/ui';
 import { asignarSalaALocalizacion } from '@/app/acciones-proyectos';
 import type { LocalizacionDeProyecto } from '@/lib/datos-proyectos';
@@ -21,7 +22,7 @@ export function AdopcionDeSalas({
       titulo="Adoptar salas sin proyecto"
       pie={`${salasSueltas.length} ${salasSueltas.length === 1 ? 'sala suelta' : 'salas sueltas'} de antes de la jerarquía. Adoptarlas no toca su diseño: solo las cuelga de la obra.`}
     >
-      <form action={asignarSalaALocalizacion} className="flex flex-wrap items-end gap-3">
+      <FormularioMutacion action={asignarSalaALocalizacion} className="flex flex-wrap items-end gap-3">
         <Campo etiqueta="Sala">
           <select name="sala_id" required className="w-64">
             {salasSueltas.map((s) => (
@@ -41,7 +42,7 @@ export function AdopcionDeSalas({
           </select>
         </Campo>
         <Boton variante="secundario">Adoptar</Boton>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
 import { crearPlantillaDesdeSala } from '@/app/acciones';
 import type { EquipoEnSala, Sala } from '@/lib/tipos';
@@ -29,7 +30,7 @@ export function GuardarComoPlantilla({
         </div>
       )}
 
-      <form action={crearPlantillaDesdeSala} className="flex flex-wrap items-end gap-3">
+      <FormularioMutacion action={crearPlantillaDesdeSala} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="sala_id" value={sala.id} />
         <Campo
           etiqueta="Nombre de la plantilla"
@@ -42,7 +43,7 @@ export function GuardarComoPlantilla({
           />
         </Campo>
         <Boton variante="secundario">Crear plantilla</Boton>
-      </form>
+      </FormularioMutacion>
     </Tarjeta>
   );
 }

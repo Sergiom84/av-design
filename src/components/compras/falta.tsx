@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Aviso, Boton, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import { crearPedidoDesdeFalta } from '@/app/acciones-almacen';
 import type { GrupoProveedor, LineaFaltante } from '@/lib/compras';
@@ -16,18 +17,20 @@ export function QueFalta({
   faltantes,
   grupos,
   sinCatalogar,
+  enPedido = new Map<string, number>(),
 }: {
   salaId: string;
   faltantes: LineaFaltante[];
   grupos: GrupoProveedor[];
   sinCatalogar: string[];
+  enPedido?: Map<string, number>;
 }) {
   const hayFalta = grupos.length > 0;
 
   return (
     <Tarjeta
       titulo="Qué falta"
-      pie="Necesario menos disponible. Lo ya reservado para esta obra no vuelve a contarse: apartarlo no es comprarlo dos veces."
+      pie="Lo reservado y lo que ya está en un pedido no se vuelve a comprar. Falta indica lo que aún no ha llegado."
     >
       {sinCatalogar.length > 0 && (
         <div className="mb-4">
@@ -53,7 +56,9 @@ export function QueFalta({
               <th>Referencia</th>
               <th className="num">Necesario</th>
               <th className="num">En almacén</th>
+              <th className="num">En obra</th>
               <th className="num">Falta</th>
+              <th className="num">En pedido</th>
               <th>De dónde sale</th>
             </tr>
           </thead>
@@ -67,9 +72,11 @@ export function QueFalta({
                   {l.cantidad} {l.unidad}
                 </td>
                 <td className="num text-tinta-tenue">{l.disponible}</td>
+                <td className="num">{l.servido ?? 0}</td>
                 <td className={`num ${l.falta > 0 ? 'text-alerta' : ''}`}>
                   {l.falta > 0 ? l.falta : '—'}
                 </td>
+                <td className="num">{enPedido.get(l.articulo_id) ?? 0}</td>
                 <td className="text-tinta-tenue">{l.detalle.join(' · ')}</td>
               </tr>
             ))}
@@ -93,12 +100,12 @@ export function QueFalta({
                     {g.total != null ? ` · ${g.total.toFixed(2)} €` : ''}
                   </span>
                 </div>
-                {g.proveedor && (
-                  <form action={crearPedidoDesdeFalta}>
+                {(
+                  <FormularioMutacion action={crearPedidoDesdeFalta}>
                     <input type="hidden" name="sala_id" value={salaId} />
-                    <input type="hidden" name="proveedor" value={g.proveedor} />
+                    <input type="hidden" name="proveedor" value={g.proveedor ?? '__sin_proveedor__'} />
                     <Boton variante="secundario">Crear pedido</Boton>
-                  </form>
+                  </FormularioMutacion>
                 )}
               </div>
 

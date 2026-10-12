@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { notFound } from 'next/navigation';
 import { hayConfiguracion } from '@/lib/db';
 import {
@@ -10,6 +11,8 @@ import {
 import { SinConfigurar } from '@/components/sin-configurar';
 import { TablaPrecios } from '@/components/precios/tabla-precios';
 import { TablaPuertos } from '@/components/puertos/tabla-puertos';
+import { FichaTecnica } from '@/components/catalogo/ficha-tecnica';
+import { datosTecnicosDeArticulo } from '@/lib/datos-ficha-tecnica';
 import { Aviso, Boton, Cabecera, Campo, Enlace, Tarjeta } from '@/components/ui';
 import { desactivarArticulo, guardarArticulo } from '../../acciones';
 import { ETIQUETA_SENAL } from '@/lib/tipos';
@@ -20,11 +23,12 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const [articulo, usos, precios, puertos] = await Promise.all([
+  const [articulo, usos, precios, puertos, datosTecnicos] = await Promise.all([
     obtenerArticulo(id),
     usosDeArticulo(id),
     preciosDeArticulo(id),
     puertosDeArticulo(id),
+    datosTecnicosDeArticulo(id),
   ]);
   if (!articulo) notFound();
 
@@ -57,10 +61,10 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
           .join(' · ')}
         acciones={
           enUso === 0 ? (
-            <form action={desactivarArticulo}>
+            <FormularioMutacion action={desactivarArticulo}>
               <input type="hidden" name="id" value={articulo.id} />
               <Boton variante="peligro">Retirar del catálogo</Boton>
-            </form>
+            </FormularioMutacion>
           ) : undefined
         }
       />
@@ -76,7 +80,7 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
         </div>
       )}
 
-      <form action={guardarArticulo} className="grid gap-6 xl:grid-cols-2 items-start">
+      <FormularioMutacion action={guardarArticulo} className="grid gap-6 xl:grid-cols-2 items-start">
         <input type="hidden" name="id" value={articulo.id} />
 
         <div className="space-y-6">
@@ -281,11 +285,15 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
 
           <Boton>Guardar ficha</Boton>
         </div>
-      </form>
+      </FormularioMutacion>
 
       {/* Fuera del formulario de la ficha: un formulario no puede anidarse. */}
       <div className="mt-6">
         <TablaPuertos articuloId={articulo.id} puertos={puertos} />
+      </div>
+
+      <div className="mt-6">
+        <FichaTecnica datos={datosTecnicos} />
       </div>
 
       {precios.length > 0 && (

@@ -61,13 +61,14 @@ const equipo = (id: string, nombre: string, articulo_id: string): EquipoEnSala =
 const conexion = (id: string, senal: Conexion['senal']): Conexion => ({
   id,
   sala_id: SALA,
-  origen_id: 'e-caja',
+  detalle: { estado: 'legacy' }, origen_id: 'e-caja',
   destino_id: 'e-tv',
   articulo_cable_id: null,
   senal,
   ruta: null,
   longitud_manual_m: null,
   notas: null,
+  etiqueta_cable: senal === 'hdmi' ? 'HD-1000' : 'RED-1000',
   creado_en: '2026-01-01',
 });
 

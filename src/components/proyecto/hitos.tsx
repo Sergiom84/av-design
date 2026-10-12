@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import Link from 'next/link';
 import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
 import { borrarHitoProyecto, registrarHitoProyecto } from '@/app/acciones-ciclo';
@@ -20,6 +21,7 @@ export function HitosDeProyecto({
   roles,
   salasSinEntregar,
   confirmarBorrado,
+  editable = true,
 }: {
   proyectoId: string;
   hitos: HitoProyecto[];
@@ -27,13 +29,14 @@ export function HitosDeProyecto({
   roles: TecnicoRol[];
   salasSinEntregar: number;
   confirmarBorrado?: string;
+  editable?: boolean;
 }) {
   const inicio = hitos.find((h) => h.tipo === 'inicio');
   const cierre = hitos.find((h) => h.tipo === 'cierre');
   const iniciadores = tecnicosDeRol(tecnicos, roles, 'inicio');
 
   const formulario = (tipo: 'inicio' | 'cierre', etiqueta: string) => (
-    <form
+    <FormularioMutacion
       action={registrarHitoProyecto}
       className="flex flex-wrap items-end gap-3 pt-3 border-t border-linea-suave"
     >
@@ -60,7 +63,7 @@ export function HitosDeProyecto({
         </Campo>
       )}
       <Boton variante="secundario">{etiqueta}</Boton>
-    </form>
+    </FormularioMutacion>
   );
 
   const fila = (titulo: string, hito: HitoProyecto | undefined, pendiente: string) => (
@@ -89,11 +92,11 @@ export function HitosDeProyecto({
       <div className="space-y-2">
         <Aviso tono="alerta">{aviso}</Aviso>
         <div className="flex gap-3 items-center">
-          <form action={borrarHitoProyecto}>
+          <FormularioMutacion action={borrarHitoProyecto}>
             <input type="hidden" name="proyecto_id" value={proyectoId} />
             <input type="hidden" name="id" value={h.id} />
             <Boton variante="peligro">{etiqueta} definitivamente</Boton>
-          </form>
+          </FormularioMutacion>
           <Link href={`/proyectos/${proyectoId}`} className="enlace">
             Cancelar
           </Link>
@@ -124,10 +127,10 @@ export function HitosDeProyecto({
         )}
       </ol>
 
-      {!inicio && formulario('inicio', 'Registrar inicio')}
-      {!cierre && inicio && formulario('cierre', 'Registrar cierre')}
+      {editable && !inicio && formulario('inicio', 'Registrar inicio')}
+      {editable && !cierre && inicio && formulario('cierre', 'Registrar cierre')}
 
-      {(inicio || cierre) && (
+      {editable && (inicio || cierre) && (
         <div className="space-y-3 pt-3 border-t border-linea-suave">
           {cierre &&
             borrado(

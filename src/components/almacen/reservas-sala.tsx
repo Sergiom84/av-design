@@ -1,3 +1,4 @@
+import { FormularioMutacion } from '@/components/formulario-mutacion/formulario';
 import { Aviso, Boton, Campo, ContenedorTabla, Enlace, Tarjeta, Vacio } from '@/components/ui';
 import {
   borrarReserva,
@@ -10,6 +11,9 @@ import { ETIQUETA_RESERVA } from '@/lib/tipos';
 import type { FilaReserva } from '@/lib/datos-almacen';
 import type { LineaFaltante } from '@/lib/compras';
 import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
+import { FormularioCargaKit, type AccionCargaKit } from '@/components/carga/formulario-carga-kit';
+import { randomUUID } from 'node:crypto';
+import type { ReactNode } from 'react';
 
 /**
  * Material apartado para esta obra, y cuánto hay en almacén para apartar.
@@ -39,22 +43,37 @@ export function ReservasDeSala({
   disponibilidad,
   necesidad,
   reservadoAqui,
+  porSuministro,
+  bloquearGenericas = false,
+  preparar,
+  reservasGestionadas = [],
+  editableCarga = false,
 }: {
   salaId: string;
   reservas: FilaReserva[];
   disponibilidad: Map<string, Disponibilidad>;
   necesidad: LineaFaltante[];
   reservadoAqui: Map<string, number>;
+  porSuministro?: ReactNode;
+  bloquearGenericas?: boolean;
+  preparar?: AccionCargaKit;
+  reservasGestionadas?: string[];
+  editableCarga?: boolean;
 }) {
+  const gestionadas = new Set(reservasGestionadas);
   const activas = reservas.filter((r) => r.estado === 'activa');
   const resto = reservas.filter((r) => r.estado !== 'activa');
-  const conDisponibilidad = necesidad.filter((l) => disponibilidad.has(l.articulo_id));
+  // La cobertura genérica excluye kits deliberadamente; no presentarla como
+  // saldo por suministro cuando la tabla explícita ya acredita sus reservas.
+  const conDisponibilidad = bloquearGenericas ? [] : necesidad.filter((l) => disponibilidad.has(l.articulo_id));
 
   return (
     <Tarjeta
       titulo="Material reservado"
       pie="Lo reservado sigue en almacén hasta que se carga. Al confirmar la carga se convierte en salida."
     >
+      {porSuministro}
+      <fieldset disabled={bloquearGenericas} className="min-w-0">
       {reservas.length === 0 ? (
         <Vacio>
           Sin reservas. Aparta aquí el material de esta obra para que otra no cuente con
@@ -94,18 +113,33 @@ export function ReservasDeSala({
                   </td>
                   <td className="text-tinta-tenue">{r.notas ?? '—'}</td>
                   <td className="whitespace-nowrap">
-                    {r.estado === 'activa' && (
-                      <form action={liberarReserva} className="inline">
-                        <input type="hidden" name="id" value={r.id} />
-                        <input type="hidden" name="sala_id" value={salaId} />
-                        <Boton variante="secundario">Liberar</Boton>
-                      </form>
-                    )}{' '}
-                    <form action={borrarReserva} className="inline">
-                      <input type="hidden" name="id" value={r.id} />
-                      <input type="hidden" name="sala_id" value={salaId} />
-                      <Boton variante="peligro">Quitar</Boton>
-                    </form>
+                    {gestionadas.has(r.id) ? (
+                      preparar && r.estado === 'activa' && (
+                        <FormularioCargaKit
+                          accion={preparar}
+                          token={randomUUID()}
+                          disabled={!editableCarga}
+                          etiqueta="Preparar"
+                        >
+                          <input type="hidden" name="reserva_id" value={r.id} />
+                        </FormularioCargaKit>
+                      )
+                    ) : (
+                      <>
+                        {r.estado === 'activa' && (
+                          <FormularioMutacion action={liberarReserva} className="inline">
+                            <input type="hidden" name="id" value={r.id} />
+                            <input type="hidden" name="sala_id" value={salaId} />
+                            <Boton variante="secundario">Liberar</Boton>
+                          </FormularioMutacion>
+                        )}{' '}
+                        <FormularioMutacion action={borrarReserva} className="inline">
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="sala_id" value={salaId} />
+                          <Boton variante="peligro">Quitar</Boton>
+                        </FormularioMutacion>
+                      </>
+                    )}
                   </td>
                 </tr>
               );
@@ -173,7 +207,7 @@ export function ReservasDeSala({
       )}
 
       <div className="mt-4 pt-4 border-t border-linea space-y-3">
-        <form action={crearReserva} className="flex flex-wrap items-end gap-3">
+        <FormularioMutacion action={crearReserva} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="sala_id" value={salaId} />
           <BuscadorArticulo etiqueta="Referencia" requerido className="w-full sm:w-[18rem]" />
           <Campo etiqueta="Cantidad">
@@ -190,17 +224,18 @@ export function ReservasDeSala({
             <input name="quien" className="w-32" />
           </Campo>
           <Boton>Reservar</Boton>
-        </form>
+        </FormularioMutacion>
 
-        <form action={reservarLoDisponible} className="flex flex-wrap items-end gap-3">
+        <FormularioMutacion action={reservarLoDisponible} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="sala_id" value={salaId} />
           <Boton variante="secundario">Reservar todo lo disponible</Boton>
           <span className="text-tinta-tenue pb-1">
             Aparta de golpe lo que la obra necesita y el almacén puede dar. Lo que no hay
             se compra.
           </span>
-        </form>
+        </FormularioMutacion>
       </div>
+      </fieldset>
     </Tarjeta>
   );
 }

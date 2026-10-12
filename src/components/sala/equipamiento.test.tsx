@@ -18,11 +18,15 @@
 
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
 
 import { montar, type Montaje } from '@/pruebas/dom';
-import type { EquipoEnSala } from '@/lib/tipos';
+import { ErrorConcurrencia } from '@/lib/control-escritura';
+import type { Conexion, EquipoEnSala } from '@/lib/tipos';
 import { Equipamiento } from './equipamiento';
+
+// Next Link usa self para observar los enlaces en el DOM.
+Object.defineProperty(globalThis, 'self', { configurable: true, get: () => globalThis.window });
 
 const SALA_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -84,6 +88,8 @@ describe('las casillas de posición de Equipamiento', () => {
     const alta = contenedor.querySelector('form') as HTMLFormElement;
     assert.equal(valorDe(alta, 'x_m'), '');
     assert.equal(valorDe(alta, 'y_m'), '');
+    assert.equal(alta.querySelector('input[name="x_m"]')?.closest('details')?.open, false);
+    assert.equal([...alta.querySelectorAll('button')].find((b) => b.textContent === 'Añadir equipo')?.closest('details'), null);
     assert.equal(
       valorDe(alta, 'z_m'),
       '',
@@ -134,8 +140,76 @@ describe('las casillas de posición de Equipamiento', () => {
     );
     montajes.push(m);
     const texto = m.contenedor.textContent ?? '';
+    assert.equal(m.contenedor.querySelectorAll('form').length, 0, 'cerrado conserva solo lectura');
     assert.ok(texto.includes('Sin colocar'), 'el estimado se lee como lo que es');
     assert.ok(texto.includes('X 4.5'), 'y el colocado sigue enseñando su medida');
     assert.ok(!texto.includes('X 0 '), 'nadie midió un cero en la esquina');
+  });
+
+  it('un rechazo de guardado conserva el nombre editado', async () => {
+    let envios = 0;
+    const m = await montar(createElement(Equipamiento, {
+      salaId: SALA_ID,
+      equipos: [equipo('a1111111-1111-4111-8111-111111111111', 'TEST estimado', { x_m: 0, y_m: 0, z_m: 0 }, false)],
+      tomas: [],
+      catalogo: new Map(),
+      accionGuardar: async () => {
+        envios++;
+        throw new ErrorConcurrencia();
+      },
+    }));
+    montajes.push(m);
+    const previa = globalThis.FormData;
+    globalThis.FormData = (m.ventana as Window & typeof globalThis).FormData;
+    try {
+      const fila = formularioDe(m.contenedor, 'TEST estimado');
+      const nombre = fila.querySelector('input[name="nombre"]') as HTMLInputElement;
+      nombre.value = 'Nota de montaje conservada';
+      nombre.dispatchEvent(new (m.ventana as Window & typeof globalThis).Event('input', { bubbles: true }));
+      await act(async () => { fila.requestSubmit(); });
+      assert.equal(envios, 1);
+      assert.equal((fila.querySelector('input[name="nombre"]') as HTMLInputElement).value, 'Nota de montaje conservada');
+      assert.ok(m.contenedor.querySelector('[role="alert"]'));
+    } finally {
+      globalThis.FormData = previa;
+    }
+  });
+
+  it('10 m comerciales frente a 40 m producen aviso técnico con el mapa de cables', async () => {
+    const codec = equipo('a1111111-1111-4111-8111-111111111111', 'CODEC EQ', { x_m: 0, y_m: 0, z_m: 0 }, true);
+    const tv = equipo('b1111111-1111-4111-8111-111111111111', 'Pantalla', { x_m: 4, y_m: 1, z_m: 1.4 }, true);
+    const conexion: Conexion = {
+      id: 'c40',
+      sala_id: SALA_ID,
+      origen_id: codec.id,
+      destino_id: tv.id,
+      detalle: { estado: 'legacy' },
+      articulo_cable_id: 'a-hdmi',
+      senal: 'hdmi',
+      ruta: null,
+      longitud_manual_m: 40,
+      notas: null,
+      etiqueta_cable: 'HD-1000',
+      puerto_origen_id: 'p-out',
+      puerto_destino_id: 'p-in',
+      puerto_origen_ordinal: 1,
+      puerto_destino_ordinal: 1,
+    };
+    const m = await montar(createElement(Equipamiento, {
+      salaId: SALA_ID,
+      equipos: [codec, tv],
+      tomas: [],
+      catalogo: new Map([
+        [codec.articulo_id, { marca: 'CISCO', modelo: 'CODEC EQ', categoria: 'VIDEOCONFERENCIA' }],
+        [tv.articulo_id, { marca: 'SAMSUNG', modelo: 'QB65R', categoria: 'PANTALLA' }],
+      ]),
+      conexiones: [conexion],
+      metros: { c40: { necesarios: 40, comercial: 10 } },
+    }));
+    montajes.push(m);
+    const texto = m.contenedor.textContent ?? '';
+    assert.match(texto, /10 m/);
+    assert.match(texto, /40 m/);
+    assert.match(texto, /no cubre|insuficiente|comercial/i);
   });
 });

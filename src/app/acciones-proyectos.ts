@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
+import { transaccionConControl } from '@/lib/control-escritura';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
 import { exigirEdicion } from '@/lib/sesion-servidor';
 import { codigoLibreDeProyecto } from '@/lib/nombres-proyecto';
@@ -31,7 +32,7 @@ export async function crearProyecto(datos: FormData) {
   const nombre = texto(datos.get('nombre'));
   if (!nombre) return;
 
-  const proyectoId = await sql.begin(async (tx) => {
+  const proyectoId = await transaccionConControl(sql, async (tx) => {
     // La sede se resuelve dentro de la transacción: si el alta falla no queda
     // una sede huérfana recién creada.
     const nombreSede = texto(datos.get('sede'));

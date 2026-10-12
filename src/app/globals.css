@@ -190,10 +190,17 @@ table.tabla-cables {
 }
 
 table.tabla-cables td:nth-child(2),
+table.tabla-cables td:nth-child(3),
 table.tabla-cables td:nth-child(5),
+table.tabla-cables td:nth-child(6),
+table.tabla-cables td:nth-child(8),
 table.tabla-cables td:nth-child(9),
 table.tabla-cables td:nth-child(10) {
   white-space: nowrap;
+}
+
+table.tabla-cables td:last-child {
+  min-width: 16rem;
 }
 
 /* Editar una conexión exige ver de un vistazo los dos equipos, su señal y el

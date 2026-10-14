@@ -17,6 +17,10 @@
 /.next/
 /.next-e2e-diagrama/
 /.next-visual-qa/
+/.next-e1-documentos/
+/.next-e2-importacion/
+/.next-e2-reanudacion/
+/.next-e2-build/
 /.playwright-cli/
 /out/
 

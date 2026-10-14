@@ -714,10 +714,11 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
         z_m: string;
         posicion_confirmada: boolean;
         rotacion_grados: string | null;
+        dimensiones_tecnicas: Record<string, unknown> | null;
       }>
     >`select e.id, e.articulo_id, e.nombre, e.cantidad, a.categoria,
              e.extremo, e.x_m, e.y_m, e.z_m, e.posicion_confirmada,
-             e.rotacion_grados
+             e.rotacion_grados, e.dimensiones_tecnicas
       from sala_equipos e
       left join articulos a on a.id = e.articulo_id
       where e.sala_id = ${salaId}
@@ -734,7 +735,7 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
       const [linea] = await tx<Array<{ id: string }>>`
         insert into plantilla_articulos
           (plantilla_id, articulo_id, categoria, modelo_texto, cantidad, opcional,
-           extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados)
+           extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados, dimensiones_tecnicas)
         values (${id}, ${e.articulo_id}, ${e.categoria ?? 'SIN CATEGORIA'},
                 ${e.nombre}, ${Math.max(1, Math.round(Number(e.cantidad) || 1))}, false,
                 ${e.extremo}::extremo_cable,
@@ -742,7 +743,10 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
                 ${e.posicion_confirmada ? Number(e.y_m) : null},
                 ${e.posicion_confirmada ? Number(e.z_m) : null},
                 ${e.posicion_confirmada},
-                ${Number(e.rotacion_grados ?? 0)})
+                ${Number(e.rotacion_grados ?? 0)},
+                ${e.dimensiones_tecnicas == null
+                  ? tx`'null'::jsonb`
+                  : tx.json(e.dimensiones_tecnicas as postgres.JSONValue)})
         returning id`;
       lineaDeEquipo.set(String(e.id), linea.id);
     }
@@ -1411,6 +1415,7 @@ export async function guardarArticulo(datos: FormData) {
   await sql`
     update articulos set
       marca                    = ${texto(datos.get('marca'))},
+      fuente                   = 'app',
       modelo                   = ${texto(datos.get('modelo')) ?? 'Sin modelo'},
       categoria                = ${(texto(datos.get('categoria')) ?? 'SIN CATEGORIA').toUpperCase()},
       descripcion              = ${texto(datos.get('descripcion'))},
@@ -1442,6 +1447,7 @@ export async function crearArticulo(datos: FormData) {
   const [a] = await sql<Array<{ id: string }>>`
     insert into articulos ${sql({
       tipo: texto(datos.get('tipo')) ?? 'equipo',
+      fuente: 'app',
       marca: texto(datos.get('marca')),
       modelo: texto(datos.get('modelo')) ?? 'Sin modelo',
       categoria: (texto(datos.get('categoria')) ?? 'SIN CATEGORIA').toUpperCase(),
@@ -1515,7 +1521,7 @@ export async function borrarPuerto(datos: FormData) {
 /** No se borra: se desactiva, para no romper las salas que ya lo usan. */
 export async function desactivarArticulo(datos: FormData) {
   await exigirEdicion('catalogo');
-  await sql`update articulos set activo = false where id = ${String(datos.get('id'))}`;
+  await sql`update articulos set activo = false, fuente = 'app' where id = ${String(datos.get('id'))}`;
   revalidatePath('/catalogo');
   redirect('/catalogo');
 }

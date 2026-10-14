@@ -3,6 +3,8 @@ import { hayConfiguracion } from '@/lib/db';
 import { listarMarcas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Cabecera, Enlace, Tarjeta, Vacio } from '@/components/ui';
+import { BuscadorTecnico } from '@/components/catalogo-tecnico/buscador-tecnico';
+import { FavoritosCatalogo } from '@/components/catalogo-favoritos/favoritos-catalogo';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +30,11 @@ export default async function Catalogo({ searchParams }: PageProps<'/catalogo'>)
       <Cabecera
         titulo="Catálogo"
         descripcion="Por marca. Dentro de cada marca, por tipo de equipo. Y dentro, cada modelo con su precio, características y observaciones."
-        acciones={<Enlace href="/articulo/nuevo">Añadir referencia</Enlace>}
+        acciones={<><Enlace href="/catalogo/importar">Importar catálogo u ofertas</Enlace><Enlace href="/articulo/nuevo">Añadir referencia</Enlace></>}
       />
+
+      <div className="mb-6"><BuscadorTecnico /></div>
+      <div className="mb-6"><FavoritosCatalogo /></div>
 
       <form className="flex flex-wrap items-end gap-3 mb-6">
         <input

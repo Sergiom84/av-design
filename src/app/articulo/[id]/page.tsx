@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { hayConfiguracion } from '@/lib/db';
+import { hayConfiguracion, sql } from '@/lib/db';
 import {
   obtenerArticulo,
   preciosDeArticulo,
@@ -13,6 +13,13 @@ import { TablaPuertos } from '@/components/puertos/tabla-puertos';
 import { Aviso, Boton, Cabecera, Campo, Enlace, Tarjeta } from '@/components/ui';
 import { desactivarArticulo, guardarArticulo } from '../../acciones';
 import { ETIQUETA_SENAL } from '@/lib/tipos';
+import { exigirSeccion } from '@/lib/sesion-servidor';
+import { permisoCatalogoTecnico } from '@/lib/catalogo-tecnico';
+import { obtenerDatosTecnicos } from '@/lib/catalogo-tecnico-repositorio';
+import { FichaTecnicaArticulo } from '@/components/catalogo-tecnico/ficha-tecnica';
+import { puedeUsarFavoritos } from '@/lib/catalogo-favoritos';
+import { esArticuloFavorito } from '@/lib/catalogo-favoritos-repositorio';
+import { BotonFavorito } from '@/components/catalogo-favoritos/boton-favorito';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +27,7 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
+  const usuario = await exigirSeccion('catalogo', 'ver');
   const [articulo, usos, precios, puertos] = await Promise.all([
     obtenerArticulo(id),
     usosDeArticulo(id),
@@ -27,10 +35,12 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
     puertosDeArticulo(id),
   ]);
   if (!articulo) notFound();
+  const fichaTecnica = await obtenerDatosTecnicos(sql, usuario, id);
+  const favorito = puedeUsarFavoritos(usuario) ? await esArticuloFavorito(sql, usuario, id) : null;
 
   const marca = articulo.marca ?? SIN_MARCA;
   const esCable = articulo.tipo !== 'equipo';
-  const enUso = usos.plantillas + usos.salas + usos.conexiones;
+  const enUso = usos.plantillas + usos.salas + usos.conexiones + usos.materialBom;
 
   return (
     <>
@@ -70,11 +80,14 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
           <Aviso tono="neutro">
             En uso: {usos.plantillas} plantilla{usos.plantillas === 1 ? '' : 's'},{' '}
             {usos.salas} sala{usos.salas === 1 ? '' : 's'}
-            {usos.conexiones > 0 && `, ${usos.conexiones} conexiones`}. No se puede
+            {usos.conexiones > 0 && `, ${usos.conexiones} conexiones`}
+            {usos.materialBom > 0 && `, ${usos.materialBom} partidas de BOM`}. No se puede
             retirar del catálogo mientras esté en uso.
           </Aviso>
         </div>
       )}
+
+      {favorito !== null && <div className="mb-6"><BotonFavorito articuloId={articulo.id} inicial={favorito} /></div>}
 
       <form action={guardarArticulo} className="grid gap-6 xl:grid-cols-2 items-start">
         <input type="hidden" name="id" value={articulo.id} />
@@ -284,6 +297,10 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
       </form>
 
       {/* Fuera del formulario de la ficha: un formulario no puede anidarse. */}
+      <div className="mt-6">
+        <FichaTecnicaArticulo articuloId={articulo.id} marca={articulo.marca} modelo={articulo.modelo}
+          ficha={fichaTecnica} puedeEditar={permisoCatalogoTecnico(usuario, 'editar')} />
+      </div>
       <div className="mt-6">
         <TablaPuertos articuloId={articulo.id} puertos={puertos} />
       </div>

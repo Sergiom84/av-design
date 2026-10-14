@@ -94,6 +94,7 @@ export default async function PortadaProyecto({
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Estado tono={TONO_ESTADO_PROYECTO[estado]}>{ETIQUETA_ESTADO_PROYECTO[estado]}</Estado>
+        <Enlace href={`/proyectos/${proyecto.id}/documentos`}>Documentos de la obra</Enlace>
       </div>
 
       <PasosDeProyecto

@@ -478,11 +478,13 @@ export async function usosDeArticulo(id: string) {
     select
       (select count(*) from plantilla_articulos where articulo_id = ${id}) as plantillas,
       (select count(*) from sala_equipos        where articulo_id = ${id}) as salas,
-      (select count(*) from conexiones          where articulo_cable_id = ${id}) as conexiones`;
+      (select count(*) from conexiones          where articulo_cable_id = ${id}) as conexiones,
+      (select count(*) from sala_material_bom   where articulo_id = ${id}) as material_bom`;
   return {
     plantillas: Number(f.plantillas),
     salas: Number(f.salas),
     conexiones: Number(f.conexiones),
+    materialBom: Number(f.material_bom),
   };
 }
 

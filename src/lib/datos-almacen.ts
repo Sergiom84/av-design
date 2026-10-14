@@ -7,7 +7,8 @@ import {
   type ResultadoCable,
 } from './calculo-cable';
 import { agruparPorProveedor, calcularFaltante, necesidadDeSala } from './compras';
-import { listarArticulos, obtenerParametros, obtenerSala } from './datos';
+import { listarArticulos, obtenerArticulo, obtenerParametros, obtenerSala } from './datos';
+import { materialBomDeSala } from './datos-material-bom';
 import type {
   Carga,
   EstadoCarga,
@@ -450,11 +451,24 @@ export async function faltaParaSala(salaId: string) {
   if (!completa) return null;
 
   const { sala, equipos, conexiones } = completa;
-  const [articulos, parametros] = await Promise.all([
+  const [articulos, parametros, materialBom] = await Promise.all([
     listarArticulos(),
     obtenerParametros(),
+    materialBomDeSala(salaId),
   ]);
   const porId = new Map(articulos.map((a) => [a.id, a]));
+  // Retirar una referencia del buscador no retira material de una obra existente.
+  const usados = new Set([
+    ...equipos.map(e => e.articulo_id),
+    ...conexiones.map(c => c.articulo_cable_id),
+    ...materialBom.map(m => m.articulo_id),
+  ]);
+  for (const id of usados) {
+    if (id && !porId.has(id)) {
+      const articulo = await obtenerArticulo(id);
+      if (articulo) porId.set(id, articulo);
+    }
+  }
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
 
   const sinMedidas = !sala.largo_m || !sala.ancho_m || !sala.alto_m;
@@ -468,6 +482,7 @@ export async function faltaParaSala(salaId: string) {
     equipos,
     agruparMaterialCable(resultados, conexiones, porId),
     porId,
+    materialBom,
   );
 
   const reservas = await reservasDeSala(salaId);

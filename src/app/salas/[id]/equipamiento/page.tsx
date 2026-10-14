@@ -7,6 +7,8 @@ import { SinConfigurar } from '@/components/sin-configurar';
 import { Equipamiento } from '@/components/sala/equipamiento';
 import { GuardarComoPlantilla } from '@/components/sala/guardar-como-plantilla';
 import { TomasDeRed } from '@/components/sala/tomas-red';
+import { materialBomDeSala } from '@/lib/datos-material-bom';
+import { MaterialBom } from '@/components/importacion/material-bom';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +26,7 @@ export default async function EquipamientoSala({
   if (!completa) notFound();
 
   const { sala, equipos, tomas, catalogoEquipos } = completa;
+  const materialBom = await materialBomDeSala(id);
   const cerrado = sala.proyecto_id
     ? proyectoCerrado(await hitosDeProyecto(sala.proyecto_id))
     : false;
@@ -38,6 +41,7 @@ export default async function EquipamientoSala({
         catalogo={catalogoEquipos}
       />
       <TomasDeRed salaId={sala.id} tomas={tomas} equipos={equipos} />
+      <MaterialBom salaId={sala.id} material={materialBom} cerrado={cerrado} />
       <GuardarComoPlantilla sala={sala} equipos={equipos} />
     </div>
   );

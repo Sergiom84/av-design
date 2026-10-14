@@ -467,23 +467,23 @@ sql.push('');
 
 sql.push(`-- Catálogo: ${equiposUnicos.size} equipos del inventario real`);
 sql.push(
-  'insert into articulos (tipo, categoria, marca, modelo, unidad, unidades_instaladas) values',
+  'insert into articulos (tipo, categoria, marca, modelo, unidad, unidades_instaladas, fuente) values',
 );
 sql.push(
   [...equiposUnicos.values()]
     .map(
       (e) =>
-        `  ('equipo', ${txt(e.categoria)}, ${txt(e.marca)}, ${txt(e.modelo)}, 'ud', ${num(e.unidades_instaladas)})`,
+        `  ('equipo', ${txt(e.categoria)}, ${txt(e.marca)}, ${txt(e.modelo)}, 'ud', ${num(e.unidades_instaladas)}, 'csv')`,
     )
     .join(',\n') +
-    "\non conflict (coalesce(marca, ''), modelo, categoria) do update set unidades_instaladas = excluded.unidades_instaladas;",
+    "\non conflict (coalesce(marca, ''), modelo, categoria) do update set unidades_instaladas = excluded.unidades_instaladas where articulos.fuente = 'csv';",
 );
 sql.push('');
 
 sql.push(`-- Catálogo: ${cables.length} referencias de cable y consumible (base editable)`);
 sql.push(
   'insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, senal, ' +
-    'conector_a, conector_b, longitudes_comerciales_m, bobina_m, diametro_mm, coste, plazo_dias, stock_minimo) values',
+    'conector_a, conector_b, longitudes_comerciales_m, bobina_m, diametro_mm, coste, plazo_dias, stock_minimo, fuente) values',
 );
 sql.push(
   cables
@@ -492,12 +492,12 @@ sql.push(
         `  (${txt(c.tipo)}, ${txt(c.categoria)}, ${txt(c.marca)}, ${txt(c.modelo)}, ${txt(c.descripcion)}, ` +
         `${txt(c.unidad)}, ${c.senal ? txt(c.senal) : 'null'}, ${txt(c.conector_a)}, ${txt(c.conector_b)}, ` +
         `${arr(c.longitudes)}, ${num(c.bobina_m)}, ${num(c.diametro_mm)}, ${num(c.coste)}, ` +
-        `${num(c.plazo_dias)}, ${num(c.stock_minimo)})`,
+        `${num(c.plazo_dias)}, ${num(c.stock_minimo)}, 'csv')`,
     )
     .join(',\n') +
     "\non conflict (coalesce(marca, ''), modelo, categoria) do update set " +
     'descripcion = excluded.descripcion, longitudes_comerciales_m = excluded.longitudes_comerciales_m, ' +
-    'bobina_m = excluded.bobina_m, diametro_mm = excluded.diametro_mm;',
+    "bobina_m = excluded.bobina_m, diametro_mm = excluded.diametro_mm where articulos.fuente = 'csv';",
 );
 sql.push('');
 
@@ -519,7 +519,7 @@ if (precios.length) {
   if (articulosNuevos.size) {
     sql.push(
       'insert into articulos (tipo, categoria, marca, modelo, descripcion, unidad, senal, ' +
-        'conector_a, conector_b, longitudes_comerciales_m, bobina_m, referencia_fabricante) values',
+        'conector_a, conector_b, longitudes_comerciales_m, bobina_m, referencia_fabricante, fuente) values',
     );
     sql.push(
       [...articulosNuevos.values()]
@@ -528,12 +528,12 @@ if (precios.length) {
             `  (${txt(a.tipo)}, ${txt(a.categoria)}, ${txt(a.marca)}, ${txt(a.modelo)}, ` +
             `${txt(a.descripcion)}, ${txt(a.unidad)}, ${a.senal ? txt(a.senal) : 'null'}, ` +
             `${txt(a.conector_a)}, ${txt(a.conector_b)}, ${arr(a.longitudes)}, ` +
-            `${num(a.bobina_m)}, ${txt(a.referencia)})`,
+            `${num(a.bobina_m)}, ${txt(a.referencia)}, 'csv')`,
         )
         .join(',\n') +
         "\non conflict (coalesce(marca, ''), modelo, categoria) do update set " +
         'descripcion = coalesce(articulos.descripcion, excluded.descripcion), ' +
-        'referencia_fabricante = coalesce(articulos.referencia_fabricante, excluded.referencia_fabricante);',
+        "referencia_fabricante = coalesce(articulos.referencia_fabricante, excluded.referencia_fabricante) where articulos.fuente = 'csv';",
     );
     sql.push('');
   }
@@ -610,7 +610,7 @@ set coste = round(coalesce(m.final, m.orientativo), 4),
     coste_orientativo = (m.final is null)
 from mejor m
 where m.articulo_id = a.id
-  and coalesce(m.final, m.orientativo) is not null;`);
+  and coalesce(m.final, m.orientativo) is not null and a.fuente = 'csv';`);
   sql.push('');
 
   sql.push('-- Referencia del fabricante: la del presupuesto más reciente que la traiga');
@@ -621,7 +621,7 @@ from (
   from precios where referencia is not null
   order by articulo_id, fecha desc nulls last
 ) c
-where c.articulo_id = a.id and a.referencia_fabricante is null;`);
+where c.articulo_id = a.id and a.referencia_fabricante is null and a.fuente = 'csv';`);
   sql.push('');
 }
 

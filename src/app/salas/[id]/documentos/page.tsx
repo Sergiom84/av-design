@@ -3,14 +3,13 @@ import { hayConfiguracion } from '@/lib/db';
 import { obtenerSalaCabecera } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Enlace, Estado, Tarjeta } from '@/components/ui';
+import { ExportadorDocumentos } from '@/components/documentos/exportador';
+import { exigirSeccion } from '@/lib/sesion-servidor';
+import { puedeExportarBom } from '@/lib/documentos/seleccion';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Los entregables de la sala, reunidos. Hoy son los que ya existen dentro de
- * cada pestaña; el hub con PDF, Excel y paquete ZIP está en el roadmap como
- * `Después` y entrará aquí sin tocar el resto de la ficha.
- */
+/** Entregables de una sala y acceso a las vistas que alimentan el snapshot. */
 export default async function DocumentosSala({
   params,
 }: PageProps<'/salas/[id]/documentos'>) {
@@ -19,6 +18,7 @@ export default async function DocumentosSala({
   const { id } = await params;
   const sala = await obtenerSalaCabecera(id);
   if (!sala) notFound();
+  const yo = await exigirSeccion('salas');
 
   // Literales de plantilla sin cast: typedRoutes valida cada destino.
   const entregables = [
@@ -36,7 +36,7 @@ export default async function DocumentosSala({
     {
       nombre: 'Esquema de conexiones',
       detalle: 'Los equipos y sus cables, con los identificadores de la tabla.',
-      href: `/salas/${sala.id}/cableado` as const,
+      href: `/salas/${sala.id}/diagrama` as const,
     },
     {
       nombre: 'Lista de material',
@@ -46,6 +46,8 @@ export default async function DocumentosSala({
   ];
 
   return (
+    <div className="space-y-6">
+    <ExportadorDocumentos salas={[{id:sala.id,nombre:sala.nombre,codigo:sala.codigo}]} puedeBom={puedeExportarBom(yo.permisos)}/>
     <Tarjeta titulo="Entregables">
       <div className="divide-y divide-linea-suave">
         {entregables.map((e) => (
@@ -57,14 +59,8 @@ export default async function DocumentosSala({
             <Estado tono="listo">Disponible</Estado>
           </div>
         ))}
-        <div className="flex flex-wrap items-start justify-between gap-3 py-3">
-          <div className="min-w-0">
-            <span className="font-medium">Paquete exportable</span>
-            <p className="text-tinta-tenue">PDF, Excel y ZIP con todo lo anterior.</p>
-          </div>
-          <Estado tono="neutro">Pendiente</Estado>
-        </div>
       </div>
     </Tarjeta>
+    </div>
   );
 }

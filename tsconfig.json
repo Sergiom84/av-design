@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
@@ -30,8 +36,19 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     ".next-e2e-diagrama/types/**/*.ts",
-    ".next-e2e-diagrama/dev/types/**/*.ts"
+    ".next-e2e-diagrama/dev/types/**/*.ts",
+    ".next-e1-documentos/types/**/*.ts",
+    ".next-e1-documentos/dev/types/**/*.ts",
+    ".next-e2-importacion/types/**/*.ts",
+    ".next-e2-importacion/dev/types/**/*.ts",
+    ".next-e2-reanudacion/types/**/*.ts",
+    ".next-e2-reanudacion/dev/types/**/*.ts",
+    ".next-e2-build/types/**/*.ts",
+    ".next-e2-build/dev/types/**/*.ts"
   ],
   "//exclude": "`output/` son artefactos locales ignorados por git —copias del árbol que dejan las auditorías, informes, capturas—. Comprobarles los tipos hace fallar el build por código viejo que ya no es el del repositorio.",
-  "exclude": ["node_modules", "output"]
+  "exclude": [
+    "node_modules",
+    "output"
+  ]
 }

@@ -1797,3 +1797,188 @@ do $$ begin
     );
   end if;
 end $$;
+
+-- E2 · Fuentes de catálogo y precios revisables (2026-10)
+-- E2 local: fuentes revisables, sin aplicar automáticamente a producción.
+-- Rollback de la migración: conservar primero archivo/reportes; retirar triggers,
+-- tablas importacion_cambios/sala_material_bom/importacion_lotes y columnas
+-- revision/fuente añadidas únicamente si no se han empezado a usar.
+alter table articulos add column if not exists fuente text not null default 'csv';
+alter table articulos alter column fuente set default 'app';
+alter table articulos drop constraint if exists articulos_fuente_valida;
+alter table articulos add constraint articulos_fuente_valida check (fuente in ('csv', 'app'));
+alter table articulos add column if not exists revision bigint not null default 0;
+alter table precios add column if not exists revision bigint not null default 0;
+alter table proveedores add column if not exists revision bigint not null default 0;
+
+create table if not exists importacion_lotes (
+  id uuid primary key default gen_random_uuid(),
+  destino text not null check (destino in ('catalogo', 'bom', 'precios')),
+  sala_id uuid references salas on delete restrict,
+  usuario_id uuid not null,
+  origen text not null,
+  archivo_nombre text not null,
+  archivo_sha256 text not null check (archivo_sha256 ~ '^[a-f0-9]{64}$'),
+  archivo bytea not null check (octet_length(archivo) <= 5242880),
+  estado text not null default 'confirmado' check (estado in ('confirmado', 'revertido', 'reversion_parcial')),
+  filas jsonb not null,
+  informe jsonb not null,
+  reversion jsonb not null default '[]'::jsonb,
+  creado_en timestamptz not null default now(),
+  revertido_en timestamptz,
+  check ((destino = 'bom') = (sala_id is not null))
+);
+create index if not exists importacion_lotes_usuario_idx on importacion_lotes (usuario_id, creado_en desc);
+
+alter table precios add column if not exists unidad_compra text;
+alter table precios add column if not exists lote_id uuid references importacion_lotes on delete restrict;
+
+create table if not exists sala_material_bom (
+  id uuid primary key default gen_random_uuid(),
+  sala_id uuid not null references salas on delete cascade,
+  articulo_id uuid not null references articulos on delete restrict,
+  cantidad numeric(12,2) not null check (cantidad > 0),
+  unidad unidad_medida not null,
+  nota text,
+  lote_id uuid references importacion_lotes on delete restrict,
+  revision bigint not null default 0
+);
+create index if not exists sala_material_bom_sala_idx on sala_material_bom (sala_id);
+comment on table sala_material_bom is 'Partidas adicionales a la necesidad derivada: sin equipo colocado, conexión ni cálculo inventado.';
+
+create table if not exists importacion_cambios (
+  id uuid primary key default gen_random_uuid(),
+  lote_id uuid not null references importacion_lotes on delete restrict,
+  orden integer not null,
+  tabla text not null check (tabla in ('articulos', 'precios', 'sala_material_bom', 'proveedores')),
+  fila_id uuid not null,
+  antes jsonb,
+  despues jsonb not null,
+  estado text not null default 'pendiente' check (estado in ('pendiente', 'revertido', 'conservado')),
+  motivo text,
+  unique (lote_id, orden)
+);
+-- También actualiza el checkpoint local anterior a registrar proveedores.
+alter table importacion_cambios drop constraint if exists importacion_cambios_tabla_check;
+alter table importacion_cambios add constraint importacion_cambios_tabla_check
+  check (tabla in ('articulos', 'precios', 'sala_material_bom', 'proveedores'));
+
+-- Contenido idéntico tras dos ediciones (ABA) sigue siendo trabajo posterior.
+-- No depende de que quien escribe recuerde aumentar la revisión.
+create or replace function e2_aumentar_revision() returns trigger language plpgsql as $$
+begin
+  new.revision := old.revision + 1;
+  return new;
+end;
+$$;
+drop trigger if exists e2_revision_articulos on articulos;
+create trigger e2_revision_articulos before update on articulos for each row execute function e2_aumentar_revision();
+drop trigger if exists e2_revision_precios on precios;
+create trigger e2_revision_precios before update on precios for each row execute function e2_aumentar_revision();
+drop trigger if exists e2_revision_bom on sala_material_bom;
+create trigger e2_revision_bom before update on sala_material_bom for each row execute function e2_aumentar_revision();
+drop trigger if exists e2_revision_proveedores on proveedores;
+create trigger e2_revision_proveedores before update on proveedores for each row execute function e2_aumentar_revision();
+
+-- AVX-16: bytes durables y dimensiones verificadas, sin alterar la geometría.
+begin;
+create table if not exists articulos_tecnicos (
+  articulo_id uuid primary key references articulos(id),
+  marca text,
+  modelo text not null,
+  ancho numeric,
+  alto numeric,
+  fondo numeric,
+  unidad text check (unidad in ('mm', 'cm', 'm')),
+  ru numeric,
+  origen text not null,
+  url text not null check (url ~ '^https://'),
+  fecha date not null,
+  verificado_por uuid references usuarios(id),
+  verificado_en timestamptz not null default now(),
+  check (ancho is null or ancho > 0),
+  check (alto is null or alto > 0),
+  check (fondo is null or fondo > 0),
+  check (ru is null or ru > 0),
+  check (unidad is not null or (ancho is null and alto is null and fondo is null))
+);
+create table if not exists articulos_archivos_tecnicos (
+  id uuid primary key default gen_random_uuid(),
+  articulo_id uuid not null references articulos(id),
+  tipo text not null check (tipo in ('imagen', 'ficha')),
+  nombre text not null,
+  mime text not null,
+  tamano_bytes integer not null check (tamano_bytes between 1 and 5242880),
+  sha256 text not null check (sha256 ~ '^[a-f0-9]{64}$'),
+  bytes bytea not null check (octet_length(bytes) between 1 and 5242880),
+  marca text,
+  modelo text not null,
+  origen text not null,
+  url text not null check (url ~ '^https://'),
+  fecha date not null,
+  verificado_por uuid references usuarios(id),
+  verificado_en timestamptz not null default now(),
+  unique (articulo_id, tipo),
+  check (octet_length(bytes) = tamano_bytes),
+  check ((tipo = 'imagen' and mime in ('image/png', 'image/jpeg', 'image/webp'))
+      or (tipo = 'ficha' and mime = 'application/pdf'))
+);
+alter table sala_equipos add column if not exists dimensiones_tecnicas jsonb;
+alter table plantilla_articulos add column if not exists dimensiones_tecnicas jsonb;
+comment on column sala_equipos.dimensiones_tecnicas is
+  'Dimensiones verificadas congeladas al alta. Ausente sigue ausente; no sustituye geometría del plano.';
+comment on column plantilla_articulos.dimensiones_tecnicas is
+  'Dimensiones congeladas; sala -> plantilla -> sala conserva el snapshot, incluso ausencia.';
+
+create or replace function congelar_dimensiones_tecnicas() returns trigger language plpgsql as $$
+declare datos jsonb;
+begin
+  if tg_op = 'UPDATE' then
+    if new.articulo_id is not distinct from old.articulo_id then return new; end if;
+    -- Sustituir la referencia sustituye su snapshot; editar el catálogo no.
+    new.dimensiones_tecnicas := null;
+  elsif new.dimensiones_tecnicas is not null then
+    -- JSON null es ausencia explícita al copiar una instancia legado.
+    return new;
+  elsif tg_table_name = 'sala_equipos' then
+    if new.origen_plantilla_linea_id is not null then
+      select dimensiones_tecnicas into datos from plantilla_articulos
+        where id = new.origen_plantilla_linea_id and articulo_id is not distinct from new.articulo_id;
+      new.dimensiones_tecnicas := datos;
+      return new;
+    end if;
+  end if;
+  select jsonb_build_object('marca', t.marca, 'modelo', t.modelo,
+    'ancho', t.ancho, 'alto', t.alto, 'fondo', t.fondo, 'unidad', t.unidad, 'ru', t.ru,
+    'origen', t.origen, 'url', t.url, 'fecha', t.fecha)
+    into datos from articulos_tecnicos t join articulos a on a.id = t.articulo_id
+    where t.articulo_id = new.articulo_id and t.modelo = a.modelo
+      and t.marca is not distinct from a.marca
+      and (t.ancho is not null or t.alto is not null or t.fondo is not null or t.ru is not null);
+  new.dimensiones_tecnicas := datos;
+  return new;
+end;
+$$;
+drop trigger if exists sala_equipos_congelar_dimensiones on sala_equipos;
+create trigger sala_equipos_congelar_dimensiones before insert or update of articulo_id on sala_equipos
+  for each row execute function congelar_dimensiones_tecnicas();
+drop trigger if exists plantilla_articulos_congelar_dimensiones on plantilla_articulos;
+create trigger plantilla_articulos_congelar_dimensiones before insert or update of articulo_id on plantilla_articulos
+  for each row execute function congelar_dimensiones_tecnicas();
+commit;
+-- Rollback manual, sólo sobre la BD de prueba identificada: drop triggers, función,
+-- tablas articulos_archivos_tecnicos/articulos_tecnicos y ambas columnas snapshot.
+-- La entrega conserva los datos técnicos al revertir lotes de importación ajenos.
+
+-- AVX-18 opcional: preferencias personales, sin ranking ni sustituciones.
+begin;
+create table if not exists usuarios_articulos_favoritos (
+  usuario_id uuid not null references usuarios(id),
+  articulo_id uuid not null references articulos(id),
+  creado_en timestamptz not null default now(),
+  primary key (usuario_id, articulo_id)
+);
+comment on table usuarios_articulos_favoritos is
+  'Favoritos personales reversibles. No modifica catálogo, equipos, precios o puertos de una obra.';
+commit;
+-- Rollback manual en destino previamente identificado: drop table usuarios_articulos_favoritos;

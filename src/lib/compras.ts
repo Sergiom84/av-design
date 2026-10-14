@@ -19,7 +19,16 @@ import type { LineaMaterialCable } from './calculo-cable';
 import type { Articulo, EquipoEnSala, EstadoPedido, UnidadMedida } from './tipos';
 
 /** De dónde sale una línea: del equipamiento de la sala o del cálculo de cable. */
-export type OrigenNecesidad = 'equipo' | 'cable';
+export type OrigenNecesidad = 'equipo' | 'cable' | 'bom';
+
+/** Material importado explícitamente, sin posición física ni conexión. */
+export interface LineaMaterialBom {
+  articulo_id: string;
+  descripcion: string;
+  unidad: UnidadMedida;
+  cantidad: number;
+  nota?: string | null;
+}
 
 export interface LineaNecesidad {
   articulo_id: string;
@@ -43,6 +52,7 @@ export function necesidadDeSala(
   equipos: Array<Pick<EquipoEnSala, 'articulo_id' | 'nombre' | 'cantidad'>>,
   materialCable: LineaMaterialCable[],
   articulos: Map<string, Pick<Articulo, 'marca' | 'modelo' | 'unidad'>>,
+  materialBom: LineaMaterialBom[] = [],
 ): LineaNecesidad[] {
   const lineas = new Map<string, LineaNecesidad>();
 
@@ -88,6 +98,11 @@ export function necesidadDeSala(
   for (const l of materialCable) {
     if (!l.articulo_id) continue;
     acumular(l.articulo_id, l.descripcion, l.unidad, l.cantidad, 'cable', l.a_pedir);
+  }
+
+  for (const l of materialBom) {
+    acumular(l.articulo_id, l.descripcion, l.unidad, l.cantidad, 'bom',
+      `${l.cantidad} ${l.unidad} importados${l.nota ? ` · ${l.nota}` : ''}`);
   }
 
   return [...lineas.values()].sort((a, b) =>

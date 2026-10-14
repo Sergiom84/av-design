@@ -1,5 +1,18 @@
 # Roadmap · qué queda y en qué orden
 
+Revalidación local 14-10-2026 de E1 (AVX-01–03), en worktree aislado y con
+fixture nueva: [14-e1-revalidacion-local.md](14-e1-revalidacion-local.md).
+Conserva la implementación previa y documenta correcciones, revisión,
+checks actuales y límites de los cambios E2 presentes en el snapshot.
+
+Actualización local 13-10-2026: E1 de la investigación Xtenav (AVX-01–03)
+implementa PDF técnico, BOM/cables XLSX/CSV y paquete ZIP seleccionable de
+sala u obra. Ver contrato en [10-e1-especificacion.md](10-e1-especificacion.md)
+y verificación/límites en [11-e1-entrega-local.md](11-e1-entrega-local.md).
+No se ha publicado ni desplegado. Los apartados de agosto conservan su
+contexto histórico; la exportación PDF indicada allí como futura está cubierta
+por esta entrega local. E2–E8 permanecen fuera de esta iteración.
+
 Estado a 7 de agosto de 2026. Este documento manda sobre `docs/05-continuar.md`,
 que quedó viejo. El 7-8-2026 Sergio pidió dos cosas nuevas que reordenan el
 plan: **acercar el aspecto al de XTEN-AV** (decisión registrada en

@@ -1,5 +1,6 @@
 import 'server-only';
 import postgres from 'postgres';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * Conexión a Postgres. Ahora apunta al contenedor local de docker-compose;
@@ -37,6 +38,16 @@ function obtener() {
   return nueva;
 }
 
+// Contexto limitado a una exportación: todas las funciones de lectura existentes
+// usan la misma transacción y no se duplican sus consultas ni normalizadores.
+const lectura = new AsyncLocalStorage<ReturnType<typeof postgres>>();
+
+export async function conLecturaConsistente<T>(leer: () => Promise<T>): Promise<T> {
+  return obtener().begin('isolation level repeatable read read only', async (transaccion) =>
+    lectura.run(transaccion as unknown as ReturnType<typeof postgres>, leer),
+  ) as Promise<T>;
+}
+
 /**
  * La conexión se abre en la primera consulta, no al cargar el módulo. Durante
  * `next build` se importan todas las páginas para recoger su configuración, y
@@ -46,10 +57,10 @@ function obtener() {
  */
 export const sql = new Proxy(function () {} as unknown as ReturnType<typeof postgres>, {
   apply: (_destino, _this, argumentos) =>
-    (obtener() as unknown as (...a: unknown[]) => unknown)(...argumentos),
+    ((lectura.getStore() ?? obtener()) as unknown as (...a: unknown[]) => unknown)(...argumentos),
   get: (_destino, propiedad) => {
     // Nadie hace `await sql`, pero quien lo compruebe no debe abrir la conexión.
     if (propiedad === 'then') return undefined;
-    return (obtener() as unknown as Record<string | symbol, unknown>)[propiedad];
+    return ((lectura.getStore() ?? obtener()) as unknown as Record<string | symbol, unknown>)[propiedad];
   },
 }) as ReturnType<typeof postgres>;

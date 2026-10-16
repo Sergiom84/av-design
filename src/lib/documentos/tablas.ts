@@ -1,10 +1,11 @@
 import ExcelJS from 'exceljs';
-import { agruparMaterialCable } from '../calculo-cable';
 import { tablaCablesACsv, type FilaCable } from '../cable-schedule';
-import { agruparPorProveedor, calcularFaltante, necesidadDeSala, type LineaNecesidad } from '../compras';
+import { agruparPorProveedor, calcularFaltante, type LineaNecesidad } from '../compras';
+import { necesidadExportada } from '../necesidad-tecnica';
+export { necesidadExportada } from '../necesidad-tecnica';
 import { ETIQUETA_RUTA, ETIQUETA_SENAL } from '../tipos';
 import { codificarCsv, textoSeguroCsv } from './csv';
-import type { SalaExportada, SnapshotExportacion } from './modelo';
+import { etiquetaRevisionDiseno, type SalaExportada, type SnapshotExportacion } from './modelo';
 
 export interface LineaBom extends LineaNecesidad {
   referencia: string | null;
@@ -22,20 +23,6 @@ export interface LineaBom extends LineaNecesidad {
 }
 
 /**
- * La necesidad siempre usa todos los equipos y conexiones del snapshot.
- * Los filtros del dibujo no forman parte de este contrato.
- */
-export function necesidadExportada(snapshot: SnapshotExportacion, sala: SalaExportada): LineaNecesidad[] {
-  const articulos = new Map(snapshot.articulos.map((a) => [a.id, a]));
-  return necesidadDeSala(
-    sala.equipos,
-    agruparMaterialCable(sala.resultadosCable, sala.conexiones, articulos),
-    articulos,
-    sala.materialBom ?? [],
-  );
-}
-
-/**
  * Consolida la selección ANTES de consultar el disponible: el mismo stock no
  * puede cubrir una sala y volver a cubrir otra. Solo suma las reservas propias
  * de las salas seleccionadas, no las del resto de la obra.
@@ -44,15 +31,19 @@ export function construirBom(snapshot: SnapshotExportacion, seleccion: SalaExpor
   const salas = salasUnicas(seleccion);
   const articulos = new Map(snapshot.articulos.map((a) => [a.id, a]));
   const porArticulo = new Map<string, LineaNecesidad>();
+  const descripciones = new Map<string, Set<string>>();
   const reservas = new Map<string, number>();
   for (const sala of salas) {
     for (const linea of necesidadExportada(snapshot, sala)) {
       const previa = porArticulo.get(linea.articulo_id);
       if (previa) {
+        descripciones.get(linea.articulo_id)!.add(linea.descripcion);
+        previa.descripcion = [...descripciones.get(linea.articulo_id)!].join(' | ');
         previa.cantidad = redondear(previa.cantidad + linea.cantidad);
         previa.origenes = [...new Set([...previa.origenes, ...linea.origenes])];
         previa.detalle.push(...linea.detalle.map((d) => `${sala.sala.nombre}: ${d}`));
       } else {
+        descripciones.set(linea.articulo_id, new Set([linea.descripcion]));
         porArticulo.set(linea.articulo_id, {
           ...linea,
           origenes: [...linea.origenes],
@@ -93,7 +84,7 @@ export function construirBom(snapshot: SnapshotExportacion, seleccion: SalaExpor
   }).sort((a, b) => a.descripcion.localeCompare(b.descripcion, 'es'));
 }
 
-const COLUMNAS_BOM = [
+export const COLUMNAS_BOM = [
   ['articulo_id', 'ID artículo', 38], ['referencia', 'Referencia', 20],
   ['descripcion', 'Descripción', 38], ['origenes', 'Origen', 17], ['unidad', 'Unidad', 9],
   ['necesidad', 'Necesidad', 14], ['existencias', 'Existencias', 14],
@@ -105,7 +96,7 @@ const COLUMNAS_BOM = [
   ['detalle', 'Detalle', 65],
 ] as const;
 
-function filaBom(l: LineaBom): Array<string | number | null> {
+export function filaBom(l: LineaBom): Array<string | number | null> {
   return [l.articulo_id, l.referencia, l.descripcion, l.origenes.join(' + '), l.unidad,
     l.cantidad, l.existencias, l.reservado_total, l.disponible_libre, l.reservado_propio,
     l.disponible_para_seleccion, l.a_comprar, l.proveedor, l.precio_unitario, l.estado_precio,
@@ -115,9 +106,10 @@ function filaBom(l: LineaBom): Array<string | number | null> {
 export function generarBomCsv(snapshot: SnapshotExportacion, seleccion: SalaExportada | SalaExportada[]): Uint8Array {
   const salas = salasUnicas(Array.isArray(seleccion) ? seleccion : [seleccion]);
   const contexto = [snapshot.revision, snapshot.creadoEn, snapshot.proyecto?.codigo ?? null,
-    snapshot.proyecto?.nombre ?? null, salas.map((s) => s.sala.codigo ?? s.sala.nombre).join(' | ')];
+    snapshot.proyecto?.nombre ?? null, salas.map((s) => s.sala.codigo ?? s.sala.nombre).join(' | '),
+    salas.map((s) => `${s.sala.id}: ${etiquetaRevisionDiseno(s)}${s.revisionDiseno ? `; SHA-256 ${s.revisionDiseno.hash}` : ''}`).join(' | ')];
   return codificarCsv(
-    ['revision', 'fecha_snapshot', 'obra_codigo', 'obra_nombre', 'salas_seleccionadas', ...COLUMNAS_BOM.map((c) => c[0])],
+    ['revision', 'fecha_snapshot', 'obra_codigo', 'obra_nombre', 'salas_seleccionadas', 'revisiones_diseno', ...COLUMNAS_BOM.map((c) => c[0])],
     construirBom(snapshot, salas).map((l) => [...contexto, ...filaBom(l)]),
   );
 }
@@ -199,6 +191,22 @@ export async function generarXlsx(snapshot: SnapshotExportacion, seleccion: Sala
     const ausentes = salas.flatMap((s) => s.filasCable).filter((f) => f.metros == null).length;
     hoja.getCell(filaTotal + 1, 3).value = `Sin cálculo: ${ausentes} conexiones. Los metros vacíos no son cero; el subtotal puede ser parcial.`;
   }
+  if (salas.some((s) => s.revisionDiseno)) {
+    const columnas = [['sala_id', 'ID sala', 38], ['sala', 'Sala', 35], ['estado', 'Estado del diseño', 14],
+      ['revision_id', 'ID revisión', 38], ['numero', 'Número', 12], ['nombre', 'Nombre revisión', 35],
+      ['hash', 'SHA-256 diseño', 68], ['autor', 'Autor revisión', 30], ['fecha', 'Fecha revisión (UTC)', 27],
+      ['antecedente', 'Antecedente', 60], ['origen', 'Medidas heredadas', 82]] as const;
+    const hoja = crearHoja(libro, snapshot, salas, 'Revisiones de diseño', columnas);
+    hoja.getCell('A6').value = 'El hash identifica el diseño leído consistentemente. Borrador no equivale a una revisión guardada.';
+    hoja.getCell('A7').value = 'La disponibilidad de almacén es la actual de esta exportación; no se restaura ni duplica con el diseño.';
+    escribirTabla(hoja, salas.map((s) => {
+      const r = s.revisionDiseno;
+      return [s.sala.id, etiquetaSala(s), r?.estado ?? 'Sin referencia', r?.id ?? null, r?.numero ?? null,
+        r?.nombre ?? null, r?.hash ?? null, r?.autor ?? null, r?.creadoEn ?? null,
+        r?.antecedente ? `${r.antecedente.numero}: ${r.antecedente.nombre} (${r.antecedente.id})` : null,
+        r?.heredadaDe ? `Sala ${r.heredadaDe.salaId}; revisión ${r.heredadaDe.revisionId}. Medidas heredadas; no acreditan visita.` : null];
+    }), [5]);
+  }
   return new Uint8Array(await libro.xlsx.writeBuffer());
 }
 
@@ -209,7 +217,10 @@ function crearHoja(libro: ExcelJS.Workbook, snapshot: SnapshotExportacion, salas
     properties: { defaultRowHeight: 24, tabColor: { argb: 'FF3669D9' } },
     pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:9' },
   });
-  hoja.columns = columnas.map(([clave, , ancho]) => ({ key: clave, width: ancho }));
+  // El botón de autofiltro ocupa parte de cada cabecera en Excel.
+  hoja.columns = columnas.map(([clave, cabecera, ancho]) => ({
+    key: clave, width: Math.max(ancho, cabecera.length + 6),
+  }));
   hoja.getCell('A2').value = `${nombre} · ${snapshot.proyecto?.nombre ?? salas[0]?.sala.nombre ?? 'Selección vacía'}`;
   hoja.getCell('A2').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF182338' } };
   hoja.getCell('A3').value = 'Revisión'; hoja.getCell('B3').value = snapshot.revision;
@@ -265,7 +276,7 @@ function salasUnicas(salas: SalaExportada[]): SalaExportada[] {
 function etiquetaSala(sala: SalaExportada): string {
   return [sala.sala.codigo, sala.sala.nombre].filter(Boolean).join(' · ');
 }
-function sumaConocida(importes: Array<number | null>): number | null {
+export function sumaConocida(importes: Array<number | null>): number | null {
   const conocidos = importes.filter((importe): importe is number => importe != null);
   return conocidos.length ? redondear(conocidos.reduce((total, importe) => total + importe, 0)) : null;
 }

@@ -4,6 +4,8 @@ import { obtenerDatosPlanoSala } from '@/lib/datos-plano';
 import { categoriasDeMobiliario, nombreDePlantilla } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { EditorPlanoSala } from '@/components/plano-editor/editor-plano-sala';
+import { sesionActual } from '@/lib/sesion-servidor';
+import { puedeLeerPlantillas } from '@/lib/plantilla-preview';
 import { OrigenDiagrama } from '@/components/plano-editor/origen-diagrama';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +43,8 @@ export default async function PlanoSala({ params }: PageProps<'/salas/[id]/plano
         salaId={datos.sala.id}
         version={datos.sala.diagrama_version}
         cerrado={datos.cerrado}
+        aforo={datos.sala.aforo}
+        puedePlantillas={puedeLeerPlantillas(await sesionActual())}
       />
     );
   }

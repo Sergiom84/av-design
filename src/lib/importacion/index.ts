@@ -3,3 +3,4 @@ export * from './parser';
 export * from './revision';
 export * from './servicio';
 export * from './coste';
+export * from './seleccion';

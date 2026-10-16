@@ -20,10 +20,13 @@ import { FichaTecnicaArticulo } from '@/components/catalogo-tecnico/ficha-tecnic
 import { puedeUsarFavoritos } from '@/lib/catalogo-favoritos';
 import { esArticuloFavorito } from '@/lib/catalogo-favoritos-repositorio';
 import { BotonFavorito } from '@/components/catalogo-favoritos/boton-favorito';
+import { PlanesRequisitos } from '@/lib/requisitos/planes';
+import { decisionesSchema, uuid, type Decisiones } from '@/lib/requisitos/modelo';
+import type { PrefillRequisito } from '@/components/catalogo-tecnico/ficha-tecnica';
 
 export const dynamic = 'force-dynamic';
 
-export default async function FichaArticulo({ params }: PageProps<'/articulo/[id]'>) {
+export default async function FichaArticulo({ params,searchParams }: PageProps<'/articulo/[id]'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
@@ -36,6 +39,22 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
   ]);
   if (!articulo) notFound();
   const fichaTecnica = await obtenerDatosTecnicos(sql, usuario, id);
+  let requisitoTecnico:PrefillRequisito<Extract<Decisiones,{destino:'tecnico'}>>|undefined;
+  let requisitoPuerto:PrefillRequisito<Extract<Decisiones,{destino:'puerto'}>>|undefined;
+  let errorRequisito=false;
+  const consulta=await searchParams;
+  if(consulta.requisitoPlan){
+    try{
+      const planId=uuid.parse(consulta.requisitoPlan);
+      const plan=await new PlanesRequisitos(sql).obtener(usuario.id,planId);
+      const wrapper=plan.decisiones as {datos?:unknown;revisadoPor?:string};
+      const d=decisionesSchema.parse(wrapper.revisadoPor?wrapper.datos:plan.decisiones);
+      if(plan.estado!=='borrador'||!('articuloId' in d)||d.articuloId!==id)throw new Error('Destino no disponible.');
+      if(d.destino==='tecnico')requisitoTecnico={planId,version:plan.version,decisiones:d};
+      else if(d.destino==='puerto')requisitoPuerto={planId,version:plan.version,decisiones:d};
+      else throw new Error('Destino no disponible.');
+    }catch{errorRequisito=true;}
+  }
   const favorito = puedeUsarFavoritos(usuario) ? await esArticuloFavorito(sql, usuario, id) : null;
 
   const marca = articulo.marca ?? SIN_MARCA;
@@ -88,6 +107,7 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
       )}
 
       {favorito !== null && <div className="mb-6"><BotonFavorito articuloId={articulo.id} inicial={favorito} /></div>}
+      {errorRequisito&&<div className="mb-6"><Aviso>La propuesta del documento ya no está disponible para esta ficha. Abre la revisión actual desde la obra.</Aviso></div>}
 
       <form action={guardarArticulo} className="grid gap-6 xl:grid-cols-2 items-start">
         <input type="hidden" name="id" value={articulo.id} />
@@ -299,10 +319,10 @@ export default async function FichaArticulo({ params }: PageProps<'/articulo/[id
       {/* Fuera del formulario de la ficha: un formulario no puede anidarse. */}
       <div className="mt-6">
         <FichaTecnicaArticulo articuloId={articulo.id} marca={articulo.marca} modelo={articulo.modelo}
-          ficha={fichaTecnica} puedeEditar={permisoCatalogoTecnico(usuario, 'editar')} />
+          key={requisitoTecnico?.planId??articulo.id} ficha={fichaTecnica} puedeEditar={permisoCatalogoTecnico(usuario, 'editar')} requisito={requisitoTecnico} />
       </div>
       <div className="mt-6">
-        <TablaPuertos articuloId={articulo.id} puertos={puertos} />
+        <TablaPuertos articuloId={articulo.id} puertos={puertos} requisito={requisitoPuerto} />
       </div>
 
       {precios.length > 0 && (

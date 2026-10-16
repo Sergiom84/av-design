@@ -1,11 +1,14 @@
-import { ErrorImportacion, type CandidatoImportacion, type DestinoImportacion, type FilaImportacion } from './modelo';
+import { validarSeleccion } from './seleccion';
+import { ErrorImportacion, type CandidatoImportacion, type DestinoImportacion, type FilaImportacion, type PreviewImportacion, type SeleccionFila, type DecisionBomRevisada, type TipoImportado } from './modelo';
 import { claveLiteral, fechaIsoValida, numeroImportado, type FilaLeida } from './parser';
 
-export interface ArticuloParaImportacion {
+export interface ArticuloTecnicoParaImportacion {
   id: string; referencia: string | null; referencia_fabricante: string | null;
   marca: string | null; modelo: string; categoria: string; tipo: string;
-  unidad: 'ud' | 'm'; activo: boolean; revision: number; coste: number | null;
-  coste_orientativo: boolean;
+  unidad: 'ud' | 'm'; activo: boolean; revision: number;
+}
+export interface ArticuloParaImportacion extends ArticuloTecnicoParaImportacion {
+  coste?: number | null; coste_orientativo?: boolean;
 }
 
 export function coincidenciasExactas(datos: Record<string, string>, articulos: ArticuloParaImportacion[]): CandidatoImportacion[] {
@@ -16,7 +19,7 @@ export function coincidenciasExactas(datos: Record<string, string>, articulos: A
   const encontradas = porReferencia.length ? porReferencia : modelo ? articulos.filter(a =>
     claveLiteral(a.modelo) === modelo && claveLiteral(a.marca) === marca && (!categoria || claveLiteral(a.categoria) === categoria)) : [];
   return encontradas.map(a => ({ id: a.id, etiqueta: `${a.marca ?? ''} ${a.modelo}`.trim(),
-    categoria: a.categoria, unidad: a.unidad, activo: a.activo, revision: Number(a.revision) }));
+    categoria: a.categoria, tipo: a.tipo as CandidatoImportacion['tipo'], unidad: a.unidad, activo: a.activo, revision: Number(a.revision) }));
 }
 
 export function revisarFilas(destino: DestinoImportacion, filas: FilaLeida[], articulos: ArticuloParaImportacion[]): FilaImportacion[] {
@@ -95,4 +98,48 @@ export function validarEntrada(destino: unknown, origen: unknown, salaId: unknow
   if (typeof origen !== 'string' || !origen.trim() || origen.length > 500) throw new ErrorImportacion('Indica la procedencia del archivo (máximo 500 caracteres).');
   if (destino === 'bom' && (typeof salaId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(salaId))) throw new ErrorImportacion('Selecciona una sala válida para la BOM.');
   if (destino !== 'bom' && salaId) throw new ErrorImportacion('Sólo la BOM tiene una sala de destino.');
+}
+
+export function revisarDecisionesBom(preview: PreviewImportacion, seleccion: SeleccionFila[], articulos: CandidatoImportacion[], confirmar = false): DecisionBomRevisada[] {
+  const decisiones = validarSeleccion(seleccion, 'bom');
+  const usados = new Set<string>();
+  return decisiones.map(elegida => {
+    const fila = preview.filas.find(f => f.fila === elegida.fila);
+    if (!fila || fila.errores.length || fila.estado === 'rechazada') throw new ErrorImportacion(`Fila ${elegida.fila}: inexistente o rechazada.`);
+    if (elegida.crear || !elegida.articuloId) throw new ErrorImportacion(`Fila ${fila.fila}: elige una referencia de catálogo.`);
+    const destino = articulos.find(a => a.id === elegida.articuloId);
+    if (!destino || !destino.activo) throw new ErrorImportacion(`Fila ${fila.fila}: destino inexistente o inactivo.`);
+    if (destino.unidad !== fila.datos.unidad) throw new ErrorImportacion(`Fila ${fila.fila}: unidad incompatible.`);
+    if (!Number.isInteger(destino.revision) || destino.revision < 0) throw new ErrorImportacion('La revisión del destino no está disponible.', 409);
+    if (confirmar && (elegida.revisionArticulo === undefined || elegida.revisionArticulo !== destino.revision)) throw new ErrorImportacion(`Fila ${fila.fila}: referencia modificada o sin revisión final.`, 409);
+    if (usados.has(destino.id)) throw new ErrorImportacion('Dos filas corresponden a la misma referencia. Elige una.');
+    usados.add(destino.id);
+    let original: CandidatoImportacion | null = null;
+    let tipoOrigen: TipoImportado;
+    let fuenteTipo: DecisionBomRevisada['fuenteTipo'];
+    const alternativa = elegida.alternativa;
+    if (!alternativa) {
+      original = fila.candidatos.find(c => c.id === destino.id) ?? null;
+      if (!original) throw new ErrorImportacion(`Fila ${fila.fila}: revisa una alternativa con motivo y tipo de origen.`);
+      tipoOrigen = original.tipo; fuenteTipo = 'catalogo';
+    } else {
+      if (fila.candidatos.length === 1) {
+        original = fila.candidatos[0];
+        if (alternativa.articuloOriginalId && alternativa.articuloOriginalId !== original.id) throw new ErrorImportacion('Referencia original ajena a la fila.');
+      } else if (fila.candidatos.length > 1) {
+        original = fila.candidatos.find(c => c.id === alternativa.articuloOriginalId) ?? null;
+        if (!original) throw new ErrorImportacion('Identifica primero la referencia original entre las coincidencias ambiguas.');
+      } else if (alternativa.articuloOriginalId) throw new ErrorImportacion('La fila no tiene una referencia original de catálogo.');
+      if (original?.id === destino.id) throw new ErrorImportacion('El mismo artículo no es una alternativa.');
+      tipoOrigen = original ? original.tipo : ['equipo', 'cable', 'consumible'].includes(fila.datos.tipo) ? fila.datos.tipo as TipoImportado : alternativa.tipoOrigen;
+      fuenteTipo = original ? 'catalogo' : ['equipo', 'cable', 'consumible'].includes(fila.datos.tipo) ? 'archivo' : 'confirmado_por_usuario';
+      if (alternativa.tipoOrigen !== tipoOrigen || alternativa.fuenteTipo !== fuenteTipo) throw new ErrorImportacion('El tipo de origen o su procedencia no coinciden con la fuente.');
+    }
+    if (!['equipo', 'cable', 'consumible'].includes(tipoOrigen) || destino.tipo !== tipoOrigen) throw new ErrorImportacion(`Fila ${fila.fila}: tipo de artículo incompatible.`);
+    const cantidad = numeroImportado(fila.datos.cantidad);
+    if (cantidad == null || !Number.isFinite(cantidad) || cantidad <= 0 || cantidad > 1e6 || (destino.unidad === 'ud' && !Number.isInteger(cantidad)) || Math.abs(cantidad * 100 - Math.round(cantidad * 100)) > 1e-6) throw new ErrorImportacion('Cantidad de origen inválida.');
+    return { seleccion: { fila: fila.fila, articuloId: destino.id, revisionArticulo: destino.revision,
+      ...(alternativa ? { alternativa: { ...alternativa, motivo: alternativa.motivo.trim(), articuloOriginalId: original?.id ?? null, tipoOrigen, fuenteTipo } } : {}) },
+      original, destino, cantidad, unidad: destino.unidad, tipoOrigen, fuenteTipo, datosOriginales: { ...fila.datos } };
+  });
 }

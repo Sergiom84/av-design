@@ -227,6 +227,30 @@ export function columnaDeEquipo(
 
 type BocaDiagrama = { puerto: Puerto; ordinal: number };
 
+/** Une las caras reales: el sentido de una conexión no decide dónde está la boca. */
+export function trazarLineaDiagrama(
+  origen: BloqueDiagrama, destino: BloqueDiagrama,
+  primero: { x: number; y: number }, ultimo: { x: number; y: number }, carril = 0,
+): Pick<LineaDiagrama, 'puntos' | 'etiqueta_x' | 'etiqueta_y'> {
+  const signoOrigen = primero.x < origen.x ? -1 : 1;
+  const signoDestino = ultimo.x < destino.x ? -1 : 1;
+  const salida = primero.x + signoOrigen * 18;
+  const llegada = ultimo.x + signoDestino * 18;
+  const enfrentados = signoOrigen !== signoDestino && (llegada - salida) * signoOrigen >= 0;
+  if (enfrentados) {
+    const centro = (salida + llegada) / 2;
+    const canal = Math.max(Math.min(salida, llegada), Math.min(Math.max(salida, llegada), centro + ((carril % 5) - 2) * 12));
+    return { puntos: primero.y === ultimo.y ? [primero, ultimo] : [primero, { x: canal, y: primero.y }, { x: canal, y: ultimo.y }, ultimo], etiqueta_x: canal, etiqueta_y: (primero.y + ultimo.y) / 2 };
+  }
+  // Rodear ambos cuerpos cuando las caras no se miran. Una recta hacia el
+  // otro lado quedaría oculta al pintar encima el bloque del equipo.
+  const inferior = Math.max(origen.y + origen.alto, destino.y + destino.alto) + 18 + carril * 16;
+  return {
+    puntos: [primero, { x: salida, y: primero.y }, { x: salida, y: inferior }, { x: llegada, y: inferior }, { x: llegada, y: ultimo.y }, ultimo],
+    etiqueta_x: (salida + llegada) / 2, etiqueta_y: inferior,
+  };
+}
+
 const claveBoca = (equipoId: string, puertoId: string, ordinal: number) =>
   `${equipoId}:${puertoId}:${ordinal}`;
 
@@ -364,9 +388,8 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
       continue;
     }
 
-    // El cable sale del lado derecho del origen y entra por el izquierdo del
-    // destino. Si el puerto se conoce, a la altura de su fila; si no, a media
-    // cabecera, que se lee como "del equipo en general".
+    // Un puerto conocido manda su cara y su fila. Sólo el legado sin boca
+    // conserva el anclaje genérico derecha → izquierda a media cabecera.
     const fOrigen = c.puerto_origen_id
       ? filaPorBoca.get(claveBoca(c.origen_id, c.puerto_origen_id, c.puerto_origen_ordinal ?? 1))
       : undefined;
@@ -374,37 +397,19 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
       ? filaPorBoca.get(claveBoca(c.destino_id, c.puerto_destino_id, c.puerto_destino_ordinal ?? 1))
       : undefined;
 
-    const x1 = bOrigen.x + bOrigen.ancho + m.largo_conector;
+    const origenIzquierda = fOrigen && bOrigen.entradas.includes(fOrigen.fila);
+    const destinoDerecha = fDestino && bDestino.salidas.includes(fDestino.fila);
+    const x1 = origenIzquierda ? bOrigen.x - m.largo_conector : bOrigen.x + bOrigen.ancho + m.largo_conector;
     const y1 = fOrigen?.fila.y ?? bOrigen.y + m.alto_cabecera / 2;
-    const x2 = bDestino.x - m.largo_conector;
+    const x2 = destinoDerecha ? bDestino.x + bDestino.ancho + m.largo_conector : bDestino.x - m.largo_conector;
     const y2 = fDestino?.fila.y ?? bDestino.y + m.alto_cabecera / 2;
 
     carril += 1;
-    const carrilX =
-      Math.min(x1, x2) +
-      Math.abs(x2 - x1) / 2 +
-      ((carril % 5) - 2) * 12; // cinco carriles repartidos alrededor del centro
-
-    const puntos =
-      y1 === y2
-        ? [
-            { x: x1, y: y1 },
-            { x: x2, y: y2 },
-          ]
-        : [
-            { x: x1, y: y1 },
-            { x: carrilX, y: y1 },
-            { x: carrilX, y: y2 },
-            { x: x2, y: y2 },
-          ];
-
     lineas.push({
       conexion_id: c.id,
       identificador: identificadores.get(c.id) ?? '—',
       senal: c.senal,
-      puntos,
-      etiqueta_x: carrilX,
-      etiqueta_y: Math.min(y1, y2) + Math.abs(y2 - y1) / 2,
+      ...trazarLineaDiagrama(bOrigen, bDestino, { x: x1, y: y1 }, { x: x2, y: y2 }, carril),
     });
   }
 
@@ -415,11 +420,12 @@ export function construirDiagrama(entrada: EntradaDiagrama): EscenaDiagrama {
         (columnasOcupadas.length - 1) * m.separacion_x
       : m.margen * 2;
 
+  const desplazamientoX = Math.max(0, m.margen - Math.min(m.margen, ...lineas.flatMap(l => l.puntos.map(p => p.x)), ...bloques.map(b => b.x - m.largo_conector)));
   return {
-    bloques,
-    lineas,
-    ancho: anchoTotal,
-    alto: Math.max(altoTotal, m.margen * 2),
+    bloques: bloques.map(b => ({ ...b, x: b.x + desplazamientoX })),
+    lineas: lineas.map(l => ({ ...l, puntos: l.puntos.map(p => ({ ...p, x: p.x + desplazamientoX })), etiqueta_x: l.etiqueta_x + desplazamientoX })),
+    ancho: Math.max(anchoTotal, ...lineas.flatMap(l => l.puntos.map(p => p.x + m.margen))) + desplazamientoX,
+    alto: Math.max(altoTotal, m.margen * 2, ...lineas.flatMap(l => l.puntos.map(p => p.y + m.margen))),
     omitidas,
   };
 }

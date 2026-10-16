@@ -433,13 +433,13 @@ describe('la mesa', () => {
 });
 
 describe('cambiar las medidas de la sala', () => {
-  it('encogerla arrastra dentro lo que se queda fuera', () => {
+  it('encogerla conserva las posiciones físicas y deja que la guarda rechace lo que queda fuera', () => {
     const b = cambiarMedidasSala(
       moverEquipo(base(), 'tv', { x_m: 4.5, y_m: 2.4 }),
       { largo_m: 3, ancho_m: 2 },
     );
     const tv = b.equipos.find((e) => e.id === 'tv')!;
-    assert.deepEqual([tv.x_m, tv.y_m], [3, 2]);
+    assert.deepEqual([tv.x_m, tv.y_m], [4.5, 2.4]);
     const t = b.tomas.find((x) => x.id === '12')!;
     assert.deepEqual([t.x_m, t.y_m], [3, 2]);
   });
@@ -1429,11 +1429,11 @@ describe('las puertas del plano', () => {
     assert.equal(afectaAlCalculo(original, borrador), false);
   });
 
-  it('encoger la sala arrastra la puerta para que el hueco siga cabiendo', () => {
+  it('encoger la sala conserva la puerta medida aunque el recinto propuesto ya no la admita', () => {
     let b = editarPuerta(conPuerta(), 'p1', { anchura_m: 0.9, altura_m: 2.1 });
     b = moverPuerta(b, 'p1', 3.8);
     const encogida = cambiarMedidasSala(b, { largo_m: 3 });
-    assert.equal(encogida.puertas[0].posicion_m, 2.1);
+    assert.equal(encogida.puertas[0].posicion_m, 3.8);
   });
 
   it('el guardado devuelve ids reales también para puertas', () => {

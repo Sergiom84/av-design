@@ -1,0 +1,3 @@
+import { resolve } from 'node:path';
+import { defineConfig,devices } from '@playwright/test';
+export default defineConfig({testDir:'.',testMatch:'rea08-servicio.spec.mts',workers:1,retries:0,timeout:60000,expect:{timeout:20000},reporter:[['list'],['json',{outputFile:resolve(process.env.REA08_SALIDA??'output/rea-integracion/rea08/servicio-runtime','chrome-resultados.json')}]],outputDir:resolve(process.env.REA08_SALIDA??'output/rea-integracion/rea08/servicio-runtime','trazas'),use:{...devices['Desktop Chrome'],channel:'chrome',baseURL:'http://localhost:3119',viewport:{width:1440,height:1000},trace:'retain-on-failure',screenshot:'only-on-failure'}});

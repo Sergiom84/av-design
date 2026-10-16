@@ -29,22 +29,35 @@ function crear() {
   });
 }
 
-/** En desarrollo se reutiliza la conexión entre recargas en caliente. */
+/** Un pool por proceso, también entre recargas en caliente de desarrollo. */
 function obtener() {
   const existente = global.__sql;
   if (existente) return existente;
   const nueva = crear();
-  if (process.env.NODE_ENV !== 'production') global.__sql = nueva;
+  global.__sql = nueva;
   return nueva;
 }
 
 // Contexto limitado a una exportación: todas las funciones de lectura existentes
 // usan la misma transacción y no se duplican sus consultas ni normalizadores.
-const lectura = new AsyncLocalStorage<ReturnType<typeof postgres>>();
+export type ConexionDeLectura = ReturnType<typeof postgres> | postgres.TransactionSql<Record<string, unknown>>;
+const lectura = new AsyncLocalStorage<ConexionDeLectura>();
+
+/**
+ * Comparte una transacción de lectura ya abierta con los lectores E1. El
+ * llamante establece aislamiento/ACL y conserva su commit o rollback; aquí
+ * sólo se limita la conexión al callback, también si falla o corre en paralelo.
+ */
+export function conConexionDeLectura<T>(
+  conexion: ConexionDeLectura,
+  leer: () => Promise<T>,
+): Promise<T> {
+  return lectura.run(conexion, leer);
+}
 
 export async function conLecturaConsistente<T>(leer: () => Promise<T>): Promise<T> {
   return obtener().begin('isolation level repeatable read read only', async (transaccion) =>
-    lectura.run(transaccion as unknown as ReturnType<typeof postgres>, leer),
+    lectura.run(transaccion, leer),
   ) as Promise<T>;
 }
 

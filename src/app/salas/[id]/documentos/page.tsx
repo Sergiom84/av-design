@@ -6,6 +6,8 @@ import { Enlace, Estado, Tarjeta } from '@/components/ui';
 import { ExportadorDocumentos } from '@/components/documentos/exportador';
 import { exigirSeccion } from '@/lib/sesion-servidor';
 import { puedeExportarBom } from '@/lib/documentos/seleccion';
+import { puede } from '@/lib/usuarios';
+import { PanelRevisionesDiseno } from '@/components/revisiones-diseno/panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +18,9 @@ export default async function DocumentosSala({
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const { id } = await params;
-  const sala = await obtenerSalaCabecera(id);
-  if (!sala) notFound();
   const yo = await exigirSeccion('salas');
+  const sala = await obtenerSalaCabecera(id, puede(yo.permisos, 'proyectos', 'ver'));
+  if (!sala) notFound();
 
   // Literales de plantilla sin cast: typedRoutes valida cada destino.
   const entregables = [
@@ -47,7 +49,20 @@ export default async function DocumentosSala({
 
   return (
     <div className="space-y-6">
+    <PanelRevisionesDiseno salaId={sala.id} puedeEditar={puede(yo.permisos, 'salas', 'editar') && !yo.ficticio}/>
     <ExportadorDocumentos salas={[{id:sala.id,nombre:sala.nombre,codigo:sala.codigo}]} puedeBom={puedeExportarBom(yo.permisos)}/>
+    {!yo.ficticio && !yo.debeCambiarClave && <Tarjeta titulo="Propuestas internas">
+      <p className="mb-3">Prepara el alcance y conserva cada revisión con su PDF.</p>
+      <Enlace href={`/salas/${sala.id}/propuestas`}>Abrir propuestas de la sala</Enlace>
+    </Tarjeta>}
+    {!yo.ficticio && !yo.debeCambiarClave && <Tarjeta titulo="Activos y servicio">
+      <p className="mb-3">Identifica las unidades instaladas y registra incidencias y visitas.</p>
+      <Enlace href={`/salas/${sala.id}/servicio`}>Abrir activos y servicio de la sala</Enlace>
+    </Tarjeta>}
+    {!yo.ficticio && !yo.debeCambiarClave && <Tarjeta titulo="Consulta local">
+      <p className="mb-3">Consulta medidas, equipos y conexiones de esta sala con sus fuentes.</p>
+      <Enlace href={`/cuenta/consultas?tipo=sala&id=${sala.id}`}>Abrir consulta técnica de la sala</Enlace>
+    </Tarjeta>}
     <Tarjeta titulo="Entregables">
       <div className="divide-y divide-linea-suave">
         {entregables.map((e) => (

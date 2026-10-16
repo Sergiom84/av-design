@@ -1,3 +1,10 @@
+> **HISTÓRICO · NO EJECUTAR COMO CONTINUACIÓN.** E2 ya está implementada.
+> Desde el 15-10-2026, usa únicamente
+> [PROMPT_CONTINUACION_REA.md](PROMPT_CONTINUACION_REA.md) y los contratos activos
+> [17-integracion-rea.md](17-integracion-rea.md) y
+> [18-rea-cobertura.md](18-rea-cobertura.md). El cuerpo siguiente conserva el
+> encargo original; sus límites de alcance no sustituyen la autorización actual.
+
 # Continuar AV_design con E2
 
 Quiero continuar las mejoras de AV_design basadas en la investigación de

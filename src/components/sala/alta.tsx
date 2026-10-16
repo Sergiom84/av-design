@@ -10,6 +10,9 @@ import {
   type PlantillaSala,
   type Ruta,
 } from '@/lib/tipos';
+import { DimensionesSala } from '@/components/medidas/dimensiones-sala';
+import { VistaPreviaDePlantilla } from '@/components/plantilla/vista-previa';
+import { bloqueosPlantilla, type VistaPreviaPlantilla } from '@/lib/plantilla-preview';
 import type { ProyectoConLocalizaciones } from '@/lib/datos-proyectos';
 
 export type PlantillaConEquipamiento = PlantillaSala & { lineas: LineaPlantilla[] };
@@ -101,6 +104,7 @@ export function AltaDeSala({
   const inicial = plantillas.find((p) => p.id === plantillaInicial);
   const proyectoDePartida = proyectos.find((p) => p.id === proyectoInicial);
 
+  const [vista, setVista] = useState<VistaPreviaPlantilla | null>(null);
   const [plantillaId, setPlantillaId] = useState(inicial?.id ?? '');
   const [borrador, setBorrador] = useState<Borrador>(
     inicial ? desdePlantilla(inicial) : VACIO,
@@ -131,7 +135,7 @@ export function AltaDeSala({
   const codigos = codigo ? serieDeNombres(codigo, copias) : [];
 
   const cambiarPlantilla = (id: string) => {
-    setPlantillaId(id);
+    setVista(null); setPlantillaId(id);
     const p = plantillas.find((x) => x.id === id);
     setBorrador(p ? desdePlantilla(p) : VACIO);
   };
@@ -152,6 +156,7 @@ export function AltaDeSala({
         action={enviarAlta}
         className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0"
       >
+        <input type="hidden" name="huella_plantilla" value={vista?.plantilla.id === plantillaId ? vista.huella : ''} />
       <div className="space-y-6 min-w-0">
         <Tarjeta
           titulo="Origen y serie"
@@ -351,6 +356,10 @@ export function AltaDeSala({
           </div>
         </Tarjeta>
 
+        <VistaPreviaDePlantilla id={plantillaId || null} alRecibir={setVista} contexto={{
+          ...Object.fromEntries(['aforo','largo_m','ancho_m','alto_m','alto_falso_techo_m','mesa_largo_m','mesa_ancho_m','mesa_alto_cm'].map(k => [k, borrador[k as keyof Borrador] === '' ? null : Number(borrador[k as keyof Borrador])])),
+          ruta_por_defecto: borrador.ruta_por_defecto,
+        }} />
         <Tarjeta titulo="Medidas de la sala">
           {sinMedidas && (
             <div className="mb-4">
@@ -362,29 +371,9 @@ export function AltaDeSala({
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(
-              [
-                ['largo_m', 'Largo (m)'],
-                ['ancho_m', 'Ancho (m)'],
-                ['alto_m', 'Alto (m)'],
-                ['alto_falso_techo_m', 'Falso techo (m)'],
-              ] as const
-            ).map(([clave, etiqueta]) => (
-              <Campo key={clave} etiqueta={etiqueta}>
-                <input
-                  name={clave}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={borrador[clave]}
-                  onChange={campo(clave)}
-                  className="w-full num"
-                />
-              </Campo>
-            ))}
-          </div>
-
+          <DimensionesSala key={plantillaId || 'sin-plantilla'} valores={{ largo_m: borrador.largo_m ? Number(borrador.largo_m) : null, ancho_m: borrador.ancho_m ? Number(borrador.ancho_m) : null, alto_m: borrador.alto_m ? Number(borrador.alto_m) : null }}
+            alCambiar={medidas => setBorrador(v => ({ ...v, largo_m: medidas.largo_m == null ? '' : String(medidas.largo_m), ancho_m: medidas.ancho_m == null ? '' : String(medidas.ancho_m), alto_m: medidas.alto_m == null ? '' : String(medidas.alto_m) }))} />
+          <Campo etiqueta="Falso techo (m)"><input name="alto_falso_techo_m" type="number" step="0.01" min="0" value={borrador.alto_falso_techo_m} onChange={campo('alto_falso_techo_m')} className="w-full num" /></Campo>
           {/*
             La mesa no entra en el cálculo de cable, pero es lo que hace que la
             sala nazca con croquis. La plantilla la trae medida y aquí solo se
@@ -464,7 +453,7 @@ export function AltaDeSala({
           </div>
 
           <div className="mt-4">
-            <Boton disabled={enviando}>
+            <Boton disabled={enviando || Boolean(plantillaId && (!vista || vista.plantilla.id !== plantillaId || bloqueosPlantilla(vista).length))}>
               {enviando
                 ? 'Creando…'
                 : copias === 1
@@ -532,7 +521,7 @@ export function AltaDeSala({
         className="lg:hidden fixed inset-x-0 md:left-64 md:right-0 bottom-0 z-10 border-t border-linea-suave bg-superficie px-4 py-3"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
-        <Boton form="alta-sala" className="w-full min-h-11" disabled={enviando}>
+        <Boton form="alta-sala" className="w-full min-h-11" disabled={enviando || Boolean(plantillaId && (!vista || vista.plantilla.id !== plantillaId || bloqueosPlantilla(vista).length))}>
           {enviando
             ? 'Creando…'
             : copias === 1

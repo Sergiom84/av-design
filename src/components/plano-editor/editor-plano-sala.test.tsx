@@ -166,6 +166,19 @@ const registrar = (e: Editor) => {
   return e;
 };
 
+describe('entradas del recinto antes de guardar',()=>{
+  it('texto inválido bloquea botón, llamada por teclado y conserva el último dato sin escribirlo',async()=>{
+    let llamadas=0;
+    const e=registrar(await editor(async()=>{llamadas++;return{ok:true,version:2,ids:{}};}));
+    const largo=e.m.contenedor.querySelector<HTMLInputElement>('[name="entrada_largo"]')!;
+    await escribir(largo,'7');await esperar();assert.equal(e.boton('Guardar cambios')!.disabled,false);
+    await escribir(largo,'-2');await esperar();assert.equal(e.boton('Guardar cambios')!.disabled,true);
+    await teclear(largo,'s',{ctrlKey:true});await esperar();assert.equal(llamadas,0);assert.equal(largo.value,'-2');
+    await escribir(largo,'7');await esperar();assert.equal(e.boton('Guardar cambios')!.disabled,false);
+    await teclear(largo,'s',{metaKey:true});await esperar(30);assert.equal(llamadas,1);
+  });
+});
+
 after(async () => {
   for (const m of montados) await m.desmontar();
 });

@@ -1,4 +1,5 @@
 import type { Conexion, Puerto, Ruta, Senal } from './tipos';
+import type { AnotacionDiseno, DecisionAnotacion } from './anotaciones-diseno';
 
 export interface ConexionBorrador extends Conexion {
   temporal: boolean;
@@ -26,13 +27,15 @@ export interface EntradaGuardarEditorConexiones {
   versionEsperada: number;
   equipos_alta?: { temporal_id: string; articulo_id: string }[];
   posiciones?: { equipo_id: string; x: number; y: number }[];
+  anotaciones?: AnotacionDiseno[];
+  decisiones_anotaciones?: DecisionAnotacion[];
   altas: AltaConexionEditor[];
   cambios: CambioConexionEditor[];
   bajas: string[];
 }
 
 export type ResultadoGuardarEditorConexiones =
-  | { ok: true; version: number; ids: Record<string, string>; equipos_ids?: Record<string, string> }
+  | { ok: true; version: number; ids: Record<string, string>; equipos_ids?: Record<string, string>; anotaciones_ids?: Record<string, string>; identificadores_cable?: Record<string, string> }
   | { ok: false; motivo: 'conflicto' | 'ajeno' | 'invalido' | 'cerrado' | 'no_existe'; detalle: string };
 
 export type GuardarEditorConexiones = (

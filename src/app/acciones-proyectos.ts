@@ -6,6 +6,8 @@ import { sql } from '@/lib/db';
 import { LOCALIZACION_SIN_ASIGNAR } from '@/lib/datos-proyectos';
 import { exigirEdicion } from '@/lib/sesion-servidor';
 import { codigoLibreDeProyecto } from '@/lib/nombres-proyecto';
+import { esUuid } from '@/lib/uuid';
+import { crearLocalizacionEnTransaccion, ErrorJerarquia } from '@/lib/jerarquia-transaccional';
 
 const texto = (v: FormDataEntryValue | null): string | null => {
   const s = v == null ? '' : String(v).trim();
@@ -98,11 +100,13 @@ export async function crearLocalizacion(datos: FormData) {
   const proyectoId = texto(datos.get('proyecto_id'));
   const nombre = texto(datos.get('nombre'));
   if (!proyectoId || !nombre) return;
-  if (await proyectoCerrado(proyectoId)) return;
-  await sql`
-    insert into localizaciones (proyecto_id, nombre)
-    values (${proyectoId}, ${nombre})
-    on conflict (proyecto_id, nombre) do nothing`;
+  try {
+    await sql.begin(tx => crearLocalizacionEnTransaccion(tx, proyectoId, nombre));
+  } catch (error) {
+    // Conserva el no-op de duplicado/cierre; ahora se comprueba tras esperar la obra.
+    if (error instanceof ErrorJerarquia) return;
+    throw error;
+  }
   revalidatePath('/proyectos');
   revalidatePath('/proyectos/[id]', 'page');
 }
@@ -131,7 +135,14 @@ export async function borrarProyecto(datos: FormData) {
   const id = texto(datos.get('id'));
   if (!id) return;
   if (await proyectoCerrado(id)) return;
-  await sql`delete from proyectos where id = ${id}`;
+  try {
+    await sql`delete from proyectos where id = ${id}`;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === '23503') {
+      return { error: 'La obra conserva registros vinculados y debe mantener su historial. No se ha borrado nada.' };
+    }
+    throw error;
+  }
   revalidatePath('/proyectos');
   revalidatePath('/salas');
   redirect('/proyectos');
@@ -143,39 +154,31 @@ export async function borrarProyecto(datos: FormData) {
  * proyecto de Barcelona no puede seguir diciendo Madrid. Al soltarla del
  * proyecto conserva la sede que tenía, que sigue siendo verdad.
  */
-async function proyectoCerradoDeSala(salaId: string): Promise<boolean> {
-  const [f] = await sql<Array<{ cerrado: boolean }>>`
-    select exists (
-      select 1 from hitos_proyecto h
-      join localizaciones l on l.proyecto_id = h.proyecto_id
-      join salas s on s.localizacion_id = l.id
-      where s.id = ${salaId} and h.tipo = 'cierre'
-    ) as cerrado`;
-  return Boolean(f?.cerrado);
-}
-
 export async function asignarSalaALocalizacion(datos: FormData) {
   await exigirEdicion('proyectos');
   const salaId = texto(datos.get('sala_id'));
-  if (!salaId) return;
-  // La obra de origen también está cerrada de solo lectura: mover o soltar
-  // una sala de ella es tocar su estructura igual que borrarla.
-  if (await proyectoCerradoDeSala(salaId)) return;
+  if (!salaId || !esUuid(salaId)) return;
   const localizacionId = texto(datos.get('localizacion_id'));
-  if (localizacionId) {
-    const [loc] = await sql<Array<{ proyecto_id: string }>>`
-      select proyecto_id from localizaciones where id = ${localizacionId}`;
-    if (!loc || (await proyectoCerrado(loc.proyecto_id))) return;
-    await sql`
-      update salas set
-        localizacion_id = ${localizacionId},
-        sede_id = (select p.sede_id from localizaciones l
-                   join proyectos p on p.id = l.proyecto_id
-                   where l.id = ${localizacionId})
-      where id = ${salaId}`;
-  } else {
-    await sql`update salas set localizacion_id = null where id = ${salaId}`;
-  }
+  if(localizacionId && !esUuid(localizacionId))return;
+  await sql.begin(async tx=>{
+    // La sala siempre va primero; los proyectos se bloquean porID para que
+    // dos traslados opuestos mantengan el mismo orden entre ellos.
+    const [sala]=await tx`select id,localizacion_id from salas where id=${salaId} for update`;
+    if(!sala)return;
+    const [origen]=sala.localizacion_id ? await tx`select proyecto_id from localizaciones where id=${sala.localizacion_id}` : [];
+    const [destino]=localizacionId ? await tx`select proyecto_id from localizaciones where id=${localizacionId}` : [];
+    if(localizacionId && !destino)return;
+    const ids=[...new Set([origen?.proyecto_id,destino?.proyecto_id].filter((id):id is string=>typeof id==='string'))].sort();
+    if(ids.length)await tx`select id from proyectos where id in ${tx(ids)} order by id for update`;
+    // Leer DESPUÉS de esperar: el cierre confirmado ya debe ser visible.
+    const cierres=ids.length ? await tx`select proyecto_id from hitos_proyecto where proyecto_id in ${tx(ids)} and tipo='cierre'` : [];
+    if(cierres.length)return;
+    if(localizacionId) {
+      const [actual]=await tx`select p.id,p.sede_id from localizaciones l join proyectos p on p.id=l.proyecto_id where l.id=${localizacionId}`;
+      if(!actual || actual.id!==destino.proyecto_id)return;
+      await tx`update salas set localizacion_id=${localizacionId},sede_id=${actual.sede_id} where id=${salaId}`;
+    } else await tx`update salas set localizacion_id=null where id=${salaId}`;
+  });
   revalidatePath('/proyectos');
   revalidatePath('/proyectos/[id]', 'page');
   revalidatePath('/salas');

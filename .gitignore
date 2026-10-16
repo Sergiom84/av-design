@@ -21,6 +21,10 @@
 /.next-e2-importacion/
 /.next-e2-reanudacion/
 /.next-e2-build/
+/.next-e3-revisiones/
+/.next-e3-build/
+/.next-rea-integracion/
+/.next-rea-build/
 /.playwright-cli/
 /out/
 
@@ -59,6 +63,11 @@ next-env.d.ts
 
 # ficheros de trabajo: volcados, informes intermedios, copias de la base
 /.tmp/
+/.next-rea01-integracion/
+/.next-rea02-integracion/
+/.next-rea03-integracion/
+/.next-rea04-integracion/
+/.next-rea06-integracion/
 
 # artefactos del E2E multiagente (docs/09-plan-visual-y-e2e.md, apartado 7.6): capturas,
 # consola y trazas de cada corrida, fuera del commit a propósito
@@ -67,3 +76,10 @@ next-env.d.ts
 # Resguardo de scripts/mutaciones-lote1.mjs: solo existe mientras corre.
 scripts/.mutacion-en-curso/
 *.ajeno
+
+.next-rea05-integracion/
+.next-rea05-costes-integracion/
+.next-rea07-integracion/
+
+# Tipos Next generados para gates locales; no son fuentes publicables.
+/.next-rea-global-types/

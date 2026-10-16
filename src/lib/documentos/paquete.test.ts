@@ -2,7 +2,7 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { unzipSync, strFromU8 } from 'fflate';
-import { generarPaquete, leerArchivo, leerPaquete } from './paquete';
+import { generarPaquete, leerArchivo, leerPaquete, type EventoPaquete } from './paquete';
 import { PARAMETROS_POR_DEFECTO } from '../tipos';
 import type { SalaExportada, SnapshotExportacion } from './modelo';
 
@@ -19,6 +19,15 @@ const snapshot:SnapshotExportacion={revision:'DOC-regresion-paquete',creadoEn:'2
   articulos:[],parametros:PARAMETROS_POR_DEFECTO,disponibilidad:[]};
 const opciones={papel:'A4',orientacion:'horizontal',escala:50} as const;
 const sha=(b:Uint8Array)=>createHash('sha256').update(b).digest('hex');
+
+it('el manifiesto ZIP conserva la identidad consistente del diseño por sala',async()=>{
+  const copia=structuredClone(snapshot);
+  copia.salas[0].revisionDiseno={estado:'borrador',id:null,numero:null,nombre:null,autor:null,creadoEn:null,hash:'c'.repeat(64),antecedente:null,heredadaDe:null};
+  const m=await generarPaquete(copia,['cables-csv'],opciones,'usuario',()=>{});
+  assert.deepEqual(m.salas[0].revisionDiseno,copia.salas[0].revisionDiseno);
+  const bytes=await leerArchivo(m.id,'paquete.zip',m);assert.ok(bytes);
+  assert.deepEqual(JSON.parse(strFromU8(unzipSync(bytes)['manifiesto.json'])).salas[0].revisionDiseno,copia.salas[0].revisionDiseno);
+});
 
 it('dos salas con código y prefijo de UUID iguales conservan todos los archivos y hashes',async()=>{
   const m=await generarPaquete(snapshot,['cables-csv'],opciones,'usuario',()=>{});
@@ -46,4 +55,40 @@ it('fallo PDF mantiene archivos válidos y no reemplaza el paquete completo ante
   assert.equal(Object.keys(unzipSync(bytes)).length,3);
   const despues=await leerArchivo(completo.id,'paquete.zip',completo);assert.ok(despues);
   assert.equal(sha(despues),sha(antes));
+});
+
+it('progreso secuencial cuenta errores y correctos y termina con la misma revisión',async()=>{
+  const eventos:EventoPaquete[]=[];
+  const m=await generarPaquete(snapshot,['plano','cables-csv'],opciones,'usuario',evento=>eventos.push(evento),
+    async()=>{throw new Error('Fallo simulado');});
+  assert.deepEqual(eventos.map(e=>e.tipo),['inicio','documento','documento','documento','documento','fin']);
+  const inicio=eventos[0];assert.equal(inicio.tipo,'inicio');
+  if(inicio.tipo==='inicio')assert.deepEqual({id:inicio.paquete,revision:inicio.revision},{id:m.id,revision:m.revision});
+  const documentos=eventos.filter(e=>e.tipo==='documento');
+  assert.deepEqual(documentos.map(e=>[e.completados,e.total,e.archivo.estado]),
+    [[1,4,'error'],[2,4,'error'],[3,4,'correcto'],[4,4,'correcto']]);
+  assert.deepEqual(eventos.at(-1),{tipo:'fin',manifiesto:m});
+  for(const a of m.archivos){
+    const archivo=await leerArchivo(m.id,a.nombre,m);
+    if(a.estado==='error')assert.equal(archivo,null);
+    else {assert.ok(archivo);assert.equal(sha(archivo),a.sha256);assert.equal(archivo.length,a.bytes);}
+  }
+});
+
+it('límite de 50 MB identifica el documento fallido y conserva los siguientes documentos',async()=>{
+  const m=await generarPaquete({...snapshot,salas:snapshot.salas.slice(0,1)},['plano','cables-csv'],opciones,
+    'usuario',()=>{},async()=>new Uint8Array(50*1024*1024+1));
+  assert.equal(m.archivos[0].estado,'error');assert.match(m.archivos[0].error!,/50 MB/);
+  assert.equal(m.archivos[1].estado,'correcto');
+  const zip=await leerArchivo(m.id,'paquete.zip',m);assert.ok(zip);
+  assert.deepEqual(Object.keys(unzipSync(zip)).sort(),['manifiesto.json',m.archivos[1].nombre].sort());
+});
+
+it('no mezcla manifiestos de otro paquete y caduca también el acceso directo al archivo',async(t)=>{
+  const m=await generarPaquete(snapshot,['cables-csv'],opciones,'usuario',()=>{});
+  assert.equal(await leerArchivo(m.id,'paquete.zip',{...m,id:'e1000000-0000-4000-8000-000000000099'}),null);
+  assert.equal(await leerArchivo(m.id,'paquete.zip',{...m,caducaEn:'fecha-invalida'}),null);
+  t.mock.method(Date,'now',()=>Date.parse(m.caducaEn));
+  assert.equal(await leerArchivo(m.id,'paquete.zip',m),null);
+  assert.equal(await leerPaquete(m.id,'usuario'),null);
 });

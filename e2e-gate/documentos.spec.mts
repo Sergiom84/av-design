@@ -82,7 +82,13 @@ test.describe.serial('E1 documentación, escritorio antes de móvil', () => {
         return respuesta;
       };
     });
-    await page.goto(`/salas/${f.sala}/documentos`);
+    // Las capas son sólo presentación: la exportación conserva toda la sala.
+    await page.goto(`/salas/${f.sala}/plano`);
+    const capas = page.getByRole('group', { name: 'Capas visibles del plano' });
+    await capas.getByRole('checkbox', { name: 'Equipamiento', exact: true }).uncheck();
+    await expect(capas.getByRole('checkbox', { name: 'Equipamiento', exact: true })).not.toBeChecked();
+    await page.screenshot({ path: resolve(salida, 'e2e-escritorio-filtro-plano.png'), fullPage: true });
+    await page.getByRole('link', { name: 'Documentos', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Paquete de obra', exact: true })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Material XLSX', exact: true })).toBeChecked();
     await page.getByRole('combobox', { name: /^Papel/ }).selectOption('A3');

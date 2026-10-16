@@ -1,3 +1,7 @@
+'use client';
+
+import { useActionState } from 'react';
+import { DimensionesSala } from '@/components/medidas/dimensiones-sala';
 import { Boton, Campo, Enlace, ListaClaveValor, Tarjeta } from '@/components/ui';
 import { guardarSala } from '@/app/acciones';
 import { ETIQUETA_RUTA, type Sala } from '@/lib/tipos';
@@ -25,6 +29,7 @@ export function Medidas({
   editar?: boolean;
   cerrado?: boolean;
 }) {
+  const [estado, guardar, guardando] = useActionState(async (_previo: { error: string | null }, datos: FormData) => guardarSala(datos), { error: null });
   if (!editar || cerrado) {
     return (
       <Tarjeta
@@ -59,8 +64,10 @@ export function Medidas({
 
   return (
     <Tarjeta titulo="Medidas y ruta" acciones={<Enlace href={`/salas/${sala.id}`}>Cancelar</Enlace>}>
-      <form action={guardarSala} className="space-y-3">
+      <form action={guardar} className="space-y-3">
         <input type="hidden" name="id" value={sala.id} />
+        <input type="hidden" name="version_esperada" value={sala.diagrama_version} />
+        {estado.error && <p role="alert">{estado.error}</p>}
         <Campo etiqueta="Nombre">
           <input name="nombre" defaultValue={sala.nombre} className="w-full" />
         </Campo>
@@ -85,38 +92,7 @@ export function Medidas({
           </Campo>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <Campo etiqueta="Largo (m)">
-            <input
-              name="largo_m"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={sala.largo_m || ''}
-              className="w-full"
-            />
-          </Campo>
-          <Campo etiqueta="Ancho (m)">
-            <input
-              name="ancho_m"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={sala.ancho_m || ''}
-              className="w-full"
-            />
-          </Campo>
-          <Campo etiqueta="Alto (m)">
-            <input
-              name="alto_m"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={sala.alto_m || ''}
-              className="w-full"
-            />
-          </Campo>
-        </div>
+        <DimensionesSala valores={{ largo_m: sala.largo_m || null, ancho_m: sala.ancho_m || null, alto_m: sala.alto_m || null }} />
 
         <div className="grid grid-cols-3 gap-2">
           <Campo etiqueta="Falso techo">
@@ -210,7 +186,7 @@ export function Medidas({
           <textarea name="notas" defaultValue={sala.notas ?? ''} rows={3} className="w-full" />
         </Campo>
 
-        <Boton>Guardar</Boton>
+        <Boton disabled={guardando}>Guardar</Boton>
       </form>
     </Tarjeta>
   );

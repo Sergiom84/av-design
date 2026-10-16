@@ -4,6 +4,7 @@ import { sesionActual } from './sesion-servidor';
 import { puede } from './usuarios';
 import type { DestinoImportacion, EntradaImportacion } from './importacion';
 import { ErrorImportacion } from './importacion/modelo';
+import { validarSeleccion } from './importacion/seleccion';
 
 export class ErrorImportacionHttp extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -64,6 +65,8 @@ export function destinoDelFormulario(datos: FormData): DestinoImportacion {
 }
 
 export async function entradaDelFormulario(datos: FormData): Promise<EntradaImportacion> {
+  const permitidos = new Set(['archivo', 'destino', 'origen', 'salaId', 'seleccion', 'previewHash']);
+  for (const clave of datos.keys()) if (!permitidos.has(clave) || datos.getAll(clave).length !== 1) throw new ErrorImportacionHttp('Campos de importación inválidos o repetidos.', 400);
   const archivo = datos.get('archivo');
   if (!(archivo instanceof File) || !archivo.size) throw new ErrorImportacionHttp('Falta el archivo.', 400);
   if (archivo.size > 5 * 1024 * 1024) throw new ErrorImportacionHttp('Máximo 5 MiB.', 413);
@@ -77,9 +80,17 @@ export async function entradaDelFormulario(datos: FormData): Promise<EntradaImpo
   return { destino, salaId, origen, archivo: { nombre: archivo.name, bytes: new Uint8Array(await archivo.arrayBuffer()) } };
 }
 
+export function seleccionDelFormulario(datos: FormData) {
+  let entrada: unknown;
+  try { entrada = JSON.parse(String(datos.get('seleccion') ?? '[]')); }
+  catch { throw new ErrorImportacionHttp('Selección de filas inválida.', 400); }
+  return validarSeleccion(entrada, destinoDelFormulario(datos));
+}
+
 export function respuestaErrorImportacion(error: unknown) {
-  return Response.json({ error: error instanceof Error ? error.message : 'No se pudo completar la importación.' }, {
-    status: error instanceof ErrorImportacionHttp ? error.status : error instanceof ErrorImportacion ? error.estadoHttp : 400,
+  const conocida = error instanceof ErrorImportacionHttp || error instanceof ErrorImportacion;
+  return Response.json({ error: conocida ? error.message : 'Servicio temporalmente no disponible. Prueba de nuevo.' }, {
+    status: error instanceof ErrorImportacionHttp ? error.status : error instanceof ErrorImportacion ? error.estadoHttp : 503,
     headers: { 'Cache-Control': 'no-store' },
   });
 }

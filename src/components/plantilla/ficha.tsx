@@ -3,6 +3,8 @@ import { Tarjeta } from '@/components/ui';
 import type { LineaPlantilla, PlantillaSala, Puerto, TiradaPlantilla } from '@/lib/tipos';
 import { EquipamientoDePlantilla } from './equipamiento';
 import { MedidasDePlantilla } from './medidas';
+import { VistaPreviaDePlantilla } from './vista-previa';
+import { firmaMedidasPlantilla } from '@/lib/longitudes';
 import { TiradasDePlantilla } from './tiradas';
 
 /**
@@ -78,6 +80,7 @@ export function FichaDePlantilla({
 
             {abierta ? (
               <>
+                <VistaPreviaDePlantilla key={JSON.stringify([firmaMedidasPlantilla(p), lineas, tiradas, puertos])} id={p.id} />
                 <EquipamientoDePlantilla plantillaId={p.id} lineas={lineas} orden={orden} />
                 <div className="mt-8">
                   <div className="t-etiqueta mb-2">Tiradas tipo</div>

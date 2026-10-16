@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';
+import {readFile,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {firmarSesion,COOKIE_SESION} from '../src/lib/sesion';
+import {conectarRevisiones,URL_REA_PRUEBA} from './rea07b-fixture.mjs';
+assert.equal(process.env.REA07B_DATABASE_URL,URL_REA_PRUEBA);const f=JSON.parse(await readFile('output/rea-integracion/rea07b/resultados-runtime/navegador-fixture.json','utf8')),d=JSON.parse(await readFile('output/rea-integracion/rea07b/resultados-runtime/chrome-5/durabilidad.json','utf8')),comparar=process.argv.find(a=>a.startsWith('--comparar='))?.slice(11),c=await conectarRevisiones(URL_REA_PRUEBA);
+try{const cookie=await firmarSesion(f.secreto,Date.now()+3600000,f.admin),res=await fetch('http://localhost:3121/api/resultados-propuestas/'+d.idResultado,{headers:{Cookie:COOKIE_SESION+'='+cookie}});assert.equal(res.status,200);const json=await res.json();assert.deepEqual(json.snapshot,d.guardado.snapshot);assert.equal(json.hash,d.guardado.hash);if(comparar){const antes=JSON.parse(await readFile(resolve(comparar),'utf8'));assert.deepEqual(json,antes.respuesta);}
+const sesiones=await c`select application_name,state,count(*)::int as conexiones from pg_stat_activity where datname=current_database() group by 1,2`;const destino=resolve('output/rea-integracion/rea07b/resultados-runtime','durabilidad-http-'+Date.now()+'.json');await writeFile(destino,JSON.stringify({respuesta:json,sesiones,comparadoCon:comparar??'captura Chrome5 antes de reinicio'},null,2));console.log(JSON.stringify({destino,hash:json.hash,sesiones,identico:true}));}finally{await c.end();}

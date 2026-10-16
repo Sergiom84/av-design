@@ -62,7 +62,7 @@ export function ComboboxRemoto({
   etiqueta: string;
   /** De dónde salen los resultados. La señal cancela la petición anterior. */
   buscar: (consulta: string, signal: AbortSignal) => Promise<OpcionCombobox[]>;
-  /** Qué hacer al elegir. `null` = se ha vaciado la elección. */
+  /** Qué hacer al elegir. `null` = elección retirada al editar o vaciar. */
   alElegir?: (opcion: OpcionCombobox | null) => void;
   /**
    * Vaciar la caja después de elegir. Lo usa la biblioteca del plano: allí
@@ -271,6 +271,9 @@ export function ComboboxRemoto({
           className="flex-1 min-w-0"
           onChange={(e) => {
             setTexto(e.target.value);
+            // Teclear ya retira la elección: el padre debe invalidar también
+            // su ID/revisión, aunque todavía no se haya elegido otro resultado.
+            if (elegido) alElegir?.(null);
             setElegido(null);
             if (!abierto) abrir();
             else medir();

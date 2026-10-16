@@ -34,6 +34,7 @@ export function BarraHerramientas({
   alGuardar,
   estado,
   soloLectura,
+  guardadoBloqueado = false,
 }: {
   herramienta: Herramienta;
   alCambiarHerramienta: (h: Herramienta) => void;
@@ -55,6 +56,7 @@ export function BarraHerramientas({
   alGuardar: () => void;
   estado: EstadoGuardado;
   soloLectura: boolean;
+  guardadoBloqueado?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 border-b border-linea-suave">
@@ -132,7 +134,7 @@ export function BarraHerramientas({
               tipo="button"
               variante="principal"
               onClick={alGuardar}
-              disabled={!hayCambios || guardando}
+              disabled={!hayCambios || guardando || guardadoBloqueado}
             >
               Guardar cambios
             </Boton>

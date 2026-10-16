@@ -1,7 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { sql } from '@/lib/db';
-import { confirmarImportacion, type SeleccionFila } from '@/lib/importacion';
-import { comprobarOrigen, destinoDelFormulario, entradaDelFormulario, ErrorImportacionHttp, formularioAcotado, respuestaErrorImportacion, usuarioImportacion } from '@/lib/importacion-http';
+import { confirmarImportacion } from '@/lib/importacion';
+import { comprobarOrigen, destinoDelFormulario, entradaDelFormulario, ErrorImportacionHttp, formularioAcotado, respuestaErrorImportacion, seleccionDelFormulario, usuarioImportacion } from '@/lib/importacion-http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const datos = await formularioAcotado(request);
     const yo = await usuarioImportacion(destinoDelFormulario(datos));
     const entrada = await entradaDelFormulario(datos);
-    const seleccion = JSON.parse(String(datos.get('seleccion') ?? '[]')) as SeleccionFila[];
+    const seleccion = seleccionDelFormulario(datos);
     const previewHash = String(datos.get('previewHash') ?? '');
     if (!/^[a-f\d]{64}$/.test(previewHash)) throw new ErrorImportacionHttp('Revisa el archivo antes de confirmar.', 400);
     const fallo = process.env.NODE_ENV === 'development' && process.env.AV_IMPORTACION_PRUEBA === '1'

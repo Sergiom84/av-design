@@ -1,0 +1,17 @@
+import { atenderPlan } from '@/lib/planificacion/http';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export async function GET(request: Request, context: {
+    params: Promise<{
+        id: string;
+    }>;
+}) {
+    return atenderPlan(request, 'trabajo', await context.params);
+}
+export async function PATCH(request: Request, context: {
+    params: Promise<{
+        id: string;
+    }>;
+}) {
+    return atenderPlan(request, 'trabajo', await context.params);
+}

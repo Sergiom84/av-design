@@ -10,6 +10,7 @@ import {
 import { ETIQUETA_SENAL } from '@/lib/tipos';
 import { Tarjeta, Vacio } from '@/components/ui';
 import { DibujoEsquema } from './dibujo-esquema';
+import { LeyendaDiseno } from './leyenda-diseno';
 
 /**
  * El esquema de conexiones dentro de la ficha de sala: el dibujo de bloques
@@ -177,6 +178,7 @@ export function EsquemaSala({
             )}
           </div>
           <DibujoEsquema escena={escena} />
+          <LeyendaDiseno equipos={entrada.equipos} conexiones={entrada.conexiones.filter(c => senalEnFiltro(c.senal, filtroSenal))} categorias={entrada.categoriaArticulo} />
         </>
       )}
     </Tarjeta>

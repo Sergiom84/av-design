@@ -1,5 +1,5 @@
 /**
- * Cada pestaña de la ficha tiene ruta, y cada ruta tiene pestaña.
+ * Cada pestaña tiene ruta y cada ruta se alcanza desde una pestaña.
  *
  * `next build` con `typedRoutes` caza el enlace a una ruta que no existe, pero
  * no caza lo contrario: una ruta que existe y a la que no lleva ninguna
@@ -23,6 +23,9 @@ import { PESTANAS } from '@/components/sala/lista-pestanas';
 
 const FICHA = fileURLToPath(new URL('../app/salas/[id]/', import.meta.url));
 const BARRA = fileURLToPath(new URL('../components/sala/pestanas.tsx', import.meta.url));
+// Las propuestas son documentos de la sala. Se abren desde Documentos sin
+// añadir otra pestaña; el barrido comprueba también ese enlace concreto.
+const RUTAS_SECUNDARIAS: Record<string, string> = { propuestas: 'documentos', servicio: 'documentos' };
 
 /** Los segmentos que de verdad tienen página bajo `salas/[id]/`. */
 function segmentosConRuta(): string[] {
@@ -61,11 +64,21 @@ describe('las pestañas de la ficha de sala', () => {
     }
   });
 
-  it('ninguna ruta de la ficha se queda sin pestaña que lleve a ella', () => {
+  it('ninguna ruta de la ficha se queda sin acceso desde una pestaña', () => {
     const enBarra = new Set<string>(
       PESTANAS.map((p) => p.segmento).filter((s) => s !== null),
     );
     for (const segmento of segmentosConRuta()) {
+      const desde = RUTAS_SECUNDARIAS[segmento];
+      if (desde) {
+        assert.ok(enBarra.has(desde), `/${segmento} depende de una pestaña inexistente`);
+        const origen = readFileSync(`${FICHA}${desde}/page.tsx`, 'utf8');
+        assert.ok(
+          origen.includes('href={`/salas/${sala.id}/' + segmento + '`}'),
+          `/${segmento} existe pero /${desde} no enlaza a ella`,
+        );
+        continue;
+      }
       assert.ok(
         enBarra.has(segmento),
         `/${segmento} existe pero ninguna pestaña lleva a ella: es una pantalla inalcanzable`,

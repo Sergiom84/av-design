@@ -189,6 +189,23 @@ const conexion = (p: Partial<Conexion> & Pick<Conexion, 'id'>): Conexion => ({
 });
 
 describe('identificador de cable', () => {
+  test('la etiqueta persistida sobrevive a borrar anteriores, reclasificar señal y cambiar el orden visual', () => {
+    const a = conexion({ id: 'a', identificador_cable: 'HD-1000' });
+    const b = conexion({ id: 'b', identificador_cable: 'HD-1012', creado_en: '2026-08-05T11:00:00.000Z' });
+    assert.equal(identificadoresDeCable([b, a]).get('b'), 'HD-1012');
+    assert.equal(identificadoresDeCable([{ ...b, senal: 'usb' }]).get('b'), 'HD-1012');
+    assert.equal(identificadoresDeCable([{ ...b, senal: 'usb' }, conexion({ id: 'nueva' })]).get('nueva'), 'HD-1013');
+    assert.equal(identificadoresDeCable([b]).get('b'), 'HD-1012');
+  });
+
+  test('una alta de borrador no ocupa una etiqueta persistida aunque llegue primero', () => {
+    const guardada = conexion({ id: 'guardada', identificador_cable: 'HD-1021' });
+    const nueva = conexion({ id: 'nueva', creado_en: null });
+    const ids = identificadoresDeCable([nueva, guardada]);
+    assert.equal(ids.get('guardada'), 'HD-1021');
+    assert.equal(ids.get('nueva'), 'HD-1022');
+  });
+
   test('correlativo por señal, arrancando en 1000', () => {
     const ids = identificadoresDeCable([
       conexion({ id: 'c1', senal: 'hdmi', creado_en: '2026-08-05T10:00:00.000Z' }),

@@ -1,6 +1,6 @@
 import { sql } from '@/lib/db';
-import { previsualizarImportacion } from '@/lib/importacion';
-import { comprobarOrigen, destinoDelFormulario, entradaDelFormulario, formularioAcotado, respuestaErrorImportacion, usuarioImportacion } from '@/lib/importacion-http';
+import { previsualizarImportacion, revisarSeleccionImportacion } from '@/lib/importacion';
+import { comprobarOrigen, destinoDelFormulario, entradaDelFormulario, formularioAcotado, respuestaErrorImportacion, seleccionDelFormulario, usuarioImportacion } from '@/lib/importacion-http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     const datos = await formularioAcotado(request);
     await usuarioImportacion(destinoDelFormulario(datos));
     const entrada = await entradaDelFormulario(datos);
-    return Response.json(await previsualizarImportacion(sql, entrada), { headers: { 'Cache-Control': 'no-store' } });
+    const preview = datos.has('seleccion') ? await revisarSeleccionImportacion(sql, entrada, seleccionDelFormulario(datos)) : await previsualizarImportacion(sql, entrada);
+    return Response.json(preview, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return respuestaErrorImportacion(error); }
 }

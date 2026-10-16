@@ -4,7 +4,9 @@ import { leerPaquete } from '@/lib/documentos/paquete';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export async function GET(_request:Request,context:RouteContext<'/api/documentos/[id]'>) {
-  const yo=await sesionActual();
+  let yo;
+  try {yo=await sesionActual();}
+  catch {return Response.json({error:'Servicio temporalmente no disponible. Prueba de nuevo.'},{status:503});}
   if(!yo) return Response.json({error:'Sin sesión.'},{status:401});
   if(yo.debeCambiarClave) return Response.json({error:'Cambia la contraseña provisional.'},{status:403});
   const {id}=await context.params;

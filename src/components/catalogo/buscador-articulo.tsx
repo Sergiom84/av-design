@@ -35,6 +35,7 @@ export function BuscadorArticulo({
   marcador = 'Marca, modelo o sección',
   className = 'w-full sm:w-[22rem]',
   alElegir,
+  alErrorAcceso,
   vaciarAlElegir = false,
 }: {
   etiqueta: string;
@@ -49,6 +50,8 @@ export function BuscadorArticulo({
    * del editor del plano, que da de alta el equipo en el borrador.
    */
   alElegir?: (articulo: ArticuloElegible | null) => void;
+  /** Retira el contexto protegido del formulario ante pérdida de acceso actual. */
+  alErrorAcceso?: () => void;
   vaciarAlElegir?: boolean;
 }) {
   const [elegido, setElegido] = useState('');
@@ -58,6 +61,7 @@ export function BuscadorArticulo({
       const parametros = new URLSearchParams({ q: consulta });
       if (tipo) parametros.set('tipo', tipo);
       const respuesta = await fetch(`/api/catalogo?${parametros}`, { signal });
+      if (!signal.aborted && (respuesta.status === 401 || respuesta.status === 403)) alErrorAcceso?.();
       // Un error del servidor sube y se enseña como error: devolver la
       // lista vacía haría creer que la referencia no está en el catálogo.
       const lista = await leerRespuesta<ArticuloElegible>(respuesta);
@@ -69,7 +73,7 @@ export function BuscadorArticulo({
         articulo: a,
       }));
     },
-    [tipo],
+    [tipo, alErrorAcceso],
   );
 
   return (

@@ -1369,36 +1369,9 @@ export function cambiarMedidasSala(
     aforo: medidas.aforo === undefined ? borrador.aforo : medidas.aforo,
   };
 
-  return {
-    ...base,
-    equipos: base.equipos.map((e) => ({ ...e, ...limitarALaSala(e, base) })),
-    mobiliario: base.mobiliario.map((m) =>
-      m.x_m == null || m.y_m == null
-        ? m
-        : { ...m, ...limitarALaSala({ x_m: m.x_m, y_m: m.y_m, z_m: m.z_m ?? 0 }, base) },
-    ),
-    tomas: base.tomas.map((t) =>
-      t.x_m == null || t.y_m == null
-        ? t
-        : { ...t, ...limitarALaSala({ x_m: t.x_m, y_m: t.y_m, z_m: t.z_m ?? 0 }, base) },
-    ),
-    // Encoger la sala acorta sus paredes: la puerta se arrastra para que el
-    // hueco siga cabiendo, igual que un equipo no se queda en la calle.
-    puertas: base.puertas.map((p) => {
-      const longitud = longitudDePared(p.pared, base);
-      if (!(longitud > 0)) return p;
-      const tope = Math.max(0, longitud - (p.anchura_m ?? 0));
-      return p.posicion_m > tope ? { ...p, posicion_m: alCentimetro(tope) } : p;
-    }),
-    mesa_x_m:
-      base.mesa_x_m == null
-        ? null
-        : limitarALaSala({ x_m: base.mesa_x_m, y_m: base.mesa_y_m ?? 0 }, base).x_m,
-    mesa_y_m:
-      base.mesa_y_m == null
-        ? null
-        : limitarALaSala({ x_m: base.mesa_x_m ?? 0, y_m: base.mesa_y_m }, base).y_m,
-  };
+  // Cambiar el recinto propone medidas; no convierte una posición física
+  // confirmada en otra. La guarda de coordenadas rechazará lo que quede fuera.
+  return base;
 }
 
 export function cambiarMesa(

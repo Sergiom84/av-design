@@ -3,6 +3,8 @@ import { listarPlantillas, listarSedes } from '@/lib/datos';
 import { listarProyectosConLocalizaciones } from '@/lib/datos-proyectos';
 import { SinConfigurar } from '@/components/sin-configurar';
 import { Cabecera, Enlace } from '@/components/ui';
+import { sesionActual } from '@/lib/sesion-servidor';
+import { puedeLeerPlantillas } from '@/lib/plantilla-preview';
 import { AltaDeSala } from '@/components/sala/alta';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +17,10 @@ export const dynamic = 'force-dynamic';
 export default async function NuevaSala({ searchParams }: PageProps<'/salas/nueva'>) {
   if (!hayConfiguracion()) return <SinConfigurar />;
 
+  const permitirPlantillas = puedeLeerPlantillas(await sesionActual());
   const { plantilla, proyecto } = await searchParams;
   const [plantillas, sedes, proyectos] = await Promise.all([
-    listarPlantillas(),
+    permitirPlantillas ? listarPlantillas() : Promise.resolve([]),
     listarSedes(),
     listarProyectosConLocalizaciones(),
   ]);
@@ -34,7 +37,7 @@ export default async function NuevaSala({ searchParams }: PageProps<'/salas/nuev
         plantillas={plantillas}
         sedes={sedes}
         proyectos={proyectos}
-        plantillaInicial={Array.isArray(plantilla) ? plantilla[0] : plantilla}
+        plantillaInicial={permitirPlantillas ? (Array.isArray(plantilla) ? plantilla[0] : plantilla) : undefined}
         proyectoInicial={typeof proyecto === 'string' ? proyecto : undefined}
       />
     </>

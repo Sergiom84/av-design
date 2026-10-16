@@ -6,7 +6,8 @@ import {
   type FiltrosTecnicos, type ProcedenciaTecnica, type UsuarioTecnico,
 } from './catalogo-tecnico';
 
-type BaseTecnica = ReturnType<typeof postgres>;
+type BaseTecnica = postgres.Sql<Record<string, unknown>>;
+export type ConexionTecnica = BaseTecnica | postgres.TransactionSql<Record<string, unknown>>;
 export interface DatosTecnicos extends EntradaDatosTecnicos {
   articulo_id: string;
   verificado_en: string;
@@ -53,8 +54,8 @@ function archivoPublico(fila: Record<string, unknown>): ArchivoTecnico {
     verificado_en: fecha(fila.verificado_en),
   };
 }
-async function comprobarModelo(db: BaseTecnica, articuloId: string, entrada: ProcedenciaTecnica) {
-  const [articulo] = await db<Array<{ marca: string | null; modelo: string }>>`
+async function comprobarModelo(db: ConexionTecnica, articuloId: string, entrada: ProcedenciaTecnica) {
+  const [articulo] = await db`
     select marca, modelo from articulos where id = ${articuloId} for update`;
   if (!articulo) throw new Error('La referencia no existe.');
   if (articulo.marca !== entrada.marca || articulo.modelo !== entrada.modelo) {
@@ -77,19 +78,25 @@ export async function obtenerDatosTecnicos(db: BaseTecnica, usuario: UsuarioTecn
 
 export async function guardarDatosTecnicos(db: BaseTecnica, usuario: UsuarioTecnico, articuloId: string, entrada: unknown): Promise<void> {
   exigir(usuario, 'editar'); identificador(articuloId);
+  datosTecnicosSchema.parse(entrada);
+  await db.begin(tx => guardarDatosTecnicosEnTransaccion(tx, usuario, articuloId, entrada));
+}
+
+/** Mismo escritor E2 dentro de una transacción de procedencia ya autorizada. */
+export async function guardarDatosTecnicosEnTransaccion(tx: postgres.TransactionSql<Record<string, unknown>>,
+  usuario: UsuarioTecnico, articuloId: string, entrada: unknown): Promise<void> {
+  exigir(usuario, 'editar'); identificador(articuloId);
   const datos = datosTecnicosSchema.parse(entrada);
-  await db.begin(async tx => {
-    await comprobarModelo(tx as unknown as BaseTecnica, articuloId, datos);
-    await tx`insert into articulos_tecnicos
-      (articulo_id, marca, modelo, ancho, alto, fondo, unidad, ru, origen, url, fecha, verificado_por)
-      values (${articuloId}, ${datos.marca}, ${datos.modelo}, ${datos.ancho}, ${datos.alto},
-              ${datos.fondo}, ${datos.unidad}, ${datos.ru}, ${datos.origen}, ${datos.url}, ${datos.fecha},
-              ${usuario.ficticio ? null : identificador(usuario.id)})
-      on conflict (articulo_id) do update set marca = excluded.marca, modelo = excluded.modelo,
-        ancho = excluded.ancho, alto = excluded.alto, fondo = excluded.fondo, unidad = excluded.unidad,
-        ru = excluded.ru, origen = excluded.origen, url = excluded.url, fecha = excluded.fecha,
-        verificado_por = excluded.verificado_por, verificado_en = now()`;
-  });
+  await comprobarModelo(tx, articuloId, datos);
+  await tx`insert into articulos_tecnicos
+    (articulo_id, marca, modelo, ancho, alto, fondo, unidad, ru, origen, url, fecha, verificado_por)
+    values (${articuloId}, ${datos.marca}, ${datos.modelo}, ${datos.ancho}, ${datos.alto},
+            ${datos.fondo}, ${datos.unidad}, ${datos.ru}, ${datos.origen}, ${datos.url}, ${datos.fecha},
+            ${usuario.ficticio ? null : identificador(usuario.id)})
+    on conflict (articulo_id) do update set marca = excluded.marca, modelo = excluded.modelo,
+      ancho = excluded.ancho, alto = excluded.alto, fondo = excluded.fondo, unidad = excluded.unidad,
+      ru = excluded.ru, origen = excluded.origen, url = excluded.url, fecha = excluded.fecha,
+      verificado_por = excluded.verificado_por, verificado_en = now()`;
 }
 
 export async function guardarArchivoTecnico(db: BaseTecnica, usuario: UsuarioTecnico, articuloId: string,
@@ -99,7 +106,7 @@ export async function guardarArchivoTecnico(db: BaseTecnica, usuario: UsuarioTec
   // No fiarse del hash/tamaño aportado: comprobar otra vez los bytes que se guardan.
   const validado = await validarArchivoTecnicoCompleto(archivo.bytes, archivo.mime, archivo.nombre, archivo.tipo);
   return await db.begin(async tx => {
-    await comprobarModelo(tx as unknown as BaseTecnica, articuloId, procedencia);
+    await comprobarModelo(tx, articuloId, procedencia);
     const [fila] = await tx<Array<{id: string}>>`insert into articulos_archivos_tecnicos
       (articulo_id, tipo, nombre, mime, tamano_bytes, sha256, bytes, marca, modelo,
        origen, url, fecha, verificado_por)

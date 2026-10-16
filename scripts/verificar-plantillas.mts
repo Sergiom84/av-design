@@ -147,10 +147,16 @@ try {
    * antes del formulario y DEVUELVE el fallo en vez de terminar en silencio.
    * Aqui se le pasa el estado inicial y se recoge lo que devuelve.
    */
-  const altaDeSala = (datos: FormData) =>
-    invocar((d) => crearSala({ error: null }, d), datos) as Promise<
-      { error: string | null } | undefined
-    >;
+  const altaDeSala = async (datos: FormData) => {
+    datos.set('unidad_dimensiones', 'm');
+    const plantillaId = String(datos.get('plantilla_id') ?? '');
+    if (plantillaId) {
+      const { obtenerPlantillaPreview } = await import('../src/lib/datos-plantillas');
+      const vista = await obtenerPlantillaPreview(plantillaId);
+      datos.set('huella_plantilla', vista?.huella ?? '0'.repeat(64));
+    }
+    return invocar((d) => crearSala({ error: null }, d), datos) as Promise<{ error: string | null } | undefined>;
+  };
 
   // ------------------------------------------------- la sala de partida
   const salaId = randomUUID();
@@ -299,9 +305,9 @@ try {
   aSala.set('aforo', '8');
   // El formulario de alta trae las medidas de la plantilla ya rellenas y el
   // técnico las confirma: aquí se simula eso, que es el flujo real.
-  aSala.set('largo_m', String(plantilla.largo_m));
-  aSala.set('ancho_m', String(plantilla.ancho_m));
-  aSala.set('alto_m', String(plantilla.alto_m));
+  aSala.set('entrada_largo', String(plantilla.largo_m));
+  aSala.set('entrada_ancho', String(plantilla.ancho_m));
+  aSala.set('entrada_alto', String(plantilla.alto_m));
   aSala.set('mesa_largo_m', String(plantilla.mesa_largo_m));
   aSala.set('mesa_ancho_m', String(plantilla.mesa_ancho_m));
   aSala.set('mesa_alto_cm', String(plantilla.mesa_alto_cm));
@@ -380,9 +386,9 @@ try {
   aSalaSoloMesa.set('nombre', NOMBRE_SIN_ASIENTOS);
   aSalaSoloMesa.set('tipologia', 'TEST');
   aSalaSoloMesa.set('aforo', '8');
-  aSalaSoloMesa.set('largo_m', '6');
-  aSalaSoloMesa.set('ancho_m', '4');
-  aSalaSoloMesa.set('alto_m', '3');
+  aSalaSoloMesa.set('entrada_largo', '6');
+  aSalaSoloMesa.set('entrada_ancho', '4');
+  aSalaSoloMesa.set('entrada_alto', '3');
   aSalaSoloMesa.set('mesa_largo_m', '2.4');
   aSalaSoloMesa.set('mesa_ancho_m', '1.2');
   aSalaSoloMesa.set('mesa_alto_cm', '73');
@@ -417,9 +423,9 @@ try {
   aSalaMesaPrincipal.set('nombre', NOMBRE_MESA_PRINCIPAL);
   aSalaMesaPrincipal.set('tipologia', 'TEST');
   aSalaMesaPrincipal.set('aforo', '8');
-  aSalaMesaPrincipal.set('largo_m', '6');
-  aSalaMesaPrincipal.set('ancho_m', '4');
-  aSalaMesaPrincipal.set('alto_m', '3');
+  aSalaMesaPrincipal.set('entrada_largo', '6');
+  aSalaMesaPrincipal.set('entrada_ancho', '4');
+  aSalaMesaPrincipal.set('entrada_alto', '3');
   const rechazoMesa = await altaDeSala(aSalaMesaPrincipal);
 
   const [conMesaPrincipal] = await sql<Array<{ id: string }>>`
@@ -493,9 +499,9 @@ try {
     aSalaCarrera.set('copias', '3');
     aSalaCarrera.set('tipologia', 'TEST');
     aSalaCarrera.set('aforo', '8');
-    aSalaCarrera.set('largo_m', '6');
-    aSalaCarrera.set('ancho_m', '4');
-    aSalaCarrera.set('alto_m', '3');
+    aSalaCarrera.set('entrada_largo', '6');
+    aSalaCarrera.set('entrada_ancho', '4');
+    aSalaCarrera.set('entrada_alto', '3');
     rechazoCarrera = await altaDeSala(aSalaCarrera);
   } finally {
     await sql.unsafe(
@@ -569,9 +575,9 @@ try {
   alSalaEncogida.set('aforo', '8');
   // Lo que el técnico ha medido de verdad: la sala es más pequeña que la
   // tipología, y la pantalla de la plantilla cae fuera de la pared.
-  alSalaEncogida.set('largo_m', '4');
-  alSalaEncogida.set('ancho_m', '3');
-  alSalaEncogida.set('alto_m', '3');
+  alSalaEncogida.set('entrada_largo', '4');
+  alSalaEncogida.set('entrada_ancho', '3');
+  alSalaEncogida.set('entrada_alto', '3');
   const rechazoEncogida = await altaDeSala(alSalaEncogida);
 
   const [salasEncogidas] = await sql<Array<{ cuantas: string }>>`
@@ -613,9 +619,9 @@ try {
   alSalaPuertaLejos.set('nombre', NOMBRE_ENCOGIDA + ' puerta');
   alSalaPuertaLejos.set('tipologia', 'TEST');
   alSalaPuertaLejos.set('aforo', '8');
-  alSalaPuertaLejos.set('largo_m', '4');
-  alSalaPuertaLejos.set('ancho_m', '3');
-  alSalaPuertaLejos.set('alto_m', '3');
+  alSalaPuertaLejos.set('entrada_largo', '4');
+  alSalaPuertaLejos.set('entrada_ancho', '3');
+  alSalaPuertaLejos.set('entrada_alto', '3');
   const rechazoPuerta = await altaDeSala(alSalaPuertaLejos);
 
   const [salasPuerta] = await sql<Array<{ cuantas: string }>>`
@@ -654,9 +660,9 @@ try {
   alSalaSinColocar.set('nombre', NOMBRE_SIN_COLOCAR);
   alSalaSinColocar.set('tipologia', 'TEST');
   alSalaSinColocar.set('aforo', '8');
-  alSalaSinColocar.set('largo_m', '4');
-  alSalaSinColocar.set('ancho_m', '3');
-  alSalaSinColocar.set('alto_m', '3');
+  alSalaSinColocar.set('entrada_largo', '4');
+  alSalaSinColocar.set('entrada_ancho', '3');
+  alSalaSinColocar.set('entrada_alto', '3');
   await altaDeSala(alSalaSinColocar);
 
   const [sinColocarCreada] = await sql<Array<{ id: string }>>`

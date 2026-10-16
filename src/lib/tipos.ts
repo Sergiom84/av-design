@@ -468,6 +468,8 @@ export function puertaMedida(p: {
 }
 
 export interface Conexion {
+  /** Etiqueta congelada de la brida; ausente sólo en legado o borrador local. */
+  identificador_cable?: string | null;
   id: string;
   sala_id: string;
   origen_id: string;

@@ -26,6 +26,9 @@ import { PasosDeProyecto } from '@/components/proyecto/pasos';
 import { LocalizacionesDelProyecto } from '@/components/proyecto/localizaciones';
 import { AdopcionDeSalas } from '@/components/proyecto/adopcion';
 import { BorrarProyecto } from '@/components/proyecto/borrar';
+import { sesionActual } from '@/lib/sesion-servidor';
+import { puede } from '@/lib/usuarios';
+import { tieneCapacidadFinanciera } from '@/lib/costes/autorizacion';
 
 const TONO_ESTADO_PROYECTO: Record<EstadoProyecto, TonoEstado> = {
   sin_iniciar: 'neutro',
@@ -55,6 +58,7 @@ export default async function PortadaProyecto({
 
   const { id } = await params;
   const { borrar } = await searchParams;
+  const usuario = await sesionActual();
   const proyecto = await obtenerProyecto(id);
   if (!proyecto) notFound();
 
@@ -95,6 +99,28 @@ export default async function PortadaProyecto({
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Estado tono={TONO_ESTADO_PROYECTO[estado]}>{ETIQUETA_ESTADO_PROYECTO[estado]}</Estado>
         <Enlace href={`/proyectos/${proyecto.id}/documentos`}>Documentos de la obra</Enlace>
+        {usuario && !usuario.ficticio && !usuario.debeCambiarClave &&
+          (['proyectos', 'salas', 'compras'] as const).every(seccion => puede(usuario.permisos, seccion, 'ver')) && (
+          <Enlace href={`/proyectos/${proyecto.id}/requisitos`}>Documentación y requisitos</Enlace>
+        )}
+        <Enlace href={`/proyectos/${proyecto.id}/plan`}>Plan de montaje</Enlace>
+        {usuario && !usuario.ficticio && !usuario.debeCambiarClave && puede(usuario.permisos, 'proyectos', 'editar') && (
+          <Enlace href={`/proyectos/${proyecto.id}/tiempos`}>Tiempos de la obra</Enlace>
+        )}
+        {usuario && !usuario.ficticio && !usuario.debeCambiarClave && puede(usuario.permisos, 'salas', 'ver') && (
+          <>
+            <Enlace href={`/proyectos/${proyecto.id}/propuestas`}>Propuestas internas</Enlace>
+            <Enlace href={`/propuestas/seguimiento?tipo=obra&id=${proyecto.id}`}>Seguimiento de propuestas</Enlace>
+            <Enlace href={`/proyectos/${proyecto.id}/servicio`}>Activos y servicio de la obra</Enlace>
+            <Enlace href={`/cuenta/consultas?tipo=obra&id=${proyecto.id}`}>Consulta técnica de la obra</Enlace>
+          </>
+        )}
+        {usuario && !usuario.ficticio && !usuario.debeCambiarClave && tieneCapacidadFinanciera(usuario) && (
+          <>
+            <Enlace href={`/proyectos/${proyecto.id}/costes`}>Costes registrados de la obra</Enlace>
+            <Enlace href={`/proyectos/${proyecto.id}/resultados`}>Propuestas y costes registrados</Enlace>
+          </>
+        )}
       </div>
 
       <PasosDeProyecto

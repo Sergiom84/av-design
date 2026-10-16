@@ -1,5 +1,26 @@
 # Roadmap · qué queda y en qué orden
 
+> **Publicación autorizada ·16-10-2026.** Sergio autorizó después del cierre local el commit, push de `codex/rea-integracion` y las migraciones necesarias de BD. Neon ya tiene las14 migraciones,104tablas y1357filas previas conservadas. Estado, mejoras y pasos de despliegue en [30-rea-publicacion.md](30-rea-publicacion.md). Render sigue en `main`/`adacf0e`; autoDeploy está activado. Esta autorización sustituye para esta entrega la prohibición Git/BD de los registros anteriores; no incluye merge a main ni despliegue.
+
+
+**16-10-2026 · Integración REA cerrada localmente dentro de sus contratos y límites.** Ronda adicional REA10 aplicada y verificada; catálogo/ofertas HTTP200 y ciclo completo, suite1112/1112, WebpacksinBD/tipos/lint66/diff0 y revisión independiente sin hallazgos. Cierre y trazabilidad en [29-rea-entrega-local.md](29-rea-entrega-local.md), contrato17 y cobertura18. No repetir unidades cerradas ni prompts históricosE2/E3. Sin commit,push,merge,despliegue ni producción; capacidades dependientes del entorno y límites anteriores explícitos en29. Los apartados siguientes conservan sus fechas históricas.
+
+Actualización local 14-10-2026: E3 (AVX-06/07/08/13) incorpora revisiones de
+diseño inmutables, diff/restauración con conflicto y protección de hechos
+operativos, duplicación/comparación de alternativas, organización reversible
+del diagrama lógico y anotaciones/símbolos/leyenda compartidos con E1.
+Corrección F1–F5 comprobada con 9/9 gates del arquitecto y 8/8 regresiones;
+766 pruebas/152 suites, build Webpack sin BD, tipos/lint, E3 4/4, E1 reusado
+3/3 y móvil adicional 1/1 con historial cargado. PDF/XLSX finales aceptados por
+inspectores independientes. E1/E2 se conservan en `codex/e1-e2-local`, base
+`7ba796077ff39e799b9b7eb87109b648c3df5c2d`. E3 permanece sin commit/push,
+merge a main, despliegue ni migraciones de producción. Conservación comprobada:
+642/642 evidencias E1/E2 y 15/15 fuentes protegidas idénticas. Cierre independiente
+F1–F5 y manifiesto Git final archivados, con 29 archivos modificados y 35 nuevos. Ver
+[15-e3-especificacion.md](15-e3-especificacion.md) y
+[16-e3-entrega-local.md](16-e3-entrega-local.md). E4–E8 siguen fuera de alcance;
+las notas E1/E2 y los apartados de agosto de abajo conservan su contexto histórico.
+
 Actualización local 14-10-2026: E2 (AVX-14–16 y AVX-18 personal) implementa
 importación revisable CSV/XLSX de catálogo, BOM adicional de sala y ofertas,
 lotes con procedencia/reversión, datos técnicos con archivos durables y

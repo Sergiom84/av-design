@@ -197,7 +197,7 @@ try {
    * de la guarda" (ver cabecera). Cualquier otro error se relanza: hace
    * fallar el script entero, no una sola comprobación silenciosa.
    */
-  const invocar = async (accion: (d: FormData) => Promise<void>, datos: FormData) => {
+  const invocar = async (accion: (d: FormData) => Promise<unknown>, datos: FormData) => {
     try {
       await accion(datos);
     } catch (e) {
@@ -211,8 +211,8 @@ try {
   };
 
   const filaSala = async (id: string) => {
-    const [f] = await sql<Array<{ nombre: string; largo_m: string }>>`
-      select nombre, largo_m from salas where id = ${id}`;
+    const [f] = await sql<Array<{ nombre: string; largo_m: string; ancho_m: string; alto_m: string; diagrama_version: number }>>`
+      select nombre, largo_m, ancho_m, alto_m, diagrama_version from salas where id = ${id}`;
     return f;
   };
   const filaEquipo = async (id: string) => {
@@ -253,6 +253,9 @@ try {
     const antes = await filaSala(salaCerradaId);
     const fd = new FormData();
     fd.set('id', salaCerradaId);
+    fd.set('unidad_dimensiones', 'm');
+    fd.set('version_esperada', String(antes.diagrama_version));
+    for (const k of ['largo', 'ancho', 'alto'] as const) fd.set(`entrada_${k}`, String(antes[`${k}_m`]));
     fd.set('nombre', 'NOMBRE-COLADO-SALA-CERRADA');
     await invocar(guardarSala, fd);
     const tras = await filaSala(salaCerradaId);
@@ -266,7 +269,11 @@ try {
     const fd = new FormData();
     fd.set('id', salaLegadoId);
     fd.set('nombre', antes.nombre);
-    fd.set('largo_m', '9.99');
+    fd.set('unidad_dimensiones', 'm');
+    fd.set('version_esperada', String(antes.diagrama_version));
+    fd.set('entrada_largo', '9.99');
+    fd.set('entrada_ancho', antes.ancho_m);
+    fd.set('entrada_alto', antes.alto_m);
     await invocar(guardarSala, fd);
     const tras = await filaSala(salaLegadoId);
     afirmar(
@@ -309,7 +316,7 @@ try {
    */
   async function verificarAccionDeEquipo(opciones: {
     etiqueta: string;
-    accion: (d: FormData) => Promise<void>;
+    accion: (d: FormData) => Promise<unknown>;
     /** Construye el FormData de ataque/control para un equipo y sala_id dados. */
     datos: (equipoId: string, salaId: string) => FormData;
     /** `true` si el estado cambió entre `antes` y `tras`. */
@@ -418,7 +425,7 @@ try {
   /** Mismas cuatro comprobaciones que `verificarAccionDeEquipo`, para tomas de red. */
   async function verificarAccionDeToma(opciones: {
     etiqueta: string;
-    accion: (d: FormData) => Promise<void>;
+    accion: (d: FormData) => Promise<unknown>;
     datos: (tomaId: string, salaId: string) => FormData;
     cambio: (antes: FilaToma, tras: FilaToma) => boolean;
   }) {
@@ -525,7 +532,7 @@ try {
   /** Mismas cuatro comprobaciones que `verificarAccionDeEquipo`, para conexiones. */
   async function verificarAccionDeConexion(opciones: {
     etiqueta: string;
-    accion: (d: FormData) => Promise<void>;
+    accion: (d: FormData) => Promise<unknown>;
     datos: (conexionId: string, salaId: string) => FormData;
     cambio: (antes: FilaConexion, tras: FilaConexion) => boolean;
   }) {

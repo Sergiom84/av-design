@@ -1,3 +1,11 @@
+> **HISTÓRICO · NO EJECUTAR COMO CONTINUACIÓN.** E3 ya está implementada localmente;
+> su entrega está en [16-e3-entrega-local.md](16-e3-entrega-local.md).
+> Desde el 15-10-2026, usa únicamente
+> [PROMPT_CONTINUACION_REA.md](PROMPT_CONTINUACION_REA.md) y los contratos activos
+> [17-integracion-rea.md](17-integracion-rea.md) y
+> [18-rea-cobertura.md](18-rea-cobertura.md). El cuerpo siguiente conserva el
+> encargo original; sus límites de alcance no sustituyen la autorización actual.
+
 # Continuar AV_design después de E1 y E2
 
 Quiero continuar AV_design con **E3 — Revisiones, reutilización y editor de

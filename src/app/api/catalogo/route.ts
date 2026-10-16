@@ -3,6 +3,7 @@ import { hayConfiguracion } from '@/lib/db';
 import { sesionActual } from '@/lib/sesion-servidor';
 import { buscarArticulos } from '@/lib/datos';
 import type { TipoArticulo } from '@/lib/tipos';
+import { puede } from '@/lib/usuarios';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,22 +14,26 @@ const TIPOS: TipoArticulo[] = ['equipo', 'cable', 'consumible'];
  * mucho una veintena de referencias, no las novecientas: es la diferencia
  * entre una pantalla que abre en el almacén y una que no.
  *
- * Sin base de datos devuelve la lista vacía en vez de reventar, igual que
- * `SinConfigurar` en las páginas.
+ * La autorización actual se resuelve antes de consultar referencias. Un fallo
+ * de servicio se distingue de una búsqueda correcta sin coincidencias.
  */
 export async function GET(request: NextRequest) {
-  // El middleware ya ha comprobado que la cookie esta firmada y no ha
-  // caducado, pero no que quien la trae siga de alta: alli no hay base de
-  // datos. Se responde 401 y no una redireccion, porque quien llama es un
-  // fetch del buscador, no un navegador que pueda seguirla.
-  const yo = await sesionActual();
-  if (!yo) return new Response('Sin sesion', { status: 401 });
+  const respuesta = (datos: unknown, status = 200) => Response.json(datos, {
+    status,
+    headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' },
+  });
+  try {
+    const yo = await sesionActual();
+    if (!yo) return respuesta({ error: 'Inicia sesión para consultar el catálogo.' }, 401);
+    if (yo.debeCambiarClave || !puede(yo.permisos, 'catalogo', 'ver')) {
+      return respuesta({ error: 'No tienes permiso para consultar el catálogo.' }, 403);
+    }
+    if (!hayConfiguracion()) return respuesta({ error: 'El catálogo no está disponible.' }, 503);
 
-  if (!hayConfiguracion()) return Response.json([]);
-
-  const parametros = request.nextUrl.searchParams;
-  const tipo = TIPOS.find((t) => t === parametros.get('tipo'));
-  const resultados = await buscarArticulos(parametros.get('q') ?? '', tipo);
-
-  return Response.json(resultados);
+    const parametros = request.nextUrl.searchParams;
+    const tipo = TIPOS.find((t) => t === parametros.get('tipo'));
+    return respuesta(await buscarArticulos(parametros.get('q') ?? '', tipo));
+  } catch {
+    return respuesta({ error: 'El catálogo no está disponible.' }, 503);
+  }
 }

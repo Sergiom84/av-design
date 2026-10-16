@@ -1,6 +1,6 @@
 import type { EscenaDiagrama, FilaPuertoDiagrama, BloqueDiagrama } from '@/lib/diagrama';
 import { MEDIDAS_DIAGRAMA } from '@/lib/diagrama';
-import type { Senal } from '@/lib/tipos';
+import { ESTILO_SENAL, simboloPorCategoria } from '@/lib/presentacion-diagrama';
 import { ContenedorTabla } from '@/components/ui';
 
 /**
@@ -18,18 +18,6 @@ import { ContenedorTabla } from '@/components/ui';
  * el esquema se lea igual que la tabla de cables. Tonos con contraste
  * suficiente sobre blanco; el HDMI usa el acento.
  */
-const COLOR_SENAL: Record<Senal, string> = {
-  hdmi: '#3669d9',
-  red: '#298d74',
-  usb: '#7c3aed',
-  audio_linea: '#b45309',
-  audio_altavoz: '#0e7490',
-  microfono: '#be185d',
-  alimentacion: '#b3261e',
-  control: '#57606f',
-  otro: '#57606f',
-};
-
 const TIPO = {
   serigrafia: 10.5,
   conector: 8.5,
@@ -60,11 +48,11 @@ function Puerto({
         y1={fila.y}
         x2={xFuera}
         y2={fila.y}
-        stroke={fila.conectado ? COLOR_SENAL[fila.senal] : 'var(--linea-fuerte)'}
+        stroke={fila.conectado ? ESTILO_SENAL[fila.senal].color : 'var(--linea-fuerte)'}
         strokeWidth={1.25}
       />
       {fila.conectado && (
-        <circle cx={xFuera} cy={fila.y} r={2.5} fill={COLOR_SENAL[fila.senal]} />
+        <circle cx={xFuera} cy={fila.y} r={2.5} fill={ESTILO_SENAL[fila.senal].color} />
       )}
       {/* El tipo de conector, encima del muñón. */}
       {fila.conector && (
@@ -98,9 +86,11 @@ function Puerto({
 function Bloque({ bloque }: { bloque: BloqueDiagrama }) {
   const m = MEDIDAS_DIAGRAMA;
   const yPie = bloque.y + bloque.alto - m.alto_pie;
+  const simbolo = simboloPorCategoria(bloque.categoria);
 
   return (
     <g>
+      <g transform={`translate(${bloque.x + bloque.ancho - 20} ${bloque.y - 24})`} aria-label={simbolo.nombre}><title>{simbolo.nombre}</title><path d={simbolo.forma} fill="none" stroke="var(--tinta)" strokeWidth={1.5} /></g>
       {/* Rótulo de categoría sobre el bloque. */}
       {bloque.categoria && (
         <text
@@ -213,7 +203,8 @@ export function DibujoEsquema({
             <polyline
               points={l.puntos.map((p) => `${p.x},${p.y}`).join(' ')}
               fill="none"
-              stroke={COLOR_SENAL[l.senal]}
+              stroke={ESTILO_SENAL[l.senal].color}
+              strokeDasharray={ESTILO_SENAL[l.senal].trazo}
               strokeWidth={conexionSeleccionada === l.conexion_id ? 4 : 1.5}
               pointerEvents="none"
             />
@@ -224,7 +215,7 @@ export function DibujoEsquema({
               textAnchor="middle"
               fontSize={TIPO.etiquetaCable}
               fontWeight={500}
-              fill={COLOR_SENAL[l.senal]}
+              fill={ESTILO_SENAL[l.senal].color}
               fontFamily="var(--fuente-mono)"
               pointerEvents="none"
             >

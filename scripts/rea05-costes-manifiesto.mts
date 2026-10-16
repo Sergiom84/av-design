@@ -1,0 +1,19 @@
+/** Manifiesto de propiedad y dependencias locales; no lee .env ni modifica fuentes. */
+import { createHash } from 'node:crypto';
+import { existsSync,statSync } from 'node:fs';
+import { readFile,readdir,writeFile } from 'node:fs/promises';
+import { resolve,dirname,relative } from 'node:path';
+const raiz=process.cwd(),salida=process.env.REA05_COSTES_SALIDA??'output/rea-integracion/rea05/costes-runtime';
+async function archivos(dir:string):Promise<string[]>{const filas=await readdir(resolve(raiz,dir),{withFileTypes:true});return (await Promise.all(filas.map(f=>f.isDirectory()?archivos(dir+'/'+f.name):[dir+'/'+f.name]))).flat();}
+const propietarios=[...(await archivos('src/lib/costes')),...(await archivos('src/components/costes')),...(await archivos('src/app/api/costes')),...(await archivos('src/app/proyectos/[id]/costes')),...(await readdir(resolve(raiz,'src/lib'))).filter(f=>/^costes-.*\.test\.ts$/.test(f)).map(f=>'src/lib/'+f),...(await readdir(resolve(raiz,'scripts'))).filter(f=>(/^rea05-costes-.*\.mts$/.test(f)&&f!=='rea05-costes-fixture.mts')||/^verificar-rea05-costes.*\.mts$/.test(f)).map(f=>'scripts/'+f),...(await readdir(resolve(raiz,'e2e-gate'))).filter(f=>/^rea05-costes.*\.(ts|mts)$/.test(f)).map(f=>'e2e-gate/'+f)].sort();
+const visitados=new Set<string>();
+function resolver(desde:string,entrada:string){let base:string;if(entrada.startsWith('@/'))base=resolve(raiz,'src',entrada.slice(2));else if(entrada.startsWith('.'))base=resolve(raiz,dirname(desde),entrada);else return null;const opciones=[base,...(base.endsWith('.mjs')?[base.slice(0,-4)+'.mts',base.slice(0,-4)+'.ts']:[]),...['.ts','.tsx','.mts','.js','.mjs','/index.ts','/index.tsx'].map(e=>base+e)];return opciones.find(p=>existsSync(p)&&statSync(p).isFile())??null;}
+async function visitar(ruta:string){if(visitados.has(ruta))return;visitados.add(ruta);const contenido=await readFile(resolve(raiz,ruta),'utf8');for(const m of contenido.matchAll(/(?:from\s*|import\s*\()(['"])([^'"]+)\1/g)){const p=resolver(ruta,m[2]);if(p&&p.startsWith(raiz+'/'))await visitar(relative(raiz,p));}}
+for(const p of propietarios)await visitar(p);
+for(const p of ['src/app/layout.tsx','src/app/globals.css','src/app/proyectos/layout.tsx','src/middleware.ts'])if(existsSync(resolve(raiz,p)))await visitar(p);
+for(const p of ['db/schema.sql','db/migraciones/2026-10-rea05-tiempos-costes.sql','docs/23-rea05-especificacion.md','docs/25-rea07-especificacion.md','design-system/MASTER.md','package.json','package-lock.json','next.config.ts','tsconfig.json'])visitados.add(p);
+const fuentes=[];for(const ruta of [...visitados].sort()){const bytes=await readFile(resolve(raiz,ruta));fuentes.push({ruta,propietario:propietarios.includes(ruta)?'ejecutor-costes05':'dependencia-solo-lectura',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});}
+const snapshot=JSON.parse(await readFile(resolve(raiz,salida,'snapshot-qa-actual.json'),'utf8')) as {destino:string;manifiesto:string};
+const fuera=[];for(const p of propietarios.filter(p=>p.startsWith('src/'))){const fuente=await readFile(resolve(raiz,p)),copia=await readFile(resolve(snapshot.destino,p));if(!fuente.equals(copia))fuera.push(p);}if(fuera.length)throw new Error('La copia QA difiere en fuentes de producto: '+fuera.join(','));
+const marca=Date.now(),destino=resolve(raiz,salida,'freeze-'+marca+'.json');
+const manifiesto={estado:'congelado_para_revision_independiente',runtimeNode:process.version,fecha:new Date().toISOString(),raiz,propietarios,fuentes,snapshot,paridadProducto:true,limites:'Sólo checkout codex/rea-integracion y BD sintética5559; sin commit/push/deploy/producción.'};await writeFile(destino,JSON.stringify(manifiesto,null,2));console.log(JSON.stringify({destino,propietarios:propietarios.length,fuentes:fuentes.length,paridadProducto:true}));

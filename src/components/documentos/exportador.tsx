@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DOCUMENTOS, type ArchivoDocumento, type ManifiestoExportacion, type OpcionesPdf, type TipoDocumento } from '@/lib/documentos/modelo';
 import { Tarjeta } from '@/components/ui';
 
@@ -19,9 +19,12 @@ export function ExportadorDocumentos({salas,proyectoId,puedeBom}:Props) {
   const [actual,setActual]=useState<ManifiestoExportacion|null>(null);
   const [anterior,setAnterior]=useState<ManifiestoExportacion|null>(null);
   const [error,setError]=useState('');
+  const generacion=useRef(0);
+  const ultimaCompleta=useRef(0);
   const clave=`av-documentos:${proyectoId??salas[0]?.id}`;
   useEffect(()=>{
     let activo=true;
+    const generacionRecuperada=generacion.current;
     const completo=sessionStorage.getItem(clave);
     const id=new URLSearchParams(window.location.search).get('paquete')??completo;
     async function recuperar(paqueteId:string,esActual:boolean) {
@@ -29,11 +32,14 @@ export function ExportadorDocumentos({salas,proyectoId,puedeBom}:Props) {
       if(!activo)return;
       if(respuesta.ok){
         const m=await respuesta.json() as ManifiestoExportacion;
-        if(esActual)setActual(m);
-        if(m.archivos.every(a=>a.estado==='correcto'))setAnterior(m);
+        if(!activo)return;
+        // Una recuperación lenta no sustituye una generación iniciada después.
+        if(esActual&&generacion.current===generacionRecuperada)setActual(m);
+        // Un parcial nuevo sigue permitiendo recuperar el último completo.
+        if(m.archivos.every(a=>a.estado==='correcto')&&ultimaCompleta.current<=generacionRecuperada)setAnterior(m);
       } else {
-        if(paqueteId===completo)sessionStorage.removeItem(clave);
-        if(esActual)setError('El paquete ha caducado o ya no está disponible. Genera una revisión nueva.');
+        if(paqueteId===sessionStorage.getItem(clave))sessionStorage.removeItem(clave);
+        if(esActual&&generacion.current===generacionRecuperada)setError('El paquete ha caducado o ya no está disponible. Genera una revisión nueva.');
       }
     }
     if(id)void recuperar(id,true).catch(()=>{});
@@ -42,6 +48,7 @@ export function ExportadorDocumentos({salas,proyectoId,puedeBom}:Props) {
   },[clave]);
 
   async function generar() {
+    const numeroGeneracion=++generacion.current;
     setGenerando(true);setError('');setArchivos([]);setAvance({completados:0,total:0});
     try {
       const respuesta=await fetch('/api/documentos',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -57,7 +64,7 @@ export function ExportadorDocumentos({salas,proyectoId,puedeBom}:Props) {
           setArchivos(v=>[...v,evento.archivo]);setAvance({completados:evento.completados,total:evento.total});
         } else if(evento.tipo==='fin'){
           const m=evento.manifiesto as ManifiestoExportacion;setActual(m);terminado=true;
-          if(m.archivos.every(a=>a.estado==='correcto')){setAnterior(m);sessionStorage.setItem(clave,m.id);}
+          if(m.archivos.every(a=>a.estado==='correcto')){ultimaCompleta.current=numeroGeneracion;setAnterior(m);sessionStorage.setItem(clave,m.id);}
           const url=new URL(window.location.href);url.searchParams.set('paquete',m.id);window.history.replaceState(null,'',url);
         } else if(evento.tipo==='error')throw new Error(evento.error);
       };

@@ -50,7 +50,22 @@ export function ordenarConexiones(conexiones: Conexion[]): Conexion[] {
 export function identificadoresDeCable(conexiones: Conexion[]): Map<string, string> {
   const siguiente = new Map<Senal, number>();
   const ids = new Map<string, string>();
+  // Los registros guardados llevan etiqueta propia. El cálculo sólo completa
+  // legado y altas del borrador, sin ocupar un correlativo persistido existente.
+  for (const c of conexiones) {
+    if (!c.identificador_cable) continue;
+    ids.set(c.id, c.identificador_cable);
+    for (const senal of Object.keys(PREFIJO_CABLE) as Senal[]) {
+      const prefijo = `${PREFIJO_CABLE[senal]}-`;
+      if (!c.identificador_cable.startsWith(prefijo)) continue;
+      const n = Number(c.identificador_cable.slice(prefijo.length));
+      if (Number.isSafeInteger(n) && n >= PRIMER_CORRELATIVO_CABLE) {
+        siguiente.set(senal, Math.max(siguiente.get(senal) ?? PRIMER_CORRELATIVO_CABLE, n + 1));
+      }
+    }
+  }
   for (const c of ordenarConexiones(conexiones)) {
+    if (ids.has(c.id)) continue;
     const n = siguiente.get(c.senal) ?? PRIMER_CORRELATIVO_CABLE;
     siguiente.set(c.senal, n + 1);
     ids.set(c.id, `${PREFIJO_CABLE[c.senal]}-${n}`);
@@ -140,7 +155,7 @@ export interface EntradaTablaCables {
   equipos: Map<string, EquipoEnSala>;
   tomas: Map<string, TomaRed>;
   puertos: Map<string, Puerto>;
-  articulos: Map<string, Articulo>;
+  articulos: Map<string, Pick<Articulo, 'marca' | 'modelo' | 'senal'>>;
   /** Lo que ha devuelto `calcularConexion()`, indexado por conexión. */
   resultados: Map<string, ResultadoCable>;
 }

@@ -7,6 +7,7 @@ import { montar, pulsar, esperar, type Montaje } from '@/pruebas/dom';
 import { useEditorConexiones, type DatosEditor } from './use-editor-conexiones';
 import type { EntradaGuardarEditorConexiones } from '@/lib/editor-conexiones';
 import type { Puerto } from '@/lib/tipos';
+import { identificadoresDeCable } from '@/lib/cable-schedule';
 
 const puertos: Puerto[] = ['salida', 'entrada'].map((sentido, i) => ({ id: `p${i}`, articulo_id: 'a1', nombre: sentido, total: 2, sentido: sentido as Puerto['sentido'], senal: 'hdmi', conector: 'HDMI', orden: i, notas: null, fuente: 'app' }));
 const equipos: DatosEditor['equipos'] = ['e1', 'e2'].map((id) => ({ id, sala_id: 's1', articulo_id: 'a1', nombre: id, cantidad: 1, extremo: 'mesa', posicion: { x_m: 2, y_m: 3, z_m: 1 }, posicion_confirmada: true, rotacion_grados: 0 }));
@@ -24,6 +25,15 @@ function Harness({ datos }: { datos: DatosEditor }) {
     createElement('button', { onClick: () => actual.anadirEquipo({ id: 'a1', etiqueta: 'Nuevo', categoria: 'Video', unidad: 'ud' }) }, 'Añadir'),
     createElement('button', { onClick: actual.guardarTodo }, 'Guardar'),
     createElement('button', { onClick: actual.descartar }, 'Descartar'),
+    createElement('button', { onClick: () => actual.setSeleccionEquipos(actual.equipos.map(e => e.id)) }, 'Seleccionar equipos'),
+    createElement('button', { onClick: () => actual.previsualizar('distribuir_vertical') }, 'Previsualizar'),
+    createElement('button', { onClick: actual.aplicarVistaPrevia }, 'Aplicar'),
+    createElement('button', { onClick: actual.cancelarVistaPrevia }, 'Cancelar preview'),
+    createElement('button', { onClick: actual.deshacer }, 'Deshacer'),
+    createElement('button', { onClick: actual.rehacer }, 'Rehacer'),
+    createElement('button', { onClick: () => actual.anadirAnotacion({ texto: 'Adaptador medido', ancla_tipo: 'conexion', ancla_id: actual.actual?.id ?? '', x: null, y: null }) }, 'Nota'),
+    createElement('button', { onClick: actual.quitarConexion }, 'Quitar'),
+    createElement('button', { onClick: () => actual.resolverBaja('conservar') }, 'Conservar'),
   );
 }
 async function iniciar(guardar: DatosEditor['guardar'], extras: Partial<DatosEditor> = {}) {
@@ -93,4 +103,39 @@ test('catálogo actualizado no permite marcar guardada una conexión que ya no c
   assert.equal(editor.borrador[0].temporal, true);
   assert.equal(editor.hayCambios, true);
   assert.match(editor.estado!, /Completa las dos bocas/);
+});
+
+test('vista previa no modifica borrador y aplicar/deshacer/rehacer preservan selección y XYZ', async () => {
+  const recibidas: EntradaGuardarEditorConexiones[] = [];
+  await iniciar(async entrada => { recibidas.push(entrada); return { ok: true, version: 5, ids: {} }; });
+  await clic('Seleccionar equipos'); await clic('Previsualizar');
+  assert.ok(editor.vistaPrevia); assert.equal(editor.hayCambios, false);
+  await clic('Guardar'); assert.equal(recibidas.length, 0);
+  await clic('Cancelar preview'); assert.equal(editor.vistaPrevia, null);
+  await clic('Previsualizar'); const preview = editor.vistaPrevia;
+  await clic('Aplicar'); assert.deepEqual(editor.posiciones, preview); assert.equal(editor.hayCambios, true);
+  await clic('Deshacer'); assert.deepEqual(editor.posiciones, {}); assert.equal(editor.hayCambios, false);
+  await clic('Rehacer'); assert.deepEqual(editor.posiciones, preview);
+  assert.deepEqual(editor.seleccionEquipos, ['e1', 'e2']);
+  assert.deepEqual(editor.equipos[0].posicion, { x_m: 2, y_m: 3, z_m: 1 });
+});
+
+test('anotación de conexión recibe id real y quitar ancla exige conservar antes del guardado', async () => {
+  const recibidas: EntradaGuardarEditorConexiones[] = [];
+  await iniciar(async entrada => { recibidas.push(entrada); return { ok: true, version: 5 + recibidas.length, ids: Object.fromEntries(entrada.altas.map(a => [a.temporal_id, 'c1'])), anotaciones_ids: Object.fromEntries((entrada.anotaciones ?? []).filter(a => a.id.startsWith('nota-')).map(a => [a.id, 'n1'])) }; });
+  await clic('Conectar'); await clic('Nota'); await clic('Guardar');
+  assert.equal(editor.anotaciones[0].id, 'n1'); assert.equal(editor.anotaciones[0].ancla_id, 'c1');
+  await clic('Quitar'); assert.equal(editor.borrador.length, 1); assert.ok(editor.anclaPendiente);
+  await clic('Guardar'); assert.equal(recibidas.length, 1);
+  await clic('Conservar'); assert.equal(editor.borrador.length, 0); assert.equal(editor.anotaciones[0].ancla_tipo, 'sala');
+  await clic('Guardar'); assert.deepEqual(recibidas[1].decisiones_anotaciones, [{ anotacion_id: 'n1', accion: 'conservar' }]);
+  assert.deepEqual(recibidas[1].bajas, ['c1']);
+});
+
+test('al guardar tras una baja el identificador durable del servidor conserva el hueco del correlativo', async () => {
+  await iniciar(async entrada => ({ ok: true, version: 5, ids: Object.fromEntries(entrada.altas.map(a => [a.temporal_id, 'c-nueva'])), identificadores_cable: { 'c-nueva': 'HD-1009' } }));
+  await clic('Conectar'); await clic('Guardar');
+  assert.equal(editor.borrador[0].identificador_cable, 'HD-1009');
+  assert.equal(identificadoresDeCable(editor.borrador).get('c-nueva'), 'HD-1009');
+  assert.equal(editor.hayCambios, false);
 });

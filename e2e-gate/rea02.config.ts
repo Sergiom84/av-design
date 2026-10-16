@@ -1,0 +1,2 @@
+import { defineConfig,devices } from '@playwright/test';
+export default defineConfig({testDir:'.',testMatch:'rea02.spec.mts',fullyParallel:false,workers:1,retries:0,timeout:120000,expect:{timeout:20000},forbidOnly:true,reporter:[['list'],['json',{outputFile:'../output/rea-integracion/rea02/e2e.json'}]],outputDir:'../output/rea-integracion/rea02/trazas',use:{...devices['Desktop Chrome'],channel:'chrome',baseURL:'http://localhost:3112',viewport:{width:1440,height:1000},trace:'retain-on-failure',screenshot:'only-on-failure',actionTimeout:15000}});

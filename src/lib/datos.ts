@@ -694,17 +694,33 @@ export async function listarSedes(): Promise<string[]> {
  * layout de la ficha: las pestañas no pueden pagar equipos y conexiones que
  * no van a pintar.
  */
-export async function obtenerSalaCabecera(id: string): Promise<Sala | null> {
+export type SalaCabecera = Pick<Sala, 'id' | 'nombre' | 'codigo' | 'tipologia' |
+  'sede' | 'localizacion' | 'proyecto'> & {
+    largo_m: number | null; ancho_m: number | null; alto_m: number | null;
+    medidas_heredadas: boolean; origen_sala_id: string | null;
+  };
+export async function obtenerSalaCabecera(id: string, conProyectos = false): Promise<SalaCabecera | null> {
   if (!esUuid(id)) return null;
-  const [fila] = await sql<Fila[]>`
-    select s.*, sd.nombre as sede, l.nombre as localizacion,
-           p.id as proyecto_id, p.nombre as proyecto
+  const [fila] = conProyectos ? await sql<Fila[]>`
+    select s.id, s.nombre, s.codigo, s.tipologia, s.largo_m, s.ancho_m, s.alto_m,
+           s.medidas_heredadas, s.origen_sala_id,
+           sd.nombre as sede, l.nombre as localizacion, p.nombre as proyecto
     from salas s
     left join sedes sd on sd.id = s.sede_id
     left join localizaciones l on l.id = s.localizacion_id
     left join proyectos p on p.id = l.proyecto_id
+    where s.id = ${id}` : await sql<Fila[]>`
+    select s.id, s.nombre, s.codigo, s.tipologia, s.largo_m, s.ancho_m, s.alto_m,
+           s.medidas_heredadas, s.origen_sala_id, sd.nombre as sede
+    from salas s left join sedes sd on sd.id = s.sede_id
     where s.id = ${id}`;
-  return fila ? aSala(fila) : null;
+  return fila ? {
+    id: String(fila.id), nombre: String(fila.nombre), codigo: s(fila.codigo),
+    tipologia: s(fila.tipologia), sede: s(fila.sede),
+    localizacion: s(fila.localizacion), proyecto: s(fila.proyecto),
+    largo_m: n(fila.largo_m), ancho_m: n(fila.ancho_m), alto_m: n(fila.alto_m),
+    medidas_heredadas: Boolean(fila.medidas_heredadas), origen_sala_id: s(fila.origen_sala_id),
+  } : null;
 }
 
 export interface SalaCompleta {
@@ -816,6 +832,7 @@ export async function obtenerSala(id: string): Promise<SalaCompleta | null> {
     muebles,
     conexiones: filasConexiones.map((f) => ({
       id: String(f.id),
+      identificador_cable: s(f.identificador_cable),
       sala_id: String(f.sala_id),
       origen_id: String(f.origen_id),
       destino_id: String(f.destino_id),

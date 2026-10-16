@@ -3,6 +3,8 @@ import type { ResultadoCable } from '../calculo-cable';
 import type { FilaCable } from '../cable-schedule';
 import type { Disponibilidad } from '../almacen';
 import type { LineaMaterialBom } from '../compras';
+import type { AnotacionDiseno } from '../anotaciones-diseno';
+import type { ReferenciaRevisionDiseno } from '../revisiones-diseno';
 
 export interface SalaExportada {
   sala: Sala;
@@ -17,6 +19,8 @@ export interface SalaExportada {
   reservas: Array<{ articulo_id: string; cantidad: number }>;
   posicionesEsquema: Record<string, { x: number; y: number }>;
   materialBom?: LineaMaterialBom[];
+  revisionDiseno?: ReferenciaRevisionDiseno;
+  anotacionesDiseno?: AnotacionDiseno[];
 }
 
 export interface SnapshotExportacion {
@@ -61,8 +65,17 @@ export interface ManifiestoExportacion {
   creadoEn: string;
   caducaEn: string;
   proyecto: SnapshotExportacion['proyecto'];
-  salas: Array<{ id: string; nombre: string; codigo: string | null }>;
+  salas: Array<{ id: string; nombre: string; codigo: string | null; revisionDiseno?: ReferenciaRevisionDiseno }>;
   opciones: OpcionesPdf;
   documentos: TipoDocumento[];
   archivos: ArchivoDocumento[];
+}
+
+/** Identidad del diseño, independiente del identificador temporal del paquete. */
+export function etiquetaRevisionDiseno(sala: SalaExportada): string {
+  const r = sala.revisionDiseno;
+  if (!r) return `Versión sala ${sala.sala.diagrama_version}`;
+  return r.estado === 'revision'
+    ? `Revisión ${r.numero}: ${r.nombre} [${r.hash.slice(0, 12)}]`
+    : `Borrador [${r.hash.slice(0, 12)}]${r.antecedente ? `; posterior a revisión ${r.antecedente.numero}: ${r.antecedente.nombre}` : '; sin revisión guardada'}`;
 }

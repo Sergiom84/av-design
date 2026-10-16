@@ -9,6 +9,8 @@ import {
   iniciarDiagramaDesdeCero,
 } from '@/app/acciones-diagrama';
 import { leerRespuesta } from '@/lib/combobox';
+import { VistaPreviaDePlantilla } from '@/components/plantilla/vista-previa';
+import { bloqueosPlantilla, type VistaPreviaPlantilla } from '@/lib/plantilla-preview';
 import type { PlantillaElegible } from '@/lib/datos';
 
 type OpcionPlantilla = OpcionCombobox & { plantilla: PlantillaElegible };
@@ -40,14 +42,19 @@ export function OrigenDiagrama({
   salaId,
   version,
   cerrado,
+  puedePlantillas = true,
+  aforo,
 }: {
   salaId: string;
   version: number;
   cerrado: boolean;
+  puedePlantillas?: boolean;
+  aforo?: number | null;
 }) {
   const router = useRouter();
   const [enCurso, empezar] = useTransition();
   const [elegida, setElegida] = useState<PlantillaElegible | null>(null);
+  const [vista, setVista] = useState<VistaPreviaPlantilla | null>(null);
   const [problema, setProblema] = useState<string | null>(null);
   /**
    * El listado de plantillas no contestó.
@@ -95,10 +102,10 @@ export function OrigenDiagrama({
   };
 
   const aplicar = () => {
-    if (!elegida) return;
+    if (!elegida || !vista || vista.plantilla.id !== elegida.id || bloqueosPlantilla(vista).length) return;
     setProblema(null);
     empezar(async () => {
-      const r = await aplicarPlantillaAlDiagrama(salaId, elegida.id, version);
+      const r = await aplicarPlantillaAlDiagrama(salaId, elegida.id, version, vista.huella);
       if (r.ok) return router.refresh();
       setProblema(r.detalle);
     });
@@ -157,7 +164,7 @@ export function OrigenDiagrama({
           </Boton>
         </section>
 
-        <section className="border border-linea rounded-md p-4">
+        {puedePlantillas && <section className="border border-linea rounded-md p-4">
           <h3 className="t-subtitulo mb-2">Desde una plantilla</h3>
           <p className="mb-4 text-tinta-tenue">
             Copia medidas, mesa, mobiliario, equipos, giros y tiradas de la tipología.
@@ -172,7 +179,7 @@ export function OrigenDiagrama({
             nombreColeccion={['plantilla', 'plantillas']}
             vacio="Sin plantillas que coincidan"
             mensajeInvalido="Elige una plantilla de la lista."
-            alElegir={(o) => setElegida(o ? (o as OpcionPlantilla).plantilla : null)}
+            alElegir={(o) => { setVista(null); setElegida(o ? (o as OpcionPlantilla).plantilla : null); }}
           />
 
           {elegida && (
@@ -190,17 +197,18 @@ export function OrigenDiagrama({
             </dl>
           )}
 
+          <div className="mt-4"><VistaPreviaDePlantilla id={elegida?.id ?? null} alRecibir={setVista} contexto={aforo === undefined ? undefined : { aforo }} /></div>
           <div className="mt-4">
             <Boton
               tipo="button"
               variante="principal"
               onClick={aplicar}
-              disabled={!elegida || enCurso}
+              disabled={!elegida || !vista || vista.plantilla.id !== elegida.id || bloqueosPlantilla(vista).length > 0 || enCurso}
             >
               Aplicar plantilla
             </Boton>
           </div>
-        </section>
+        </section>}
       </div>
     </Tarjeta>
   );

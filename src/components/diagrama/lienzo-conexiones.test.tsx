@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { act, createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import { montar, pulsar, teclear } from '@/pruebas/dom';
 import { LienzoConexiones } from './lienzo-conexiones';
 import { bloquesDelLienzo, puntoDeBoca } from '@/lib/lienzo-conexiones';
@@ -98,4 +99,44 @@ it('distingue equipos iguales, rechaza unidades agrupadas y no ensucia por clic 
     await act(async () => { cabecera.dispatchEvent(new W.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 10 })); cabecera.dispatchEvent(new W.MouseEvent('pointerup', { bubbles: true, clientX: 10, clientY: 10 })); });
     assert.deepEqual(movimientos, []);
   } finally { await m.desmontar(); }
+});
+
+it('matriz con 100 conexiones mantiene bocas, etiquetas y selección accesibles al reorganizar', async () => {
+  const grandes: EquipoEnSala[] = Array.from({ length: 15 }, (_, i) => ({ ...equipos[0], id: `g${i}`, articulo_id: `a${i}`, nombre: `Equipo ${i}` }));
+  const puertosGrandes: Puerto[] = grandes.flatMap((eq, i) => ['entrada', 'salida'].map((sentido, j) => ({ ...puertos[0], id: `p${i}-${j}`, articulo_id: eq.articulo_id, nombre: j ? 'OUT' : 'IN', sentido: sentido as Puerto['sentido'], total: 24 })));
+  const conexiones: Conexion[] = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, sala_id: 's', origen_id: `g${Math.floor(i / 12)}`, destino_id: `g${Math.floor(i / 12) + 1}`, puerto_origen_id: `p${Math.floor(i / 12)}-1`, puerto_origen_ordinal: i % 12 + 1, puerto_destino_id: `p${Math.floor(i / 12) + 1}-0`, puerto_destino_ordinal: i % 12 + 1, articulo_cable_id: null, senal: 'hdmi', ruta: null, longitud_manual_m: null, notas: null }));
+  const elegidas: string[] = []; const equiposElegidos: string[] = [];
+  const props = { equipos: grandes, puertos: puertosGrandes, conexiones, posiciones: {}, onMover() {}, onConectar() {}, onSeleccionarConexion: (id: string) => elegidas.push(id), onSeleccionarEquipo: (id: string) => equiposElegidos.push(id), conexionSeleccionada: 'c99', bloqueado: false, seleccionEquipos: ['g0'] };
+  const m = await montar(createElement(LienzoConexiones, props));
+  try {
+    assert.equal(m.contenedor.querySelectorAll('[aria-label^="Seleccionar cable "]').length, 100);
+    assert.equal(m.contenedor.querySelectorAll('svg[aria-label="Cables del esquema"] text').length, 100);
+    assert.equal(m.contenedor.querySelectorAll('[data-boca^="g0:"]').length, 48);
+    assert.equal(m.contenedor.querySelectorAll('input[type="checkbox"]').length, 15);
+    assert.equal(m.contenedor.querySelectorAll('input:checked').length, 1);
+    const cable = [...m.contenedor.querySelectorAll('[aria-label^="Seleccionar cable "]')].at(-1)!;
+    await teclear(cable, 'Enter'); assert.deepEqual(elegidas, ['c99']);
+    await pulsar(m.contenedor.querySelector('[aria-label="Seleccionar equipo Equipo 0"]')!); assert.deepEqual(equiposElegidos, ['g0']);
+    await m.repintar(createElement(LienzoConexiones, { ...props, posiciones: { g0: { x: 900, y: 500 } } }));
+    assert.equal(m.contenedor.querySelector('[aria-label^="Seleccionar cable "][aria-pressed="true"]')?.getAttribute('aria-label'), cable.getAttribute('aria-label'));
+    assert.equal(m.contenedor.querySelectorAll('input:checked').length, 1);
+  } finally { await m.desmontar(); }
+});
+
+it('el título SVG de cable hidrata desde HTML de servidor sin diferencias de nodos de texto', async () => {
+  const conexiones: Conexion[] = [{ id: 'c1', sala_id: 's', origen_id: 'e0', destino_id: 'e1', puerto_origen_id: 'p0', puerto_origen_ordinal: 1, puerto_destino_id: 'p1', puerto_destino_ordinal: 2, articulo_cable_id: null, senal: 'hdmi', ruta: null, longitud_manual_m: null, notas: null }];
+  const elemento = createElement(LienzoConexiones, { equipos, puertos, conexiones, posiciones: {}, onMover() {}, onConectar() {}, onSeleccionarConexion() {}, conexionSeleccionada: 'c1', bloqueado: false });
+  const m = await montar(createElement('div'));
+  const contenedor = m.documento.createElement('div'); m.documento.body.append(contenedor);
+  contenedor.innerHTML = renderToString(elemento);
+  const { hydrateRoot } = await import('react-dom/client');
+  const errores: unknown[] = [];
+  let raiz: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => { raiz = hydrateRoot(contenedor, elemento, { onRecoverableError: error => errores.push(error) }); });
+    assert.deepEqual(errores, []);
+    assert.equal(contenedor.querySelector('svg[aria-label="Cables del esquema"] title')?.textContent, 'HD-1000 · Cámara → Pantalla');
+  } finally {
+    await act(async () => { raiz?.unmount(); }); await m.desmontar();
+  }
 });

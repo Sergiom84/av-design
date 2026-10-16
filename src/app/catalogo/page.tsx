@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { CatalogoPreferido } from '@/components/preferencias/catalogo-preferido';
+import { exigirSeccion } from '@/lib/sesion-servidor';
 import { hayConfiguracion } from '@/lib/db';
 import { listarMarcas } from '@/lib/datos';
 import { SinConfigurar } from '@/components/sin-configurar';
@@ -15,6 +17,7 @@ const ETIQUETA_TIPO: Record<string, string> = {
 };
 
 export default async function Catalogo({ searchParams }: PageProps<'/catalogo'>) {
+  const yo=await exigirSeccion('catalogo','ver');
   if (!hayConfiguracion()) return <SinConfigurar />;
 
   const p = await searchParams;
@@ -33,6 +36,7 @@ export default async function Catalogo({ searchParams }: PageProps<'/catalogo'>)
         acciones={<><Enlace href="/catalogo/importar">Importar catálogo u ofertas</Enlace><Enlace href="/articulo/nuevo">Añadir referencia</Enlace></>}
       />
 
+      <div className="mb-6"><CatalogoPreferido ficticio={yo.ficticio}/></div>
       <div className="mb-6"><BuscadorTecnico /></div>
       <div className="mb-6"><FavoritosCatalogo /></div>
 

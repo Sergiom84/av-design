@@ -13,8 +13,9 @@ import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { createElement } from 'react';
 
-import { montar, esperar, moverFoco, pulsar, teclear, type Montaje } from '@/pruebas/dom';
+import { montar, esperar, moverFoco, pulsar, teclear, escribir, type Montaje } from '@/pruebas/dom';
 import { ComboboxRemoto, type OpcionCombobox } from './combobox-remoto';
+import { BuscadorArticulo } from './buscador-articulo';
 
 const OPCIONES: OpcionCombobox[] = [
   { id: '1', etiqueta: 'Samsung QB65R', detalle: 'PANTALLAS' },
@@ -140,6 +141,79 @@ describe('el combobox con un fallo de red', () => {
 });
 
 describe('el DOM del combobox con resultados', () => {
+  it('notifica pérdida de acceso401/403 y distingue el fallo de servicio', async () => {
+    const fetchAnterior = globalThis.fetch;
+    try {
+      for (const estado of [401, 403, 503]) {
+        let retiradas = 0;
+        globalThis.fetch = async () => new Response(null, { status: estado });
+        const m = await montar(createElement(BuscadorArticulo, { etiqueta: 'Artículo', alErrorAcceso: () => { retiradas++; } }));
+        try {
+          await moverFoco(null, m.contenedor.querySelector('input[role=combobox]') as HTMLInputElement);
+          await esperar(TRAS_LA_ESPERA_MS);
+          assert.equal(retiradas, estado === 503 ? 0 : 1);
+          assert.equal(m.contenedor.querySelectorAll('[role=option]').length, 0);
+        } finally { await m.desmontar(); }
+      }
+    } finally { globalThis.fetch = fetchAnterior; }
+  });
+
+  it('una búsqueda cancelada no retira el contexto por un401 tardío', async () => {
+    const fetchAnterior = globalThis.fetch;
+    let terminar!: (r: Response) => void;
+    const pendiente = new Promise<Response>(r => { terminar = r; });
+    let llamadas = 0, retiradas = 0;
+    globalThis.fetch = async () => ++llamadas === 1 ? pendiente : Response.json([]);
+    const m = await montar(createElement(BuscadorArticulo, { etiqueta: 'Artículo', alErrorAcceso: () => { retiradas++; } }));
+    try {
+      const campo = m.contenedor.querySelector('input[role=combobox]') as HTMLInputElement;
+      await moverFoco(null, campo); await esperar(TRAS_LA_ESPERA_MS);
+      await escribir(campo, 'Otra búsqueda'); await esperar(TRAS_LA_ESPERA_MS);
+      terminar(new Response(null, { status: 401 })); await esperar(20);
+      assert.equal(llamadas, 2); assert.equal(retiradas, 0);
+    } finally { await m.desmontar(); globalThis.fetch = fetchAnterior; }
+  });
+
+  it('editar o borrar una elección notifica null antes de otra búsqueda', async () => {
+    const elegidas: (OpcionCombobox | null)[] = [];
+    const c = await registrar(await abierto(async () => OPCIONES, o => elegidas.push(o)));
+    await teclear(c.campo, 'Enter');
+    await escribir(c.campo, 'Otro texto');
+    assert.deepEqual(elegidas, [OPCIONES[0], null]);
+    await escribir(c.campo, '');
+    assert.deepEqual(elegidas, [OPCIONES[0], null], 'La misma elección ya fue retirada.');
+    await esperar(TRAS_LA_ESPERA_MS);
+    await teclear(c.campo, 'Enter');
+    await escribir(c.campo, '');
+    assert.deepEqual(elegidas, [OPCIONES[0], null, OPCIONES[0], null]);
+  });
+
+  it('el modo de añadir y vaciar no revoca una incorporación al escribir de nuevo', async () => {
+    const elegidas: (OpcionCombobox | null)[] = [];
+    const m = await montar(createElement(ComboboxRemoto, { etiqueta: 'Añadir', buscar: async () => OPCIONES,
+      vaciarAlElegir: true, alElegir: o => elegidas.push(o) }));
+    montados.push(m);
+    const campo = m.contenedor.querySelector('input[role=combobox]') as HTMLInputElement;
+    await moverFoco(null, campo); await esperar(TRAS_LA_ESPERA_MS); await teclear(campo, 'Enter');
+    assert.equal(campo.value, '');
+    await escribir(campo, 'La siguiente incorporación');
+    assert.deepEqual(elegidas, [OPCIONES[0]]);
+  });
+
+  it('el selector de artículo elimina también su identificador oculto al editar el texto elegido', async () => {
+    const fetchAnterior = globalThis.fetch;
+    globalThis.fetch = async () => Response.json([{ id: 'referencia', etiqueta: 'Artículo elegido', categoria: 'Pantalla', unidad: 'ud' }]);
+    const m = await montar(createElement(BuscadorArticulo, { etiqueta: 'Artículo' }));
+    try {
+      const campo = m.contenedor.querySelector('input[role=combobox]') as HTMLInputElement;
+      const oculto = m.contenedor.querySelector('input[type=hidden]') as HTMLInputElement;
+      await moverFoco(null, campo); await esperar(TRAS_LA_ESPERA_MS); await teclear(campo, 'Enter');
+      assert.equal(oculto.value, 'referencia');
+      await escribir(campo, 'Artículo en revisión');
+      assert.equal(oculto.value, '');
+    } finally { await m.desmontar(); globalThis.fetch = fetchAnterior; }
+  });
+
   it('dentro del listbox no hay nada que no sea una opción', async () => {
     const c = await registrar(await abierto(async () => OPCIONES));
     assert.equal(c.opciones().length, 2);

@@ -134,6 +134,10 @@ export function EditorPlanoSala({
   const [menu, setMenu] = useState<MenuContextualAbierto | null>(null);
   const [estado, setEstado] = useState<EstadoGuardado>('limpio');
   const [problema, setProblema] = useState<string | null>(null);
+  const contenedor = useRef<HTMLDivElement>(null);
+  const [entradasInvalidas, setEntradasInvalidas] = useState(false);
+  const camposInvalidos = () => [...(contenedor.current?.querySelectorAll<HTMLInputElement>('input,select,textarea') ?? [])].filter(c => !c.validity.valid);
+  const actualizarValidez = () => queueMicrotask(() => setEntradasInvalidas(camposInvalidos().length > 0));
   /**
    * Qué pasó con lo último que se añadió. Vive aquí y no en la biblioteca
    * porque `Descartar` tiene que poder borrarlo: un «Silla en la lista» debajo
@@ -464,6 +468,9 @@ export function EditorPlanoSala({
   // ---------------------------------------------------------------- teclado
 
   const alPulsarTecla = (ev: React.KeyboardEvent) => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+      ev.preventDefault(); guardar(); return;
+    }
     const destino = ev.target as HTMLElement;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(destino.tagName)) return;
 
@@ -491,7 +498,12 @@ export function EditorPlanoSala({
   // ---------------------------------------------------------------- guardado
 
   const guardar = () => {
-    if (recargandoConflicto) return;
+    if (recargandoConflicto || soloLectura || guardando || !hayCambios) return;
+    const invalidos = camposInvalidos();
+    if (invalidos.length) {
+      setEntradasInvalidas(true); invalidos[0].reportValidity();
+      setProblema('Corrige las entradas inválidas antes de guardar el plano.'); return;
+    }
     setProblema(null);
     setEstado('guardando');
     empezarGuardado(async () => {
@@ -630,7 +642,7 @@ export function EditorPlanoSala({
   return (
     // `onKeyDown` en el contenedor y no en el SVG: el foco vive en la lista de
     // objetos y en el inspector, que son controles de verdad.
-    <div className="space-y-4" onKeyDown={alPulsarTecla}>
+    <div ref={contenedor} className="space-y-4" onKeyDown={alPulsarTecla} onInputCapture={actualizarValidez} onChangeCapture={actualizarValidez} onClickCapture={actualizarValidez}>
       {/* Salir de Plano con el borrador a medias no puede tragarse el
           trabajo: `beforeunload` vive ahí dentro y cubre recargar y cerrar; lo
           demás —las pestañas de la ficha, la barra lateral, el botón atrás— es
@@ -700,7 +712,7 @@ export function EditorPlanoSala({
           </div>
           {!edicionBloqueada && (
             <div className="mt-4">
-              <Boton tipo="button" variante="principal" onClick={guardar} disabled={!hayCambios || guardando}>
+              <Boton tipo="button" variante="principal" onClick={guardar} disabled={!hayCambios || guardando || entradasInvalidas}>
                 Guardar cambios
               </Boton>
             </div>
@@ -728,6 +740,7 @@ export function EditorPlanoSala({
             alDeshacer={deshacer}
             alRehacer={rehacer}
             hayCambios={hayCambios}
+            guardadoBloqueado={entradasInvalidas}
             guardando={guardando}
             alDescartar={descartar}
             alGuardar={guardar}

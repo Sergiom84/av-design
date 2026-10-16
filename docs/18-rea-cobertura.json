@@ -1,0 +1,2257 @@
+{
+  "titulo": "Cobertura de candidatos REA en AV_design y contratos de mejora",
+  "fecha": "2026-10-15",
+  "version": 1,
+  "alcance": "Censo de los 34 ST exactos del ledger de 13-10-2026; estado por lectura del checkout con E1/E2 y E3 local al comenzar esta integración. Es especificación y trazabilidad, no certificado de implementación ni producción.",
+  "base_git": {
+    "rama": "codex/rea-integracion",
+    "head": "7ba796077ff39e799b9b7eb87109b648c3df5c2d",
+    "arbol_con_cambios_locales": true,
+    "remoto_consultado": false
+  },
+  "fuentes_leidas_completas": [
+    {
+      "ruta": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/static-feature-ledger.md",
+      "bytes": 8729,
+      "lineas": 40,
+      "sha256": "a7a63c863de673a1690b4652c016c565f4b7504ee472d405580da1c2423dc052"
+    },
+    {
+      "ruta": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/static-feature-ledger.json",
+      "bytes": 18275,
+      "lineas": 413,
+      "sha256": "52f9b89d886beb82db25c7d355b50bd24b43bab4e4520ecc04d25275193bded7"
+    },
+    {
+      "ruta": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/comparison-backlog.md",
+      "bytes": 113748,
+      "lineas": 901,
+      "sha256": "39d41cd9d8450efe7fe24a95298e1a495422230f22576c08cde7fc07092229c5"
+    },
+    {
+      "ruta": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/comparison-backlog.json",
+      "bytes": 239126,
+      "lineas": 5470,
+      "sha256": "a94b2d43104389615ee475e021ebd01e00b7c1b17fc8938ceb7d2f8c62e3c94e"
+    }
+  ],
+  "verificacion_de_correspondencia": {
+    "st_md_json": 34,
+    "propuestas_md_json": 33,
+    "criterios_md_json": 99,
+    "resultado": "IDs, títulos y los 99 criterios de aceptación coinciden en Markdown/JSON; contenido completo leído y procesado."
+  },
+  "resumen": {
+    "total": 34,
+    "por_estado": {
+      "ya_cubierto": 7,
+      "parcial": 9,
+      "mejora_a_construir": 17,
+      "no_mejora_justificada": 1
+    },
+    "unidades_pendientes": 11,
+    "sin_justificacion_producto": [
+      "ST34"
+    ]
+  },
+  "significado_estados": {
+    "ya_cubierto": "El valor de producto del candidato tiene implementación local preexistente; conservar y verificar regresión, no reimplementar ni afirmar toda la AVX asociada terminada.",
+    "parcial": "Existe una parte útil, pero hay una ampliación concreta especificada y pendiente.",
+    "mejora_a_construir": "Valor útil identificado que no se localizó en el código examinado; tiene contrato y dependencias, no se descarta por tamaño o por antigua prioridad opcional.",
+    "no_mejora_justificada": "La copia literal no aporta valor al departamento. El motivo debe ser de producto y no de dificultad."
+  },
+  "reglas_alcance": [
+    "Los 34 ST no son 33 AVX, 34 findings de REA ni 34 funciones probadas de XTEN-AV. El parser analizó 7 assets; el ledger es interpretación estática humana con runtime no verificado.",
+    "La nueva autorización incluye mejoras útiles antes descritas como opcionales/experimentales. El orden resuelve dependencias, no cancela alcances.",
+    "Se conserva el mapa ST→AVX original y se identifica aparte cualquier relación adicional razonada. Un ST cubierto no prueba toda AVX-31/32 ni todas las entregas del backlog.",
+    "No copiar endpoints/scripts ni mecanismo CSRF/session/provider del SaaS. Reutilizar guardas, sesión y datos normalizados de AV_design.",
+    "Grupo de cuenta/plan, addon y upgrade son infraestructura/comercialización del SaaS; adaptar ámbito a proyecto/localización/sede y destinatarios autorizados, sin nuevos niveles obligatorios.",
+    "Dependencias externas reales (modelo/OCR/transporte) se representan como configuración no disponible; no simular IA, envío, firma, cobro o cálculo técnico.",
+    "Los criterios son gates pendientes en esta matriz. El cierre de la integración y pruebas vigentes debe registrarse en docs/17-integracion-rea.md sin reescribir fuentes históricas.",
+    "No se hizo BD, red, Git mutante ni pruebas de aplicación en esta unidad; sólo se escriben estos dos documentos."
+  ],
+  "preservar": [
+    "Plano/diagrama editables y puertos físicos existentes",
+    "Cálculo de cable, rutas XYZ y parámetros",
+    "BOM derivada del diseño normalizado",
+    "Stock por movimientos, reservas y recepciones",
+    "Hitos y entrega físicos",
+    "Distinción posición medida/estimada y visual/física",
+    "Guardas y concurrencia transaccional",
+    "Fuente CSV y precios app",
+    "E2: archivo/hash/preview, selección humana, variantes, ofertas previas, fuente app y reversión de lote.",
+    "E3: revisiones/diff/restauración, medidas heredadas, duplicación sin hechos, anotaciones/leyenda, ordenación reversible e identidad estable de cables.",
+    "E1: un snapshot para formatos relacionados, permisos actuales por descarga, errores parciales, último completo e identidad del paquete.",
+    "Historial y worktrees de Xtenav se conservan hasta verificar reconciliación; no reimplementar E3 ni promover código E2 antiguo."
+  ],
+  "fuera_de_equivalencia_directa": {
+    "avx_sin_candidato_ST_directo": [
+      "AVX-01",
+      "AVX-02",
+      "AVX-03",
+      "AVX-04",
+      "AVX-05",
+      "AVX-06",
+      "AVX-07",
+      "AVX-08",
+      "AVX-09",
+      "AVX-10",
+      "AVX-11",
+      "AVX-12",
+      "AVX-16",
+      "AVX-17",
+      "AVX-19",
+      "AVX-20",
+      "AVX-25",
+      "AVX-26",
+      "AVX-27",
+      "AVX-29",
+      "AVX-30"
+    ],
+    "explicacion": "Esas AVX nacen de fuentes públicas/UI o arquitectura y no de un ST directo. Algunas ya son bases E1/E3; otras sólo entran aquí como dependencia concreta (p.ej. activos AVX-05). No atribuir rack, CAD o acústica al análisis de estos siete JS ni declarar completa una entrega por implementar un ST."
+  },
+  "unidades": [
+    {
+      "id": "REA-00",
+      "orden": 0,
+      "titulo": "Reconciliar la variante E1 conservando E2/E3",
+      "st": [],
+      "avx": [
+        "AVX-01",
+        "AVX-02",
+        "AVX-03"
+      ],
+      "dependencias": [],
+      "contrato": "Comparar las correcciones E1 de d38d9a3 y worktrees con el checkout principal; integrar selectivamente, sin copiar el snapshot E2 antiguo ni reimplementar E3.",
+      "modelo": "Se conserva el modelo vigente de snapshot/documentos/revisión. No nace otro exportador.",
+      "criterios": [
+        "Regresión de GET antiguo frente a paquete nuevo, error interno sin SQL, integridad/caducidad de paquetes y nombres/rótulos PDF cubiertos.",
+        "Exportaciones conservan revisión/anotaciones E3 y partidas E2; mismos hechos operativos antes/después.",
+        "Conservar worktrees y evidencia histórica hasta cerrar reconciliación; no commit/push/despliegue."
+      ]
+    },
+    {
+      "id": "REA-01",
+      "orden": 1,
+      "titulo": "Medidas, previsualización y selección revisable",
+      "st": [
+        "ST02",
+        "ST06",
+        "ST11",
+        "ST13"
+      ],
+      "avx": [
+        "AVX-13",
+        "AVX-14"
+      ],
+      "dependencias": [
+        "REA-00"
+      ],
+      "contrato": "Ampliar entradas existentes: conversión visible de medidas, preview de plantilla, selección masiva segura y alternativa BOM trazada.",
+      "modelo": "Sólo se añaden metadatos de sustitución si hacen falta; metros, plantilla y lote siguen siendo canónicos. La vista de plantilla nunca crea sala.",
+      "criterios": [
+        "Aplicar los criterios de sus cuatro ST en fixtures mixtas y prueba de servidor; snapshot de BD sin mutaciones al previsualizar.",
+        "Escritorio completo antes de móvil; selección por teclado accesible, cantidades/unidades preservadas y cancelación reversible."
+      ]
+    },
+    {
+      "id": "REA-02",
+      "orden": 2,
+      "titulo": "Preferencias personales y panel operativo",
+      "st": [
+        "ST08",
+        "ST31"
+      ],
+      "avx": [
+        "AVX-18",
+        "AVX-33"
+      ],
+      "dependencias": [
+        "REA-00"
+      ],
+      "contrato": "Guardar marcas/filtros y visibilidad/orden de tarjetas por usuario real, con valores por defecto y explicación del resultado.",
+      "modelo": "Preferencias por usuario separadas de catálogo, diseño y permisos; sólo se guardan claves permitidas.",
+      "criterios": [
+        "Dos usuarios aislados, retirada inmediata de permiso, restablecer valores por defecto y no consultar/devolver secciones ocultas.",
+        "Tarjetas actuales concuerdan con detalle; futuras horas/tareas/finanzas se habilitan al existir su fuente, sin contadores inventados."
+      ]
+    },
+    {
+      "id": "REA-03",
+      "orden": 3,
+      "titulo": "Informes reproducibles y programación interna",
+      "st": [
+        "ST18",
+        "ST19",
+        "ST20"
+      ],
+      "avx": [
+        "AVX-01",
+        "AVX-02",
+        "AVX-31",
+        "AVX-33"
+      ],
+      "dependencias": [
+        "REA-00",
+        "REA-02"
+      ],
+      "contrato": "Registro de definiciones de informe, selección de ámbito/período/formato, programación y ejecuciones internas con audiencia autorizada.",
+      "modelo": "Definición inmutable por ejecución, ámbito/snapshot, usuario, zona horaria, ocurrencia única, estado/errores y referencias a archivos. El runner manual sirve de gate; scheduler desplegado queda explícito.",
+      "criterios": [
+        "Rango/zonahoraria/DST, ocurrencia idempotente, último correcto y fallos; descarga consistente y autorización de cada dato/receptor.",
+        "Funciona sin IA ni correo. Un adaptador externo sin configurar muestra pendiente de configuración y no simula envío; enviar a terceros requiere instrucción explícita."
+      ]
+    },
+    {
+      "id": "REA-04",
+      "orden": 4,
+      "titulo": "Plan de montaje, tareas y agenda",
+      "st": [
+        "ST25",
+        "ST27",
+        "ST28",
+        "ST32"
+      ],
+      "avx": [
+        "AVX-21",
+        "AVX-33"
+      ],
+      "dependencias": [
+        "REA-00",
+        "REA-02"
+      ],
+      "contrato": "Añadir plan al proyecto existente; tareas borrador desde tipología/material confirmado, responsables técnicos, fechas y agenda con conflictos.",
+      "modelo": "Planes/tareas/asignaciones con IDs nuevos, origen de revisión, estado de planificación, técnico y rango temporal. No añade otro proyecto ni reutiliza hitos como tareas.",
+      "criterios": [
+        "Generación idempotente/diff, tarea de duración desconocida, vencimientos y solapamientos, técnico inactivo y permisos.",
+        "Completar tareas no registra hechos físicos; repetir, editar o anular plan conserva stock, hitos, pedidos, recepción y carga."
+      ]
+    },
+    {
+      "id": "REA-05",
+      "orden": 5,
+      "titulo": "Horas y coste real trazables",
+      "st": [
+        "ST33"
+      ],
+      "avx": [
+        "AVX-22"
+      ],
+      "dependencias": [
+        "REA-04"
+      ],
+      "contrato": "Registrar tiempos por tarea/sala/autor y correcciones; comparar coste previsto/real desde movimientos y tarifas congeladas.",
+      "modelo": "Registros de tiempo con minutos reales, tarifa opcional y fecha de vigencia congelada; corrección con antecedente/autor, sin sobrescritura muda.",
+      "criterios": [
+        "Tiempo positivo, sin solapamientos inadvertidos, suma exacta, correcciones auditadas, coste laboral sólo para permiso autorizado.",
+        "Tarifa ausente es coste desconocido, no cero. Material realmente usado proviene de hechos existentes y no se suma dos veces."
+      ]
+    },
+    {
+      "id": "REA-06",
+      "orden": 6,
+      "titulo": "Propuesta interna versionada y alcance reutilizable",
+      "st": [
+        "ST21",
+        "ST22",
+        "ST23"
+      ],
+      "avx": [
+        "AVX-24",
+        "AVX-25",
+        "AVX-28"
+      ],
+      "dependencias": [
+        "REA-00"
+      ],
+      "contrato": "Documento estructurado por revisión de diseño/BOM, plantillas de alcance, destinatario opcional y valoración explícita cuando se aportan datos.",
+      "modelo": "Propuesta y revisiones inmutables, referencia a diseño/BOM, secciones/variables, destinatario snapshot y líneas de valoración. No segundo BOM vivo, CRM obligatorio ni importes heredados.",
+      "criterios": [
+        "Actualización explícita y marca de desactualizada; copiar plantilla no copia impuestos/totales/cliente/aceptación.",
+        "Coste 100 con recargo 20% = 120 y margen 20% = 125; moneda, impuestos configurados y redondeo visibles, sin precios desconocidos como cero.",
+        "Vista previa/PDF y permisos; editar documento no altera diseño ni hechos de obra."
+      ]
+    },
+    {
+      "id": "REA-07",
+      "orden": 7,
+      "titulo": "Eventos de propuesta y métricas económicas fiables",
+      "st": [
+        "ST29",
+        "ST30",
+        "ST33"
+      ],
+      "avx": [
+        "AVX-22",
+        "AVX-24",
+        "AVX-25",
+        "AVX-27",
+        "AVX-28",
+        "AVX-33"
+      ],
+      "dependencias": [
+        "REA-05",
+        "REA-06"
+      ],
+      "contrato": "Registrar decisión/estado de propuesta por revisión y calcular embudo, importes y ratios desde eventos y costes trazables.",
+      "modelo": "Eventos con actor/fecha/revisión; estados derivados. Aceptación interna no firma contractual; sin evento verificable no hay visto/enviado/cobrado.",
+      "criterios": [
+        "No duplicar revisiones, denominadores cero sin datos, monedas separadas/tipo congelado, beneficio parcial y acceso restringido.",
+        "Una aceptación no cambia hitos físicos/stock y una revisión nueva no hereda aceptación; envío/cobro real sólo con transporte/proveedor y autorización específica."
+      ]
+    },
+    {
+      "id": "REA-08",
+      "orden": 8,
+      "titulo": "Activos, incidencias y cobertura de servicio",
+      "st": [
+        "ST24",
+        "ST26"
+      ],
+      "avx": [
+        "AVX-05",
+        "AVX-21",
+        "AVX-23"
+      ],
+      "dependencias": [
+        "REA-04"
+      ],
+      "contrato": "Crear el mínimo registro de activos entregados requerido para incidencias, visitas y cobertura/acuerdos internos sin duplicar instalación.",
+      "modelo": "Activo individual y serial opcional con historial; incidencia sobre sala/activo/revisión entregada; visitas, evidencia y acuerdo con vigencia/fuente.",
+      "criterios": [
+        "Activo previsto frente a instalado, serial desconocido/duplicado, traslado/sustitución trazables y stock exclusivamente por movimientos existentes.",
+        "Cobertura/prioridad/SLA definidos, fechas válidas y cierre con prueba; no genera contrato vinculante, pago, recepción o nuevo hito automáticamente."
+      ]
+    },
+    {
+      "id": "REA-09",
+      "orden": 9,
+      "titulo": "Consulta contextual con fuentes, historial y dictado",
+      "st": [
+        "ST07",
+        "ST08",
+        "ST16",
+        "ST17",
+        "ST18"
+      ],
+      "avx": [
+        "AVX-16",
+        "AVX-18",
+        "AVX-31",
+        "AVX-33"
+      ],
+      "dependencias": [
+        "REA-00",
+        "REA-02",
+        "REA-03"
+      ],
+      "contrato": "Consultar datos autorizados de catálogo/diseño/BOM/documentos con fuentes y revisión; persistir historial e incorporar dictado editable en español.",
+      "modelo": "Conversación separada de revisiones, mensajes/fuentes y contexto de permisos; adaptador de consulta local y adaptador generativo sólo si está configurado.",
+      "criterios": [
+        "Set de preguntas con respuestas esperadas/fuentes/abstenciones; usuario sin acceso no recibe datos por contexto o historial.",
+        "Consulta determinista útil sin proveedor y sin llamarla IA generativa; al configurar modelo se miden calidad/coste/latencia y se limita el ámbito enviado.",
+        "Borradores siempre preview/diff y confirmación; voz con permiso explícito, soporte detectado y teclado completo."
+      ]
+    },
+    {
+      "id": "REA-10",
+      "orden": 10,
+      "titulo": "Requisitos y licitación con revisión humana",
+      "st": [
+        "ST12",
+        "ST14"
+      ],
+      "avx": [
+        "AVX-14",
+        "AVX-31",
+        "AVX-32"
+      ],
+      "dependencias": [
+        "REA-00",
+        "REA-09"
+      ],
+      "contrato": "Incorporar documento fuente y extracción por página/fragmento de áreas/requisitos; confirmar antes de crear jerarquía o material mediante E2.",
+      "modelo": "Documento hash/bytes/procedencia/autor; requisitos con ancla textual/página y certeza de extracción; plan de aplicación revisable e idempotente.",
+      "criterios": [
+        "PDF con texto/escaneado/dañado y archivo límite; nunca inventar medidas/cantidades ni confundir parser con OCR/modelo.",
+        "Validar áreas ambiguas, referencias variantes y selección; fallo intermedio revierte lote y no toca hechos operativos.",
+        "Si hace falta OCR/modelo externo, el adaptador y su configuración son una dependencia de esa extracción; conservar revisión manual/estructurada funcional."
+      ]
+    }
+  ],
+  "candidatos": [
+    {
+      "id": "ST01",
+      "candidato": "Plano vinculado a proyecto",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST01",
+        "feature": "Plano vinculado a proyecto",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          463,
+          536
+        ],
+        "interpretation": "Enviar design_name, project_id y design_ids a la creación; comprobar vinculación real en UI.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Proyecto → Localización → Sala, plano propio de sala, adopción de legado y creación contextual ya existen.",
+      "mejora_y_justificacion": "Conservar el vínculo actual; otro design_id, proyecto paralelo o vínculo obligatorio para legado duplicaría el modelo.",
+      "criterios_comprobables": [
+        "Crear sala desde la obra conserva su localizacion_id y la sede de la obra; el plano leído corresponde a esa sala.",
+        "Una sala legado sin obra sigue abriéndose y puede adoptarse sin perder equipos, rutas o historial."
+      ],
+      "dependencias": [
+        "Jerarquía actual; guardas de salas/proyectos"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/sala/alta.tsx",
+          "linea": 74,
+          "nota": "Localización por defecto según proyecto; no repregunta la sede."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-proyectos.ts",
+          "linea": 123,
+          "nota": "Lectura de obra y jerarquía."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/acciones.ts",
+          "linea": 215,
+          "nota": "Alta de sala."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST02",
+      "candidato": "Dimensiones de sala con unidad",
+      "estado": "parcial",
+      "orden": 1,
+      "unidad": "REA-01",
+      "evidencia_xtenav": {
+        "id": "ST02",
+        "feature": "Dimensiones de sala con unidad",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          503,
+          513
+        ],
+        "interpretation": "Introducir largo, ancho y alto en Feet/Meters antes de diseñar.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Largo, ancho y alto se introducen explícitamente en metros; la BD usa numeric(6,2). No se localizó conversión de entrada desde pies.",
+      "mejora_y_justificacion": "Añadir conversión explícita pies→metros donde se reciben medidas evita conversiones manuales. Mantener metros como única unidad persistida y de cálculo.",
+      "criterios_comprobables": [
+        "10 pies convierten a 3,048 m y muestran antes de confirmar la precisión persistida de 3,05 m; no se cambia la unidad de datos existentes.",
+        "Cambiar selector sin guardar no altera medidas, coordenadas ni metraje. Vacío permanece vacío; negativos, infinito y unidades desconocidas se rechazan.",
+        "Guardar y reabrir reproduce el valor normalizado en metros sin volver a convertirlo."
+      ],
+      "dependencias": [
+        "Formulario de sala/plantilla existente; validadores de medidas; no cambiar formula de calculo-cable.ts"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/sala/medidas.tsx",
+          "linea": 88,
+          "nota": "Campos Largo/Ancho/Alto (m)."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 145,
+          "nota": "Precisión actual de medidas de sala."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST03",
+      "candidato": "Jerarquía ubicación y sububicación",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST03",
+        "feature": "Jerarquía ubicación y sububicación",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          180,
+          296
+        ],
+        "interpretation": "Asignar cada diseño a una ubicación o sububicación del proyecto.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "La jerarquía ya representa sede de obra y localización de edificio/planta; no hay que añadir otro nivel.",
+      "mejora_y_justificacion": "Conservar exactamente los dos niveles del contrato. Copiar location/sub-location del SaaS introduciría preguntas duplicadas.",
+      "criterios_comprobables": [
+        "La localización se elige una vez; guardar no reintroduce edificio ni nivel en salas.",
+        "Agrupar la portada incluye localizaciones vacías y salas legado con LEFT JOIN."
+      ],
+      "dependencias": [
+        "Contrato AGENTS de jerarquía"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/proyecto.ts",
+          "linea": 68,
+          "nota": "Agrupación por localización."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-proyectos.ts",
+          "linea": 123,
+          "nota": "Jerarquía normalizada."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 880,
+          "nota": "Tabla localizaciones."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST04",
+      "candidato": "Plantillas propias y de biblioteca",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST04",
+        "feature": "Plantillas propias y de biblioteca",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          54,
+          99
+        ],
+        "interpretation": "Elegir plantilla guardada o partir de scratch.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-13"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "La sala puede nacer en blanco, desde plantilla y guardar su montaje como plantilla; E3 añade alternativa independiente.",
+      "mejora_y_justificacion": "Reutilizar el catálogo propio ya cargado. Una biblioteca externa sólo aporta si se valida su contenido y procedencia; el asset no justifica importarla.",
+      "criterios_comprobables": [
+        "Aplicar plantilla copia medidas/mobiliario/equipos/giros/tiradas una vez y rechaza sala con equipos o rosetas.",
+        "Guardar sala como plantilla y recrearla conserva coordenadas nulas y rotaciones; no copia hechos operativos."
+      ],
+      "dependencias": [
+        "Plantillas existentes; E3 AVX-13 conservada"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/sala/alta.tsx",
+          "linea": 46,
+          "nota": "Medidas heredadas de plantilla."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/plano-editor/origen-diagrama.tsx",
+          "linea": 97,
+          "nota": "Aplicación explícita."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/acciones.ts",
+          "linea": 651,
+          "nota": "Guardar sala como plantilla."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST05",
+      "candidato": "Tipos de sala AV",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST05",
+        "feature": "Tipos de sala AV",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          19,
+          32
+        ],
+        "interpretation": "Listado legacy xdraw_templates_old conserva escenarios AV de reunión, classroom, auditorium, residential, retail, videowall, Zoom y otros; confirmar taxonomía actual devuelta por servidor.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Tipología es vocabulario editable y existen 17 plantillas obtenidas del inventario real.",
+      "mejora_y_justificacion": "Conservar tipologías del departamento. El array legacy de XTEN-AV no es una taxonomía actual probada ni mejora los nombres reales.",
+      "criterios_comprobables": [
+        "Una tipología propia se puede crear/editar y se conserva en sala y plantilla.",
+        "Una variante real y su aforo no se fusionan por parecerse a un nombre legacy de XTEN-AV."
+      ],
+      "dependencias": [
+        "CSV e inventario real del proyecto"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/sala/medidas.tsx",
+          "linea": 75,
+          "nota": "Tipología editable."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/tipos.ts",
+          "linea": 139,
+          "nota": "Tipología de plantilla."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/plantillas/page.tsx",
+          "linea": 35,
+          "nota": "Plantillas derivadas del inventario."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST06",
+      "candidato": "Vista previa de plantilla",
+      "estado": "parcial",
+      "orden": 1,
+      "unidad": "REA-01",
+      "evidencia_xtenav": {
+        "id": "ST06",
+        "feature": "Vista previa de plantilla",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xdraw_modal.js",
+        "source_lines": [
+          303,
+          333
+        ],
+        "interpretation": "Control de preview en el selector de plantilla.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-13"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "El selector ya muestra tipología, medidas y recuentos de muebles/equipamiento/tiradas antes de aplicar. No se localizó vista gráfica previa.",
+      "mejora_y_justificacion": "Añadir croquis y relación de referencias sin crear una sala permite comprobar distribución y cableado antes de aplicar; se amplía la previsualización existente.",
+      "criterios_comprobables": [
+        "Elegir plantilla abre vista de sólo lectura desde los mismos datos y geometría del plano; nombres largos y ausencias quedan visibles.",
+        "Abrir/cerrar la vista no escribe sala, plantilla, stock ni versión. Dimensiones ausentes no se representan como un plano medido.",
+        "Aplicar conserva las mismas guardas de sala vacía, catálogo activo, mobiliario y concurrencia; el preview no introduce un camino de escritura."
+      ],
+      "dependencias": [
+        "Lectores normalizados de plantilla; GeometriaPlano/croquis; permisos actuales"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/plano-editor/origen-diagrama.tsx",
+          "linea": 178,
+          "nota": "Previsualización textual ya existente."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos.ts",
+          "linea": 177,
+          "nota": "PlantillaElegible contiene recuentos, no escena gráfica."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/plantilla/ficha.tsx",
+          "linea": 59,
+          "nota": "Creación desde plantilla."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST07",
+      "candidato": "Asistente conversa sobre diseño y BOM",
+      "estado": "mejora_a_construir",
+      "orden": 9,
+      "unidad": "REA-09",
+      "evidencia_xtenav": {
+        "id": "ST07",
+        "feature": "Asistente conversa sobre diseño y BOM",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          928,
+          993
+        ],
+        "interpretation": "API de chat intercambia consulta, historial, productos, cantidades y datos de diseño.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-31"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizó asistente contextual en src, rutas, tablas o dependencias. Catálogo, diseño, revisión y BOM son fuentes deterministas disponibles.",
+      "mejora_y_justificacion": "Añadir consulta técnica con fuentes y borradores revisables sobre el diseño actual. La primera utilidad puede ser búsqueda/resumen determinista; generación libre requiere proveedor configurado.",
+      "criterios_comprobables": [
+        "Una consulta sobre equipos/cable muestra sala y revisión, referencias exactas y enlaces a las fuentes; si falta dato responde desconocido.",
+        "Sin proveedor disponible, la consulta a datos locales sigue funcionando y no se presenta como generación IA; nunca inventa modelos, precios o metros.",
+        "Un borrador generado muestra diff y necesita confirmación mediante las guardas/transacciones existentes; consultar no escribe diseño ni stock."
+      ],
+      "dependencias": [
+        "E2 AVX-16; E3 AVX-06; REA-02 para preferencias; adaptador de modelo explícito para generación"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/datos.ts",
+          "linea": 18,
+          "nota": "Snapshot coherente reutilizable como fuente."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/revisiones-diseno-repositorio.ts",
+          "linea": 38,
+          "nota": "Diseño y revisión."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/catalogo-tecnico-repositorio.ts",
+          "linea": 66,
+          "nota": "Fichas verificables."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST08",
+      "candidato": "Preferencia de marca para IA",
+      "estado": "parcial",
+      "orden": 2,
+      "unidad": "REA-02",
+      "evidencia_xtenav": {
+        "id": "ST08",
+        "feature": "Preferencia de marca para IA",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          977,
+          987
+        ],
+        "interpretation": "La respuesta del chat contempla brand_preference; aún falta ver cómo condiciona la selección.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-18",
+        "AVX-31"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Existen favoritos personales y búsqueda por marca, pero no preferencias persistidas de marca ni selección IA condicionada explicable.",
+      "mejora_y_justificacion": "Guardar filtros/preferencias personales de marca y explicar el motivo del resultado. El asistente debe reutilizarlos, sin sustituir equipos automáticamente.",
+      "criterios_comprobables": [
+        "Guardar/quitar marca preferida afecta sólo al usuario actual y restaura los resultados al deshacer.",
+        "Buscar muestra por qué aparece un artículo: filtro, favorito o uso; variantes y referencias instaladas siguen consultables.",
+        "Preferir una marca no cambia equipo, precio, puerto, stock ni revisión de la sala; el contexto del asistente registra qué preferencia se aplicó."
+      ],
+      "dependencias": [
+        "Favoritos E2; identidad de usuario real; REA-09 sólo para la extensión IA"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/catalogo-favoritos.ts",
+          "linea": 16,
+          "nota": "Motivos explícitos de favoritos."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/catalogo-favoritos-repositorio.ts",
+          "linea": 33,
+          "nota": "Preferencia por usuario existente."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/catalogo/[marca]/page.tsx",
+          "linea": 1,
+          "nota": "Filtro actual por marca."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST09",
+      "candidato": "Importar BOM desde archivo",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST09",
+        "feature": "Importar BOM desde archivo",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          1820,
+          1875
+        ],
+        "interpretation": "Leer archivo en endpoint upload_bom_file_xavia y recibir matching de catálogo.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-14",
+        "AVX-32"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E2 importa BOM desde CSV/XLSX con preview, archivo original/hash, selección humana, transacción y reversión. No coloca equipos ni crea conexiones.",
+      "mejora_y_justificacion": "La importación de archivo del candidato ya se resuelve determinísticamente. Importación desde PDF/licitación se trata aparte en ST14; no rehacer E2 con IA.",
+      "criterios_comprobables": [
+        "CSV/XLSX válido presenta filas antes de escribir; confirmar sólo añade partidas elegidas de la sala autorizada.",
+        "Se conservan archivo/hash, números/unidades y reversión; un fallo intermedio revierte el lote completo.",
+        "Un cambio de catálogo/preview obliga a revisar; no cambia posiciones, conexiones, precios o hechos de obra ajenos al destino."
+      ],
+      "dependencias": [
+        "E2 AVX-14 existente; regresiones de E1/E3"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 21,
+          "nota": "Previsualización."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 77,
+          "nota": "Confirmación transaccional."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 96,
+          "nota": "CSV/XLSX y alcance explicado."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST10",
+      "candidato": "Separar coincidencias y productos sin encontrar",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST10",
+        "feature": "Separar coincidencias y productos sin encontrar",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          1857,
+          1875
+        ],
+        "interpretation": "La respuesta contempla matched_products y unmatched_products.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-14",
+        "AVX-32"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E2 distingue alta, coincidencia, ambigua, no_encontrada y rechazada por fila y muestra sus recuentos.",
+      "mejora_y_justificacion": "Conservar matching literal y revisión humana; matched/unmatched del SaaS no añade un algoritmo demostrado.",
+      "criterios_comprobables": [
+        "Una referencia exacta tiene candidato; modelo ambiguo exige elección y desconocido queda no_encontrada.",
+        "QB65R y QB65R-B permanecen distintas; una fila rechazada nunca se confirma mediante selección global o asistente."
+      ],
+      "dependencias": [
+        "E2 revisión de filas"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/modelo.ts",
+          "linea": 19,
+          "nota": "Estados exactos del preview."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/revision.ts",
+          "linea": 11,
+          "nota": "Coincidencias exactas."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 118,
+          "nota": "Recuento mostrado."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST11",
+      "candidato": "Sustitución de productos con cantidad",
+      "estado": "parcial",
+      "orden": 1,
+      "unidad": "REA-01",
+      "evidencia_xtenav": {
+        "id": "ST11",
+        "feature": "Sustitución de productos con cantidad",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          1973,
+          2073
+        ],
+        "interpretation": "Seleccionar alternativo conserva nombre original, alternativa, cantidad, tipo e índice de fila.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-14",
+        "AVX-32"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E2 permite resolver una fila no encontrada con buscador y mantiene la cantidad original; para una fila con coincidencia sólo permite sus candidatos exactos. El informe no tiene motivo específico de sustitución.",
+      "mejora_y_justificacion": "Completar la sustitución explícita en BOM con origen, referencia elegida y motivo verificables; mantener aparte la resolución literal de ofertas para no atribuir el precio de un modelo a otro.",
+      "criterios_comprobables": [
+        "Resolver/sustituir una fila de BOM conserva archivo, fila, nombre/referencia originales, artículo destino, unidad, cantidad y motivo; la UI compara original/alternativo antes de confirmar.",
+        "Sustituir por artículo inactivo, unidad incompatible o catálogo cambiado se rechaza en servidor; cancelar no escribe.",
+        "No se aplica sustitución automática a tarifas/catálogo, ni a equipos/conexiones ya dibujados. Reversión de lote conserva las dependencias posteriores."
+      ],
+      "dependencias": [
+        "E2 selección/hash/reversión; buscador de catálogo único; contrato específico de motivo si se sustituye coincidencia"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 128,
+          "nota": "Resolución de no encontrados."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 109,
+          "nota": "Unidad/activo/revisión y candidatos exactos."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 149,
+          "nota": "Cantidad de la fuente al añadir BOM."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST12",
+      "candidato": "Confirmación humana de áreas detectadas",
+      "estado": "mejora_a_construir",
+      "orden": 10,
+      "unidad": "REA-10",
+      "evidencia_xtenav": {
+        "id": "ST12",
+        "feature": "Confirmación humana de áreas detectadas",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          719,
+          784
+        ],
+        "interpretation": "Checkboxes para áreas cuando confidence está por debajo del umbral; paso de revisión previo a crear.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-14",
+        "AVX-32"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E2 exige elegir referencias, pero no extrae áreas/salas de documentos ni conserva confirmación de cada área inferida.",
+      "mejora_y_justificacion": "Preparar requisitos detectados de licitación con página/fragmento, certeza y aprobación humana, antes de vincularlos a localizaciones o crear salas.",
+      "criterios_comprobables": [
+        "En fixture con dos salas y un área ambigua se muestran las tres hipótesis y su fragmento; ninguna nace sin elección explícita.",
+        "El umbral/confianza no sustituye la revisión de nombres, localización, medidas, referencias y cantidades; desconocido permanece desconocido.",
+        "Confirmación repetida es idempotente; conflictos y fallo intermedio revierten el lote sin tocar hechos operativos."
+      ],
+      "dependencias": [
+        "REA-10 ST14; E2 preview; E3 revisiones; E1 entrega; parser/proveedor de extracción según formato"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/modelo.ts",
+          "linea": 7,
+          "nota": "El modelo actual recibe salaId, no áreas inferidas."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-proyectos.ts",
+          "linea": 223,
+          "nota": "Jerarquía donde vincular áreas confirmadas."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST13",
+      "candidato": "Selección múltiple en tabla de productos",
+      "estado": "parcial",
+      "orden": 1,
+      "unidad": "REA-01",
+      "evidencia_xtenav": {
+        "id": "ST13",
+        "feature": "Selección múltiple en tabla de productos",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          2075,
+          2140
+        ],
+        "interpretation": "Checkbox por fila y selección global.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-14"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Se pueden elegir varias filas una a una y confirmar su conjunto; no hay checkbox global o acción de seleccionar coincidencias válidas.",
+      "mejora_y_justificacion": "Añadir selección global acotada a filas elegibles y limpieza de selección evita repetir la misma acción cientos de veces sin adivinar ambigüedades.",
+      "criterios_comprobables": [
+        "Seleccionar coincidencias válidas sólo marca una coincidencia activa sin errores; omite ambiguas, desconocidas, rechazadas y duplicados en conflicto indicando el motivo.",
+        "Desmarcar todas deja cero filas; cambios de archivo/destino/preview invalidan la selección antigua.",
+        "Fixture mixta de 500 filas confirma exactamente los identificadores visibles/elegidos; el servidor mantiene las validaciones aunque se manipule el formulario."
+      ],
+      "dependencias": [
+        "E2 preview y selección existente; evitar relajar validadores de servidor"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 72,
+          "nota": "Selección individual actual."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 122,
+          "nota": "Tabla sin selección global."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 82,
+          "nota": "Validación de selección y duplicados."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST14",
+      "candidato": "Subir documentación de licitación",
+      "estado": "mejora_a_construir",
+      "orden": 10,
+      "unidad": "REA-10",
+      "evidencia_xtenav": {
+        "id": "ST14",
+        "feature": "Subir documentación de licitación",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          1767,
+          1818
+        ],
+        "interpretation": "Cargar bid document, crear proyecto y conservar referencia de documento; lectura automática del servidor no verificada.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-32"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "El importador actual sólo admite CSV/XLSX y filas de catálogo/BOM/precios; no se localizó entidad de documento de licitación ni requisitos extraídos.",
+      "mejora_y_justificacion": "Conservar documento fuente y extraer requisitos revisables enlazados al proyecto. Reutilizar E2 para material confirmado y ST12 para áreas; evitar un importador paralelo.",
+      "criterios_comprobables": [
+        "Un PDF con texto o documento admitido conserva bytes/hash, autor, procedencia y página/fragmento de cada requisito; un escaneo sin texto se identifica y solicita extracción compatible.",
+        "El preview lista referencias/cantidades/áreas detectadas con revisión humana; no infiere medidas físicas, stock o importes ausentes.",
+        "Aplicar requiere permisos vigentes, diff y confirmación; descargar fuente se limita al ámbito autorizado y fallo de extracción no crea obra incompleta."
+      ],
+      "dependencias": [
+        "E2 parser/preview/lotes; E3 revisiones; ST12; límites de archivos; extracción OCR/modelo sólo si está configurada y probada"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/modelo.ts",
+          "linea": 33,
+          "nota": "Formatos actuales csv/xlsx."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/importacion/importador.tsx",
+          "linea": 96,
+          "nota": "Entrada actual de archivos."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/catalogo-tecnico.ts",
+          "linea": 7,
+          "nota": "Límite de archivos técnicos existente, no sustituye modelo de licitación."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST15",
+      "candidato": "Cargar tarifas por grupo",
+      "estado": "ya_cubierto",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST15",
+        "feature": "Cargar tarifas por grupo",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          1653,
+          1762
+        ],
+        "interpretation": "Seleccionar grupo al importar fichero de precios y mostrar seguimiento de procesamiento.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-15"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E2 importa ofertas/tarifas con proveedor, presupuesto, fecha, moneda, unidad de compra, cantidad, procedencia y lote/usuario. No existe agrupación multiempresa del SaaS.",
+      "mejora_y_justificacion": "El valor es carga trazable/revisable ya cubierta. Usar proveedor/origen/obra cuando aplique; copiar un grupo obligatorio no añade valor al departamento.",
+      "criterios_comprobables": [
+        "Cargar tarifa normaliza unidad de compra y moneda con parámetros; conserva todas las ofertas previas y la marca orientativa/final.",
+        "Cero de kit no se transforma en precio gratuito y modificar tarifa no reescribe precios congelados de pedidos.",
+        "Lote conserva propietario/archivo/hash y estado consultable; la falta de grupo SaaS no impide una importación válida."
+      ],
+      "dependencias": [
+        "E2 AVX-15; criterios de kits existentes; permisos catálogo"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/revision.ts",
+          "linea": 47,
+          "nota": "Proveedor/fecha/moneda/unidad/kit."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/servicio.ts",
+          "linea": 160,
+          "nota": "Oferta nueva y procedencia."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/modelo.ts",
+          "linea": 47,
+          "nota": "Lote trazable."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST16",
+      "candidato": "Historial persistido del asistente",
+      "estado": "mejora_a_construir",
+      "orden": 9,
+      "unidad": "REA-09",
+      "evidencia_xtenav": {
+        "id": "ST16",
+        "feature": "Historial persistido del asistente",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          995,
+          1030
+        ],
+        "interpretation": "Código solicita guardar/transmitir chat al diseño; permanencia tras recarga necesita prueba.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-31"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizó historial de consultas de asistente; revisiones_diseno es historial de diseño y no debe reutilizarse como chat.",
+      "mejora_y_justificacion": "Guardar conversaciones ligadas a usuario/proyecto/sala/revisión y sus fuentes permite retomar una consulta sin mezclarla con revisiones inmutables.",
+      "criterios_comprobables": [
+        "Tras recargar se muestran pregunta/respuesta/fuentes y revisión usada, con aislamiento entre dos usuarios y ámbitos no autorizados.",
+        "Una revisión nueva marca el contexto anterior como histórico; el historial nunca se aplica automáticamente al diseño.",
+        "Retención es visible/configurable; borrar conversación autorizada no elimina fuentes, revisión o hechos de la obra."
+      ],
+      "dependencias": [
+        "REA-09 ST07; identidad y permisos; nuevo almacenamiento separado del historial de diseño"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 1995,
+          "nota": "revisiones_diseno tiene otra finalidad."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/revisiones-diseno-repositorio.ts",
+          "linea": 95,
+          "nota": "Historial de diseño existente."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST17",
+      "candidato": "Dictado en el asistente",
+      "estado": "mejora_a_construir",
+      "orden": 9,
+      "unidad": "REA-09",
+      "evidencia_xtenav": {
+        "id": "ST17",
+        "feature": "Dictado en el asistente",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          2325,
+          2405
+        ],
+        "interpretation": "webkitSpeechRecognition con transcripción parcial; código exige soporte de browser y fija en-US.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-31"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizó captura de voz/dictado en la interfaz. El script de referencia fija en-US y depende de soporte del navegador.",
+      "mejora_y_justificacion": "Dictado en español como entrada editable mejora el uso de campo; conservar teclado como entrada completa y no enviar ni aplicar la transcripción por sí sola.",
+      "criterios_comprobables": [
+        "Con soporte, elegir Español (España) permite iniciar/parar y editar transcripción final antes de consultar; resultados parciales no duplican texto.",
+        "Permiso de micrófono denegado, cancelación y navegador sin soporte muestran estado comprensible y dejan escribir con teclado.",
+        "No inicia escucha al montar ni envía voz/texto sin acción; si el motor procesa en proveedor remoto se informa antes de activarlo."
+      ],
+      "dependencias": [
+        "REA-09 interfaz de consulta; API del navegador detectada; decisión de procesamiento de voz si no es local"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/components/catalogo/combobox-remoto.tsx",
+          "linea": 1,
+          "nota": "Entrada actual por teclado."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/usuarios.ts",
+          "linea": 54,
+          "nota": "Permisos existentes que conserva el asistente."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST18",
+      "candidato": "Generación de informes por módulo",
+      "estado": "parcial",
+      "orden": 3,
+      "unidad": "REA-03",
+      "evidencia_xtenav": {
+        "id": "ST18",
+        "feature": "Generación de informes por módulo",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          526,
+          611
+        ],
+        "interpretation": "Chat permite escoger informes X-DRAW, X-DOC, X-PRO según intent.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-31"
+      ],
+      "mapeo_avx_adicional_razonado": [
+        "AVX-33",
+        "AVX-01",
+        "AVX-02"
+      ],
+      "estado_actual_comprobado_por_lectura": "E1 ya genera PDF/XLSX/CSV/ZIP de sala/obra; no hay informes operativos por rango, módulos o intención de consulta.",
+      "mejora_y_justificacion": "Añadir registro de informes deterministas por ámbito y período; el asistente sólo elige una definición existente y muestra su selección antes de generar.",
+      "criterios_comprobables": [
+        "Informe de material/carga/estado indica definición, período, zona horaria, ámbito y revisión; cifra y enlace al detalle coinciden.",
+        "Elegir un informe no requiere proveedor de IA y conserva la autorización de cada sección consultada y de la descarga.",
+        "Un mismo snapshot y selección genera resultados coherentes en pantalla/exportación; campos desconocidos quedan ausentes, nunca cero financiero válido."
+      ],
+      "dependencias": [
+        "E1 reconciliada; lectores de operación; permiso de cada dato; ST19 sólo para programación"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/modelo.ts",
+          "linea": 36,
+          "nota": "Entregables existentes por tipo."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/modelo.ts",
+          "linea": 26,
+          "nota": "Snapshot de exportación actual."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-almacen.ts",
+          "linea": 522,
+          "nota": "Contadores de operación existentes."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST19",
+      "candidato": "Programar informes con fechas y formato",
+      "estado": "mejora_a_construir",
+      "orden": 3,
+      "unidad": "REA-03",
+      "evidencia_xtenav": {
+        "id": "ST19",
+        "feature": "Programar informes con fechas y formato",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/reporting.js",
+        "source_lines": [
+          372,
+          446
+        ],
+        "interpretation": "Nombre, rango temporal, fecha inicio/fin y formato de exportación en payload.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Los paquetes E1 son generación puntual con retención temporal; no se localizó programación persistida de informes por fechas/formato.",
+      "mejora_y_justificacion": "Guardar definición, calendario y ejecuciones internas con rango explícito permite preparar periódicamente informes reproducibles. Descargar en la aplicación es útil aunque no exista correo.",
+      "criterios_comprobables": [
+        "Una programación guarda ámbito, formato admitido, período, Europe/Madrid, inicio/fin y próxima ejecución; fin anterior al inicio se rechaza.",
+        "Dos intentos para la misma ocurrencia no duplican ejecuciones; se registran éxito/fallo y snapshot, y reintentar no pierde el último correcto.",
+        "Ejecutar vuelve a comprobar usuario activo y permisos; retirada de permiso impide generar/descargar. Probar cambio de horario de verano y fechas vacías sin 1970."
+      ],
+      "dependencias": [
+        "REA-03 definiciones ST18; almacenamiento de ejecuciones y runner local/manual determinista antes de scheduler desplegado"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/modelo.ts",
+          "linea": 61,
+          "nota": "Manifiesto temporal, sin calendario."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/paquete.ts",
+          "linea": 1,
+          "nota": "Motor de paquete puntual reutilizable."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST20",
+      "candidato": "Destinatarios y grupos del informe",
+      "estado": "mejora_a_construir",
+      "orden": 3,
+      "unidad": "REA-03",
+      "evidencia_xtenav": {
+        "id": "ST20",
+        "feature": "Destinatarios y grupos del informe",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/reporting.js",
+        "source_lines": [
+          389,
+          460
+        ],
+        "interpretation": "Programación contempla destinatarios y grupos; no se envió ningún informe.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizó destinatario/grupo de informes ni envío en el código; los paquetes actuales pertenecen al usuario generador.",
+      "mejora_y_justificacion": "Definir audiencia interna y ámbito por proyecto/sede, con comprobación de permisos por receptor. No trasladar grupos SaaS ni añadir envío automático sin destinatario y transporte configurados.",
+      "criterios_comprobables": [
+        "Guardar audiencia sólo permite usuarios activos autorizados para el mismo ámbito y datos; revocar acceso impide la siguiente descarga.",
+        "Vista previa muestra receptores, ámbito, período y contenido antes de una distribución; un grupo no amplía permisos de sus miembros.",
+        "Sin transporte configurado, el informe queda disponible en aplicación con estado entrega no configurada; no declara envío. Un envío real exige instrucción explícita del usuario, destino y prevención de duplicados."
+      ],
+      "dependencias": [
+        "REA-03 ST18/19; identidad/permisos; transporte sólo para entrega externa autorizada"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/modelo.ts",
+          "linea": 61,
+          "nota": "Paquete actual, sin audiencia."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/usuarios.ts",
+          "linea": 181,
+          "nota": "Permisos por sección."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/sesion-servidor.ts",
+          "linea": 1,
+          "nota": "Identidad y permisos vigentes en servidor."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST21",
+      "candidato": "Presupuesto desde BOM o diseño",
+      "estado": "mejora_a_construir",
+      "orden": 6,
+      "unidad": "REA-06",
+      "evidencia_xtenav": {
+        "id": "ST21",
+        "feature": "Presupuesto desde BOM o diseño",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_new_proposal.js",
+        "source_lines": [
+          230,
+          236
+        ],
+        "interpretation": "Creación de proposal contempla id diseño/BOM y proyecto asociado.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-24"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "E1 exporta BOM y costes de compra; no se localizó propuesta con alcance/condiciones y revisión de BOM congelada.",
+      "mejora_y_justificacion": "Crear propuesta interna o comercial como documento de una revisión del diseño evita rehacer material y alcance en otro editor. Empezar por borrador interno válido sin CRM obligatorio.",
+      "criterios_comprobables": [
+        "Borrador desde revisión de una o varias salas conserva IDs/hash y BOM única; no escribe equipos, stock ni precios del catálogo.",
+        "Editar alcance/condiciones no cambia diseño; una edición posterior del diseño marca la propuesta como desactualizada hasta refresco explícito.",
+        "Vista previa/exportación distinguen costes parciales, orientativos y sin precio; el documento no declara oferta cerrada si faltan datos."
+      ],
+      "dependencias": [
+        "E1 reconciliada; E3 revisiones; REA-06 plantillas; AVX-25 mínimo sólo para totales de venta"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/modelo.ts",
+          "linea": 26,
+          "nota": "BOM y snapshot reutilizables."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/revisiones-diseno-repositorio.ts",
+          "linea": 106,
+          "nota": "Revisión inmutable seleccionable."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/compras.ts",
+          "linea": 129,
+          "nota": "Costes de compra, no propuesta de venta."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST22",
+      "candidato": "Plantillas de propuesta/SOW reutilizables",
+      "estado": "mejora_a_construir",
+      "orden": 6,
+      "unidad": "REA-06",
+      "evidencia_xtenav": {
+        "id": "ST22",
+        "feature": "Plantillas de propuesta/SOW reutilizables",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_new_proposal.js",
+        "source_lines": [
+          336,
+          403
+        ],
+        "interpretation": "Flags de crear, editar, copiar y SOW; servicio devuelve template y miniatura.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-24"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Hay plantillas de montaje y exportador técnico, pero no plantilla documental de propuesta/alcance de trabajo.",
+      "mejora_y_justificacion": "Añadir secciones estructuradas y variables validadas para propuesta/SOW evita copiar textos e importes heredados de otra obra.",
+      "criterios_comprobables": [
+        "Copiar plantilla copia estructura/textos y crea IDs de documento nuevos; no hereda cliente, totales, impuestos, aceptación ni pagos de otra propuesta.",
+        "Las variables muestran fuente y los valores ausentes; no ejecutan HTML/scripts ni modifican BOM.",
+        "Previsualización y PDF conservan secciones, destinatario, versión y texto editado sin construir otro editor de plano."
+      ],
+      "dependencias": [
+        "REA-06 ST21; E1 PDF; separación plantilla de montaje/documento"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/tipos.ts",
+          "linea": 139,
+          "nota": "Plantilla de sala actual, dominio distinto."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/documentos/pdf.ts",
+          "linea": 1,
+          "nota": "Render técnico existente como infraestructura de salida."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST23",
+      "candidato": "Cuenta/contacto/grupo obligatorios",
+      "estado": "mejora_a_construir",
+      "orden": 6,
+      "unidad": "REA-06",
+      "evidencia_xtenav": {
+        "id": "ST23",
+        "feature": "Cuenta/contacto/grupo obligatorios",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_new_proposal.js",
+        "source_lines": [
+          244,
+          262
+        ],
+        "interpretation": "Validación previa de cliente, contacto, grupo y nombre propuesta.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-24",
+        "AVX-28"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Obra no exige cuenta/contacto/grupo de cliente; proveedores son entidades de compra. No se localizó destinatario de propuesta.",
+      "mejora_y_justificacion": "Añadir destinatario/contacto opcional con procedencia para documentación interna, y exigir lo necesario sólo al preparar un envío concreto. Grupos y CRM obligatorios del SaaS no son un requisito local.",
+      "criterios_comprobables": [
+        "Propuesta interna puede crearse sin CRM ni contacto inventado; si se añade destinatario se conserva quién lo introdujo y dónde se usa.",
+        "Cambiar contacto de la obra no altera una revisión de propuesta ya emitida; se crea una nueva revisión explícita.",
+        "No se duplica el catálogo de proveedores como clientes ni se sincroniza sistema externo sin conector configurado; exportaciones respetan permisos."
+      ],
+      "dependencias": [
+        "REA-06 ST21; modelo mínimo de destinatario; AVX-28 sólo si existe sistema externo a conectar"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 861,
+          "nota": "Proyecto actual."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 52,
+          "nota": "Proveedor de compra, no cuenta de venta."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-proyectos.ts",
+          "linea": 123,
+          "nota": "Portada de obra actual."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST24",
+      "candidato": "Contrato/acuerdo de servicio",
+      "estado": "mejora_a_construir",
+      "orden": 8,
+      "unidad": "REA-08",
+      "evidencia_xtenav": {
+        "id": "ST24",
+        "feature": "Contrato/acuerdo de servicio",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_new_proposal.js",
+        "source_lines": [
+          207,
+          208
+        ],
+        "interpretation": "Creación contempla vínculo service_contract_id, etapa y acceso.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-23"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Existen hitos de entrega y bajas de material, pero no contrato/acuerdo de mantenimiento ni activos individuales de servicio.",
+      "mejora_y_justificacion": "Registrar cobertura/acuerdo interno y condiciones de atención ligado a sala entregada permite saber qué se atiende y con qué plazo; no crea contrato vinculante ni facturación por inferencia.",
+      "criterios_comprobables": [
+        "Acuerdo referencia sala/activo y revisión entregada, vigencia, cobertura y fuente; fechas y datos desconocidos no se completan automáticamente.",
+        "Incidencia muestra si cae dentro de cobertura y cómo se calcula el plazo; modificar acuerdo conserva el historial de condiciones aplicado a visitas anteriores.",
+        "Guardar acuerdo no acepta una propuesta, registra pago, mueve stock ni cambia el hito de entrega."
+      ],
+      "dependencias": [
+        "REA-08 ST26; registro mínimo AVX-05; REA-04 técnicos/tareas; condiciones aportadas explícitamente"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/acciones-ciclo.ts",
+          "linea": 49,
+          "nota": "Entrega física existente."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-almacen.ts",
+          "linea": 227,
+          "nota": "Bajas de almacén, no acuerdo de servicio."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 949,
+          "nota": "Hitos de sala."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST25",
+      "candidato": "Convertir origen en proyecto X-PRO",
+      "estado": "parcial",
+      "orden": 4,
+      "unidad": "REA-04",
+      "evidencia_xtenav": {
+        "id": "ST25",
+        "feature": "Convertir origen en proyecto X-PRO",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_xpro_modal.js",
+        "source_lines": [
+          459,
+          484
+        ],
+        "interpretation": "Orígenes Proposal/Project/Scratch; la respuesta del proyecto contempla prioridad y etapa.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-21"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "La obra ya agrupa sala/diseño y hitos; no hay que crear otro proyecto X-PRO. Falta convertir un diseño seleccionado en un plan de tareas.",
+      "mejora_y_justificacion": "Añadir planificación al proyecto existente con un origen/revisión trazable; evitar copiar obra, prioridad derivada o estados físicos.",
+      "criterios_comprobables": [
+        "Preparar plan desde obra/sala/revisión añade únicamente tareas borrador vinculadas a esa misma jerarquía.",
+        "Repetir la preparación detecta el plan existente y muestra diferencias; no duplica salas ni movimientos/hitos.",
+        "Un origen desactualizado requiere revisar el plan; activar planificación no marca obra iniciada o cerrada."
+      ],
+      "dependencias": [
+        "REA-04 ST27; E3 revisión; jerarquía actual"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-proyectos.ts",
+          "linea": 123,
+          "nota": "Obra existente."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/proyecto.ts",
+          "linea": 51,
+          "nota": "Estado de sala derivado."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/ciclo-vida.ts",
+          "linea": 1,
+          "nota": "Hitos registrados."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST26",
+      "candidato": "Convertir a proyecto de servicio",
+      "estado": "mejora_a_construir",
+      "orden": 8,
+      "unidad": "REA-08",
+      "evidencia_xtenav": {
+        "id": "ST26",
+        "feature": "Convertir a proyecto de servicio",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_xpro_modal.js",
+        "source_lines": [
+          392,
+          450
+        ],
+        "interpretation": "Rama service project diferenciada y cuenta/contacto vinculados.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-23"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizó proyecto/ticket de servicio. Una sala entregada permanece en la obra original y conserva sus hechos de montaje.",
+      "mejora_y_justificacion": "Abrir servicio/incidencia sobre instalación entregada y activo permite seguimiento de avería sin duplicar la instalación.",
+      "criterios_comprobables": [
+        "Ticket contiene sala/activo/revisión entregada, síntoma, prioridad explícita, técnico y visitas con pruebas realizadas.",
+        "Sustitución registra vínculo activo antiguo/nuevo y propone movimientos usando las acciones de almacén existentes; nunca sobrescribe existencias.",
+        "Cerrar ticket conserva historial y no revoca entrega, borra revisión ni cierra la obra de instalación."
+      ],
+      "dependencias": [
+        "AVX-05 activos; REA-04 planificación; ST24 para cobertura si existe"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-almacen.ts",
+          "linea": 227,
+          "nota": "Bajas existentes aprovechables."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/tipos.ts",
+          "linea": 619,
+          "nota": "Tipos de movimiento canónicos."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/acciones-ciclo.ts",
+          "linea": 49,
+          "nota": "Entrega de sala existente."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST27",
+      "candidato": "Generar tareas desde áreas y productos",
+      "estado": "mejora_a_construir",
+      "orden": 4,
+      "unidad": "REA-04",
+      "evidencia_xtenav": {
+        "id": "ST27",
+        "feature": "Generar tareas desde áreas y productos",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_xpro_modal.js",
+        "source_lines": [
+          565,
+          600
+        ],
+        "interpretation": "Tras importación de productos, pasa area_mapping a generación de tareas.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-21"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "No se localizaron tareas persistidas; las plantillas describen montaje y la revisión de sala deriva preparación, no trabajo asignado.",
+      "mejora_y_justificacion": "Generar borrador de tareas desde tipología/área/equipos confirmados reduce preparación repetida conservando la separación entre plan y hechos.",
+      "criterios_comprobables": [
+        "Plantilla de montaje propone tareas con origen equipo/sala/revisión y duración desconocida cuando no se ha definido.",
+        "Confirmar sólo tareas elegidas y repetir no duplica tareas del mismo origen; cambios de BOM producen diff.",
+        "Marcar una tarea lista no registra recepción, salida, instalación ni entrega."
+      ],
+      "dependencias": [
+        "REA-04 modelo de tarea/plan; plantillas; E3 revisión; catálogo de tareas editable"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/revision.ts",
+          "linea": 85,
+          "nota": "Preparación de montaje derivada, no tareas."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/proyecto.ts",
+          "linea": 108,
+          "nota": "Pasos de proyecto derivados."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/tipos.ts",
+          "linea": 139,
+          "nota": "Plantilla actual de montaje."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST28",
+      "candidato": "Grupos y recursos asignados",
+      "estado": "parcial",
+      "orden": 4,
+      "unidad": "REA-04",
+      "evidencia_xtenav": {
+        "id": "ST28",
+        "feature": "Grupos y recursos asignados",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_xpro_modal.js",
+        "source_lines": [
+          467,
+          479
+        ],
+        "interpretation": "Payload de creación contempla grupo, recursos y fechas de inicio/fin.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-21"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Hay técnicos, roles y autoría de hitos; no se localizó asignación planificada por recurso/fecha ni comprobación de solapamientos.",
+      "mejora_y_justificacion": "Asignar técnicos existentes al plan de montaje y mostrar conflictos de agenda evita repetir la plantilla de personal en otro sistema.",
+      "criterios_comprobables": [
+        "Asignación usa tecnico_id existente y permisos actuales; técnico inactivo o fecha fin anterior a inicio se rechaza.",
+        "Agenda muestra solapamientos para el mismo técnico y zona horaria, permitiendo corregirlos antes de confirmar.",
+        "Un grupo operativo no amplía permisos; planificar no firma hitos por el técnico ni cambia disponibilidad de material."
+      ],
+      "dependencias": [
+        "REA-04 ST25/27; tablas tecnicos/roles; fechas explícitas"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 920,
+          "nota": "Técnicos existentes."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 929,
+          "nota": "Roles de técnico."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/ciclo-vida.ts",
+          "linea": 84,
+          "nota": "Validación de técnico/rol."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST29",
+      "candidato": "Embudo de presupuestos por estado",
+      "estado": "mejora_a_construir",
+      "orden": 7,
+      "unidad": "REA-07",
+      "evidencia_xtenav": {
+        "id": "ST29",
+        "feature": "Embudo de presupuestos por estado",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/dashboard-chart.js",
+        "source_lines": [
+          19,
+          159
+        ],
+        "interpretation": "Draft/Sent/Viewed/Accepted/Declined, valores reales en tooltip y navegación por estado.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-28",
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [
+        "AVX-24",
+        "AVX-27"
+      ],
+      "estado_actual_comprobado_por_lectura": "No se localizó propuesta ni eventos comerciales enviados/vistos/aceptados; los estados de obra/sala derivan de hitos físicos.",
+      "mejora_y_justificacion": "Mostrar estado de propuestas desde eventos propios y versión concreta ayuda a seguir autorizaciones internas sin contaminar estados físicos.",
+      "criterios_comprobables": [
+        "Borrador, emitida, aceptada y rechazada salen de eventos con autor/fecha/revisión; visto sólo se muestra si existe evento verificable.",
+        "Contadores enlazan a exactamente las propuestas y período que los forman; denominador cero produce sin datos.",
+        "Aceptación de propuesta no registra instalación/entrega, pago o salida de material; una nueva revisión no hereda aceptación."
+      ],
+      "dependencias": [
+        "REA-06 propuestas; eventos de aceptación por revisión; AVX-27 sólo envío real si se autoriza/configura"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/proyecto.ts",
+          "linea": 51,
+          "nota": "Estados actuales de sala, distintos del embudo."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/ciclo-vida.ts",
+          "linea": 1,
+          "nota": "Hitos físicos."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 28,
+          "nota": "Panel actual sin propuestas."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST30",
+      "candidato": "Embudo monetario de proyectos/propuestas",
+      "estado": "mejora_a_construir",
+      "orden": 7,
+      "unidad": "REA-07",
+      "evidencia_xtenav": {
+        "id": "ST30",
+        "feature": "Embudo monetario de proyectos/propuestas",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/dashboard-chart.js",
+        "source_lines": [
+          401,
+          442
+        ],
+        "interpretation": "Importes por etapa con símbolo de moneda y filtro de grupo.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-28",
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [
+        "AVX-25"
+      ],
+      "estado_actual_comprobado_por_lectura": "Existen costes de compra estimados/ausentes/orientativos, no importes ofertados por etapa comercial ni conversión monetaria congelada por propuesta.",
+      "mejora_y_justificacion": "Añadir agregado monetario por etapa únicamente desde propuestas valoradas y revisión explícita; no derivar venta o ingreso de la BOM de compra.",
+      "criterios_comprobables": [
+        "Cada etapa suma sólo propuestas de su conjunto/versión/período; varias revisiones de una propuesta no duplican importe.",
+        "Separar monedas o convertir con tipo/fecha congelados; costes ausentes y precio orientativo quedan identificados.",
+        "Cada importe enlaza al detalle; cobrado/ingreso sólo se muestran con hechos de pago definidos, no con aceptación."
+      ],
+      "dependencias": [
+        "REA-06; AVX-25 valoración decimal/moneda; REA-07 eventos; permisos de costes"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/compras.ts",
+          "linea": 129,
+          "nota": "Valoración actual de compra."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion/coste.ts",
+          "linea": 1,
+          "nota": "Selección de costes, no venta."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 44,
+          "nota": "Panel actual de contadores."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST31",
+      "candidato": "Dashboard configurable",
+      "estado": "parcial",
+      "orden": 2,
+      "unidad": "REA-02",
+      "evidencia_xtenav": {
+        "id": "ST31",
+        "feature": "Dashboard configurable",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/dashboard-chart.js",
+        "source_lines": [
+          476,
+          570
+        ],
+        "interpretation": "Añadir y quitar widgets mediante guardado por usuario.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Panel muestra contadores fijos y pendientes con enlaces; no se localizó selección/orden de tarjetas persistida por usuario.",
+      "mejora_y_justificacion": "Permitir elegir/ordenar tarjetas operativas existentes aporta valor inmediato; añadir métricas nuevas sólo con dato fuente y detalle concordante.",
+      "criterios_comprobables": [
+        "Dos usuarios guardan distinto orden/visibilidad y lo recuperan; quitar preferencia restaura el panel por defecto.",
+        "Un usuario sin permiso de almacén/costes no recibe sus consultas/cifras aunque manipule preferencias; una tarjeta autorizada enlaza al detalle correspondiente.",
+        "Métrica temporal indica período y fecha de corte. Una cifra sin dato disponible se muestra no disponible y no cero."
+      ],
+      "dependencias": [
+        "Identidad y permisos; lectores existentes; ST32 sólo para carga de trabajo futura"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 19,
+          "nota": "Lectores actuales del panel."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 28,
+          "nota": "Tarjetas fijas."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/usuarios.ts",
+          "linea": 54,
+          "nota": "Permisos por sección."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST32",
+      "candidato": "Carga de trabajo y vencimientos",
+      "estado": "mejora_a_construir",
+      "orden": 4,
+      "unidad": "REA-04",
+      "evidencia_xtenav": {
+        "id": "ST32",
+        "feature": "Carga de trabajo y vencimientos",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/dashboard-chart.js",
+        "source_lines": [
+          476,
+          476
+        ],
+        "interpretation": "IDs de widget incluyen horas, eventos, tareas de hoy y de esta semana; UI completa pendiente.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-21",
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "Se cuentan cargas de material abiertas, pero eso no es carga horaria de técnicos. No se localizaron tareas con vencimiento ni agenda.",
+      "mejora_y_justificacion": "Añadir vistas Hoy/Semana/Vencidas y carga asignada desde tareas/fechas reales. Distinguir ocupación planificada, tiempo real y carga de furgoneta.",
+      "criterios_comprobables": [
+        "Fixture con tareas hoy, semana, vencida y sin fecha las sitúa en grupos correctos en Europe/Madrid; sin fecha nunca es 1970.",
+        "Carga por técnico suma intervalos definidos sin contar dos veces tareas compartidas; duración desconocida se declara.",
+        "Cada tarjeta enlaza al mismo filtro/ámbito y la preferencia del panel sólo cambia presentación."
+      ],
+      "dependencias": [
+        "REA-04 ST27/28; REA-02 panel; REA-05 para horas reales"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-almacen.ts",
+          "linea": 522,
+          "nota": "Cargas existentes son material."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 50,
+          "nota": "Carga abierta de almacén."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/db/schema.sql",
+          "linea": 920,
+          "nota": "Personas del departamento."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST33",
+      "candidato": "Beneficio y ratio de aceptación",
+      "estado": "mejora_a_construir",
+      "orden": 7,
+      "unidad": "REA-07",
+      "evidencia_xtenav": {
+        "id": "ST33",
+        "feature": "Beneficio y ratio de aceptación",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/dashboard-chart.js",
+        "source_lines": [
+          1051,
+          1099
+        ],
+        "interpretation": "Métricas financieras/comerciales con periodo y comparación porcentual.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [
+        "AVX-22",
+        "AVX-33"
+      ],
+      "mapeo_avx_adicional_razonado": [
+        "AVX-25",
+        "AVX-27"
+      ],
+      "estado_actual_comprobado_por_lectura": "No se localizaron horas reales por tarea ni venta aceptada. Coste de material y compras no permite calcular beneficio real o aceptación comercial.",
+      "mejora_y_justificacion": "Medir horas/costes y aceptación con fuentes separadas hace útil el indicador; mantener sin datos hasta disponer de costes y propuestas completos.",
+      "criterios_comprobables": [
+        "Aceptación define numerador/denominador/fecha y cuenta propuestas únicas del mismo período; 0/0 da sin datos y no 0%.",
+        "Beneficio distingue previsto/real y requiere importe de venta aceptado y costes completos; partidas sin precio u horas desconocidas dejan resultado parcial.",
+        "Material, horas, tarifas y moneda remiten a registro/revisión congelada; comparar períodos no convierte ausencia en cero y respeta permisos laborales/financieros."
+      ],
+      "dependencias": [
+        "REA-05 horas/costes; REA-06 propuestas y AVX-25 valoración; REA-07 eventos y REA-02 panel"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/compras.ts",
+          "linea": 129,
+          "nota": "Coste conocido/parcial actual."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/datos-almacen.ts",
+          "linea": 210,
+          "nota": "Movimientos como fuente material."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/app/page.tsx",
+          "linea": 28,
+          "nota": "Panel actual sin ratios financieros."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    },
+    {
+      "id": "ST34",
+      "candidato": "Acceso por addon",
+      "estado": "no_mejora_justificada",
+      "orden": 0,
+      "unidad": "BASE",
+      "evidencia_xtenav": {
+        "id": "ST34",
+        "feature": "Acceso por addon",
+        "evidence_type": "observed static source; runtime unverified",
+        "source_file": "/Users/sergio/Desktop/Aplicaciones/Xtenav/research/clonersoft/assets/xavia_main.js",
+        "source_lines": [
+          637,
+          681
+        ],
+        "interpretation": "Control de acceso a X-PRO y flujo de upgrade anunciado; autorización backend no probada.",
+        "rea_parent_evidence_id": "ev_9cf7eca2cb20340cb21a369ab52e72ff67682a1124587965f5e17fd8bcc07a74"
+      },
+      "mapeo_avx_original": [],
+      "mapeo_avx_adicional_razonado": [],
+      "estado_actual_comprobado_por_lectura": "AV_design ya tiene roles, permisos por persona/sección y guardas de servidor; no existe venta de addons a usuarios internos.",
+      "mejora_y_justificacion": "No incorporar paywall, upgrade, planes ni dependencia de addon de XTEN-AV: no mejora diseñar salas/material/stock. Conservar la autorización local es el equivalente útil ya cubierto.",
+      "criterios_comprobables": [
+        "Una sección oculta/ver/editar se aplica en servidor; manipular el botón o un supuesto addon no permite escribir.",
+        "La disponibilidad de una función depende del permiso real y datos requeridos, no de llamadas, cuotas o endpoints de XTEN-AV."
+      ],
+      "dependencias": [
+        "Permisos existentes; barrido de guardas"
+      ],
+      "evidencia_av_design": [
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/usuarios.ts",
+          "linea": 54,
+          "nota": "Secciones y política de acceso."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/usuarios.ts",
+          "linea": 181,
+          "nota": "Comprobación de permiso."
+        },
+        {
+          "ruta": "/Users/sergio/Desktop/Aplicaciones/AV_design/src/lib/importacion-http.ts",
+          "linea": 19,
+          "nota": "Guarda de servidor actual."
+        }
+      ],
+      "interpretacion_de_producto": "Adaptación propuesta para AV_design; no prueba ejecución ni backend de XTEN-AV.",
+      "implementacion_en_esta_unidad": "No implementado por esta matriz; las filas cubiertas describen código preexistente."
+    }
+  ],
+  "siguiente_unidad_implementable": {
+    "id": null,
+    "nota": "Programa REA local cerrado tras ronda adicional REA10 verificada y revisión independiente; no relanzar unidades cerradas ni prompts históricos. Límites conservados en docs29."
+  },
+  "ejecucion_unidades": {
+    "REA-00": {
+      "estado": "cerrada_localmente",
+      "evidencia": "output/rea-integracion/documentos/inspeccion-r1/informe.md",
+      "nota": "Cierre previo conservado; no certifica producción."
+    },
+    "REA-01": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea01-a/barrera-mvcc/review.md",
+        "output/rea-integracion/revision/rea01-b/cierre-p2.md"
+      ]
+    },
+    "REA-02": {
+      "estado": "cerrada_localmente",
+      "evidencia": "output/rea-integracion/revision/rea02/correccion-acl/REVISION.md"
+    },
+    "REA-03": {
+      "estado": "cerrada_localmente",
+      "evidencia": "output/rea-integracion/revision/rea03/polling-final/REVISION.md",
+      "limite": "Sin scheduler desplegado ni entrega externa."
+    },
+    "REA-04": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea04/correccion/INFORME-REAUDITORIA.md",
+        "output/rea-integracion/rea04/correccion-reanudacion/aceptacion-root.json"
+      ],
+      "limite": "Corte52fuentes revisado y gates raíz; no producción ni aceptación global."
+    },
+    "REA-05": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/rea05/tiempos-integracion-root/aceptacion-root.json",
+        "output/rea-integracion/revision/rea05-costes/correccion/DICTAMEN.md",
+        "output/rea-integracion/rea05/costes-correccion/aceptacion-root.json"
+      ],
+      "pendiente": "Sin gate global actual ni aceptaciónST33 general; compartir pool/cabecera/enlaces posteriores requiere integración final."
+    },
+    "REA-06": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea06/integridad-final/informe.json",
+        "output/rea-integracion/rea06/correccion-integridad-root/aceptacion-root.json"
+      ],
+      "limite": "Gateestable1001/WebpacksinBD excluye05WIP. Gateglobalcheckoutfinal posterior."
+    },
+    "REA-07": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea07/correccion/DICTAMEN.md",
+        "output/rea-integracion/revision/rea07b/correccion-20261016/dictamen.json",
+        "output/rea-integracion/rea07b/correccion-20261016/aceptacion-root.json"
+      ],
+      "limite": "DosP2 de paginación07B cerrados mediante gate selectivo independiente.23propias,11puras,104tablasidénticas. Gate global yST33 general pendientes."
+    },
+    "REA-08": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea08/correccion-20261016/dictamen.json",
+        "output/rea-integracion/rea08/correccion/20261016T084354Z/aceptacion-root.json"
+      ],
+      "limite": "Única corrección cincoP2 cerrada por gate selectivo;63fuentes actuales contrastadas raíz. Build/gate conjunto final pendiente; no producción."
+    },
+    "REA-09": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "output/rea-integracion/revision/rea09/correccion-20261016/dictamen.md",
+        "output/rea-integracion/rea09/correccion/20261016T090932Z/final2/aceptacion-root.json",
+        "output/rea-integracion/rea09/consultas-runtime/20261016T0851Z/incidente-evidencia.json"
+      ],
+      "limite": "F01/F02 cerrados con gate selectivo independiente,29propias+842copias;15SQL+5Chrome+4modelo.8rawantiguos sinrecuperar documentados; vozreal indisponible. Integración posterior documento_requisitos se acepta en10; gate global pendiente."
+    },
+    "REA-10": {
+      "estado": "cerrada_localmente",
+      "evidencia": [
+        "docs/28-rea10-especificacion.md",
+        "docs/29-rea-entrega-local.md",
+        "docs/CONTINUACION_REA_RONDA_ADICIONAL.md",
+        "output/rea-integracion/revision/rea10/correccion-backend-20261016/dictamen.json",
+        "output/rea-integracion/revision/rea10/correccion-ui-20261016/DICTAMEN.md",
+        "output/rea-integracion/rea10/correccion-20261016/aceptacion-backend-root.json",
+        "output/rea-integracion/rea10/correccion-20261016/contraste-ui-root.json",
+        "output/rea-integracion/rea10/serializacion-ronda-adicional-20261016/raiz/aceptacion-root.json",
+        "output/rea-integracion/rea10/serializacion-ronda-adicional-20261016/revision-independiente/dictamen.json",
+        "output/rea-integracion/rea10/serializacion-ronda-adicional-20261016/ejecutor-http-ui/manifest-final.json",
+        "output/rea-integracion/rea10/serializacion-ronda-adicional-20261016/gate-conjunto/manifest-evidencias.json"
+      ],
+      "verificacion_conjunta_previa": "Candidato03 861entradas hash779f560a7f5c4d5bc57a410bfeec77a30025b24fbff1202deeb18dd0bbca3c77:1106/1106,buildsinBD/tipos/lint65/diff0,E2diezcomprobaciones en5568. No equivale a validar el flujo HTTP400.",
+      "nota_historica_antes_de_serializacion": "Único bloqueo observado: revisión BIGINT del endpoint base-tecnica destinoarticulo se emite como texto y genera PATCH400 en catálogo/ofertas. Seis hallazgos originales corregidos, U02verde; gate UI completoexit1. Sergio autorizó ronda adicional y pidió instrucción para otro chat. Parche mínimo SINAPLICAR en rea10/bloqueo-serializacion-20261016. No aceptación global.",
+      "cierre_actual": "Ronda adicional aplicada; GET numérico→PATCH200; catálogo/ofertas preview/confirmación200; cuatro destinos escritorio→móvil390; revisión independiente sin hallazgos."
+    }
+  },
+  "ejecucion_actualizada": "2026-10-16T12:57:35.118435+00:00",
+  "pausa": {
+    "solicitadaPor": "Sergio",
+    "fecha": "2026-10-15T20:57:32.942742+00:00",
+    "relevo": "docs/CONTINUACION_REA_2026-10-16.md",
+    "agentes": "interrumpidos",
+    "puertosQA": [
+      3119,
+      3120,
+      3121
+    ],
+    "reanudadapor": "Sergio,16-10-2026;July282"
+  },
+  "relevo_actual": {
+    "archivo": "docs/29-rea-entrega-local.md",
+    "sesionJuly": 285,
+    "motivo": "Cierre local verificado de ronda adicional autorizada REA10",
+    "autorizacion": "Ronda adicional completada; no nuevas actuaciones Git/producción autorizadas",
+    "parcheAplicado": true,
+    "pendientes244_233": "done"
+  },
+  "integracion_local": {
+    "estado": "aceptada_con_limites_documentados",
+    "fecha": "2026-10-16T12:57:35.118435+00:00",
+    "sesionJuly": 285,
+    "memoriaJuly": 385,
+    "aceptacion": "output/rea-integracion/rea10/serializacion-ronda-adicional-20261016/raiz/aceptacion-root.json",
+    "suite": "1112/1112;186suites",
+    "gate": "WebpacksinBD/tipos/lint66/diffexit0;HTTPUIcompletoexit0;revisiónindependienteapta",
+    "freeze": "11ee30c911a624c34a3d6da4f682afd0456306890b702a9ddf2aa5abc73124a4",
+    "limites": "Los límites de las unidades conservan alcance; no certifica producción/ST33general fuera de05. Las notas de gates conjuntos pendientes en cierres individuales son históricas."
+  }
+}

@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import Module from 'node:module';
+import { readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { conectarRevisiones, URL_REA_PRUEBA, fotografiarRevisiones } from './rea07-fixture.mjs';
+import { ServicioSeguimiento } from '../src/lib/seguimiento-propuestas/servicio';
+import { ErrorSeguimiento, type EntradaComando, type Filtros } from '../src/lib/seguimiento-propuestas/modelo';
+import { cuerpo } from '../src/lib/seguimiento-propuestas/http';
+const m = Module as unknown as { _load: (request: string, ...args: unknown[]) => unknown }, load = m._load; m._load = (req, ...args) => req === 'server-only' ? {} : load.call(Module, req, ...args);
+const { ServicioPropuestas } = await import('../src/lib/propuestas/servicio');
+const { identidadActual } = await import('../src/lib/propuestas/autorizacion');
+const { precioCatalogo } = await import('../src/lib/propuestas/valoracion');
+assert.equal(process.env.REA07_DATABASE_URL, URL_REA_PRUEBA);
+const c = await conectarRevisiones(process.env.REA07_DATABASE_URL!), salida = resolve('output/rea-integracion/rea07/seguimiento-runtime'), f = JSON.parse(await readFile(resolve(salida, 'manifest-fixture.json'), 'utf8'));
+const queries: string[] = []; c.options.debug = (_id, query) => { queries.push(query); };
+const servicio = new ServicioSeguimiento(c, { secreto: f.secreto }), repo06 = new ServicioPropuestas(c, { secreto: f.secreto }), resultados: string[] = [];
+const ok = (caso: string) => { resultados.push(caso); console.log('OK', caso); }, es = (status: number) => (e: unknown) => e instanceof ErrorSeguimiento && e.status === status;
+const filtros = (ids = [f.a.id, f.parcial.id, f.bom.id], importes = false): Filtros => ({ desde: '2026-10-01', hasta: '2026-10-31', observadoEn: new Date().toISOString(), archivo: 'todas', ambito: { tipo: 'seleccion', ids }, importes });
+async function cmd(id: string, comando: EntradaComando['comando'], usuario = f.admin) { const d = await servicio.detalle(usuario, id); return { propuestaId: id, revisionId: d.revision.id, revisionHash: d.revision.hash, versionPropuesta: d.versionPropuesta, versionSeguimiento: d.versionSeguimiento, ultimoEventoId: d.ultimoEventoId, comando, decisionRevocadaId: comando === 'revocar_decision' ? d.ultimoEventoId : null, motivo: 'Frontera sintética', referencia: 'Acta frontera', clavePeticion: randomUUID() }; }
+try {
+    queries.length = 0; const tecnico = await servicio.embudo(f.tecnico, filtros()), detalle = await servicio.detalle(f.tecnico, f.a.id), opciones = await servicio.opcionesPropuestas(f.tecnico);
+    assert(!queries.some(q => /\b(propuesta_valoraciones|tiempos|tiempo_partes|tarifas|coste_cortes|coste_apuntes|coste_valoraciones)\b/i.test(q)));
+    assert(!Object.hasOwn(tecnico, 'importes')); assert(!/subtotalMinor|tarifa|costePrevisto|precioUnitario|destinatario/.test(JSON.stringify({ tecnico, detalle, opciones })));
+    await writeFile(resolve(salida, 'sql-spy-tecnico.json'), JSON.stringify(queries, null, 2)); ok('GWT06 spy SQL técnico no lee tablas privadas ni incluye payloads monetarios');
+    const precio = await precioCatalogo(c, await identidadActual(c, f.admin), 'd7000000-0000-4000-8000-000000000030', new Date().toISOString()), ev = { ...f.eb, titulo: 'P-CATALOGO frontera', valoracion: f.eb.valoracion.map((l: Record<string, unknown>) => ({ ...l, coste: precio.valor, origenCoste: { tipo: 'catalogo', articuloId: precio.articuloId, hash: precio.hash } })) };
+    const previa = await repo06.preparar(f.admin, ev), p = await repo06.publicar(f.admin, ev, previa.previa, { version: 0, revisionId: null, hash: null }, randomUUID());
+    const emitida = await servicio.registrar(f.gestor, await cmd(p.id, 'emitir', f.gestor)); assert(emitida.eventoId);
+    await c`insert into usuario_permisos(usuario_id,seccion,acceso) values(${f.gestor},'catalogo','oculto') on conflict(usuario_id,seccion) do update set acceso='oculto'`;
+    queries.length = 0; await assert.rejects(() => servicio.detalle(f.gestor, p.id), es(403)); const manual = await servicio.detalle(f.gestor, f.parcial.id); assert(manual.propuestaId); const filtrado = await servicio.embudo(f.gestor, filtros([p.id, f.parcial.id])); assert.equal(filtrado.denominador, 1); assert.equal(filtrado.lista[0].propuestaId, f.parcial.id); assert(!queries.some(q => /\bpropuesta_valoraciones\b/.test(q))); ok('GWT06 catálogo retirado excluye exactamente valorada catálogo, conserva manual sin SELECTprivado');
+    await c`update usuario_permisos set acceso='ver' where usuario_id=${f.gestor} and seccion='catalogo'`;
+    const fToken = filtros([f.parcial.id]), anterior = await servicio.embudo(f.gestor, fToken); await c`update usuario_permisos set acceso='oculto' where usuario_id=${f.gestor} and seccion='compras'`;
+    await assert.rejects(() => servicio.embudo(f.gestor, fToken, { token: anterior.token, etapa: 'aceptada' }), es(403)); await assert.rejects(async () => servicio.registrar(f.gestor, { ...await cmd(f.parcial.id, 'revocar_decision'), clavePeticion: randomUUID() }), es(403));
+    await c`update usuario_permisos set acceso='editar' where usuario_id=${f.gestor} and seccion='compras'`; ok('GWT09 retirada ACL invalida token y nueva escritura');
+    const futura = { ...filtros([f.rollback.id]), observadoEn: new Date(Date.now() + 3600000).toISOString() }, reloj = new ServicioSeguimiento(c, { secreto: f.secreto, reloj: () => new Date(Date.now() + 3600001) }), conjunto = await reloj.embudo(f.admin, futura); await servicio.registrar(f.admin, await cmd(f.rollback.id, 'emitir')); await assert.rejects(() => reloj.embudo(f.admin, futura, { token: conjunto.token, etapa: 'borrador' }), es(409)); ok('GWT09 operación concurrente anterior al corte cambia manifiesto409');
+    const viejo = await servicio.detalle(f.admin, f.a.id), e2 = { ...f.entrada, titulo: 'Publicación no-op ' + randomUUID() }, pv2 = await repo06.preparar(f.admin, e2), pa2 = await repo06.publicar(f.admin, e2, pv2.previa, { version: 0, revisionId: null, hash: null }, randomUUID());
+    const antesNoOp = await servicio.detalle(f.admin, pa2.id), baseNoOp = { version: pa2.version, revisionId: pa2.revisionId, hash: pa2.sha256 }, pvNoOp = await repo06.preparar(f.admin, e2, pa2.id, baseNoOp), noOp = await repo06.publicar(f.admin, e2, pvNoOp.previa, baseNoOp, randomUUID(), pa2.id); assert(noOp.sinCambio); assert.equal((await servicio.detalle(f.admin, pa2.id)).revision.publicacionOperacionId, antesNoOp.revision.publicacionOperacionId); assert.equal((await servicio.detalle(f.admin, f.a.id)).revision.hash, viejo.revision.hash); ok('GWT01 no-op06 no desplaza primera publicación ni número');
+    queries.length = 0; await assert.rejects(() => servicio.capacidadResultados(f.gestor), es(403)); assert.equal((await servicio.capacidadResultados(f.admin)).disponible, true); assert(!queries.some(q => /\b(coste_|tiempo_|tarifa)/.test(q))); ok('GWT07/14 403 ycapacidad financiera sin SELECT05');
+    for (const longitud of [65537, 70000]) await assert.rejects(() => cuerpo(new Request('http://localhost/prueba', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'x'.repeat(longitud) })), es(413));
+    const bytes = new Uint8Array([0xff]), req = new Request('http://localhost/prueba', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bytes }); await assert.rejects(() => cuerpo(req), es(400)); ok('HTTP cuerpo incremental64KiB y UTF8 estricto');
+    const emit = await cmd(f.legacy.id, 'emitir'), fotoAntes = await fotografiarRevisiones(c); await servicio.registrar(f.admin, emit); await servicio.registrar(f.admin, await cmd(f.legacy.id, 'aceptar')); const fotoDespues = await fotografiarRevisiones(c); for (const t of fotoAntes.tablas) if (!['propuesta_eventos', 'propuesta_seguimientos', 'propuesta_seguimiento_operaciones'].includes(t.tabla)) assert.equal(t.sha256, fotoDespues.tablas.find(x => x.tabla === t.tabla)?.sha256, t.tabla); await writeFile(resolve(salida, 'conservacion-exacta06-pdf.json'), JSON.stringify({ antes: fotoAntes, despues: fotoDespues }, null, 2)); ok('GWT20 sólo3sidecars07 cambian; PDF/revisiones/operaciones06 y05 íntegros');
+    await writeFile(resolve(salida, 'fronteras-resultados.json'), JSON.stringify({ resultados, catalogo: p, noOp: pa2, pendientes: ['Finanzas07B: escenarios15-18 sujetos al adaptador05'] }, null, 2));
+} finally { await c.end(); }

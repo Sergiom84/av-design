@@ -6,7 +6,7 @@ import { construirTablaCables, tablaCablesACsv } from '../cable-schedule';
 import { calcularDisponibilidad } from '../almacen';
 import { necesidadDeSala, calcularFaltante, agruparPorProveedor } from '../compras';
 import { PARAMETROS_POR_DEFECTO, type Articulo, type Sala, type EquipoEnSala, type Conexion } from '../tipos';
-import { avisosDeMaterial, construirBom, generarBomCsv, generarCablesCsv, generarXlsx } from './tablas';
+import { avisosDeMaterial, construirBom, generarBomCsv, generarCablesCsv, generarXlsx, necesidadExportada } from './tablas';
 import { textoSeguroCsv } from './csv';
 import type { SalaExportada, SnapshotExportacion } from './modelo';
 
@@ -56,6 +56,40 @@ async function leerXlsx(bytes: Uint8Array): Promise<ExcelJS.Workbook> {
 }
 
 describe('exportación BOM y cables', () => {
+  test('la proyección técnica sin precios conserva la necesidad canónica de E1', () => {
+    const snap = snapshot();
+    const s = snap.salas[0];
+    s.materialBom = [{ articulo_id: 'pantalla', descripcion: 'Pantalla adicional', unidad: 'ud', cantidad: 3 }];
+    const articulos = snap.articulos.map(({ id, marca, modelo, unidad, bobina_m }) =>
+      ({ id, marca, modelo, unidad, bobina_m }));
+    const tecnica = necesidadExportada({ articulos }, {
+      equipos: s.equipos.map(({ articulo_id, nombre, cantidad }) => ({ articulo_id, nombre, cantidad })),
+      conexiones: s.conexiones,
+      resultadosCable: s.resultadosCable,
+      materialBom: s.materialBom,
+    });
+    const proyectar = ({ articulo_id, cantidad, unidad, detalle, origenes }: ReturnType<typeof necesidadExportada>[number]) =>
+      ({ articulo_id, cantidad, unidad, detalle, origenes });
+    assert.deepEqual(tecnica.map(proyectar), construirBom(snap, [s]).map(proyectar));
+    assert.equal(tecnica.find(l => l.articulo_id === 'pantalla')?.cantidad, 6);
+    assert.equal(tecnica.find(l => l.articulo_id === 'cable')?.cantidad, 6.25);
+    assert.equal(tecnica.find(l => l.articulo_id === 'cable')?.unidad, 'm');
+    assert.ok(tecnica.every(l => !('coste' in l) && !('precio_unitario' in l) && !('disponible' in l)));
+  });
+
+  test('XLSX identifica cada diseño y BOM CSV conserva su hash sin tocar el CSV de cables', async () => {
+    const snap = snapshot(); const s = snap.salas[0];
+    s.revisionDiseno = { estado: 'revision', id: 'r1', numero: 1, nombre: 'Base sintética', autor: 'Técnico de prueba',
+      creadoEn: snap.creadoEn, hash: 'a'.repeat(64), antecedente: null, heredadaDe: null };
+    const libro = await leerXlsx(await generarXlsx(snap, snap.salas, 'bom'));
+    const hoja = libro.getWorksheet('Revisiones de diseño')!;
+    assert.ok(hoja);
+    assert.equal(hoja.getCell('D10').value, 'r1');
+    assert.equal(hoja.getCell('G10').value, 'a'.repeat(64));
+    assert.equal(hoja.getCell('H10').value, 'Técnico de prueba');
+    assert.ok(new TextDecoder().decode(generarBomCsv(snap, s)).includes('a'.repeat(64)));
+    assert.equal(new TextDecoder().decode(generarCablesCsv(snap, s)), tablaCablesACsv(s.filasCable));
+  });
   test('la BOM coincide con la cadena de compra existente y mantiene precio ausente, orientativo y cero', () => {
     const snap = snapshot(); const s = snap.salas[0];
     const articulos = new Map(snap.articulos.map((a) => [a.id, a]));
@@ -91,6 +125,47 @@ describe('exportación BOM y cables', () => {
     s.resultadosCable = [calcularConexion(s.conexiones[0], s.sala, porEquipo, new Map(snap.articulos.map((a) => [a.id, a])))!];
     const cable = construirBom(snap, [s]).find((l) => l.articulo_id === 'cable')!;
     assert.equal(cable.cantidad, 3); assert.deepEqual(cable.origenes, ['equipo', 'cable']);
+  });
+
+  test('las reservas de salas no seleccionadas siguen comprometidas y la BOM adicional usa la necesidad actual', () => {
+    const snap = snapshot([sala('s1'), sala('s2')]);
+    snap.disponibilidad = [calcularDisponibilidad('pantalla', 10, 8, null)];
+    snap.salas[0].reservas = [{ articulo_id: 'pantalla', cantidad: 1 }, { articulo_id: 'pantalla', cantidad: 1 }];
+    snap.salas[1].reservas = [{ articulo_id: 'pantalla', cantidad: 6 }];
+    snap.salas[0].materialBom = [{ articulo_id: 'pantalla', descripcion: 'Pantalla de catálogo', unidad: 'ud', cantidad: 2.5, nota: 'Ámbito adicional' }];
+    const antes = structuredClone(snap);
+    const seleccion = construirBom(snap, [snap.salas[0]]).find((l) => l.articulo_id === 'pantalla')!;
+    assert.deepEqual([seleccion.cantidad, seleccion.reservado_total, seleccion.disponible_libre,
+      seleccion.reservado_propio, seleccion.disponible_para_seleccion, seleccion.a_comprar], [5.5, 8, 2, 2, 4, 1.5]);
+    assert.deepEqual(seleccion.origenes, ['equipo', 'bom']);
+    assert.equal(seleccion.importe_necesidad, 55);
+    assert.equal(seleccion.importe_compra, 15);
+    const obra = construirBom(snap, snap.salas).find((l) => l.articulo_id === 'pantalla')!;
+    assert.deepEqual([obra.cantidad, obra.reservado_propio, obra.disponible_para_seleccion, obra.a_comprar], [8.5, 8, 10, 0]);
+    assert.deepEqual(snap, antes);
+  });
+
+
+  test('alternativas con longitudes comerciales distintas no atribuyen a toda la obra la longitud de la primera sala', async () => {
+    const snap = snapshot([sala('s1'), sala('s2')]);
+    snap.articulos = snap.articulos.map((a) => a.id === 'cable'
+      ? { ...a, unidad: 'ud', modelo: 'Latiguillo HDMI', longitudes_comerciales_m: [3, 5] } : a);
+    for (const [i, s] of snap.salas.entries()) {
+      s.conexiones[0].longitud_manual_m = i === 0 ? 4 : 2;
+      s.resultadosCable = [calcularConexion(s.conexiones[0], s.sala,
+        new Map(s.equipos.map((e) => [e.id, e])), new Map(snap.articulos.map((a) => [a.id, a])))!];
+    }
+    const antes = structuredClone(snap);
+    const bom = construirBom(snap, snap.salas), cable = bom.find((l) => l.articulo_id === 'cable')!;
+    assert.equal(cable.cantidad, 2);
+    assert.match(cable.descripcion, /5 m/);
+    assert.match(cable.descripcion, /3 m/);
+    assert.ok(cable.detalle.some((d) => d.includes('s1') && d.includes('5 m')));
+    assert.ok(cable.detalle.some((d) => d.includes('s2') && d.includes('3 m')));
+    const libro = await leerXlsx(await generarXlsx(snap, snap.salas, 'bom'));
+    assert.equal(libro.getWorksheet('Material')!.getCell(bom.indexOf(cable) + 10, 3).value, cable.descripcion);
+    assert.ok(new TextDecoder().decode(generarBomCsv(snap, snap.salas)).includes(cable.descripcion));
+    assert.deepEqual(snap, antes);
   });
 
   test('CSV de cables conserva exactamente dialecto y las 18 columnas de la exportación actual', () => {
@@ -166,6 +241,25 @@ describe('exportación BOM y cables', () => {
     assert.deepEqual(snap, antes);
   });
 
+  test('un subtotal sin ningún precio o metraje queda vacío y un total de precio cero sigue siendo numérico', async () => {
+    const snap = snapshot();
+    snap.articulos = snap.articulos.map((a) => ({ ...a, coste: null }));
+    const filas = construirBom(snap, snap.salas);
+    const sinPrecios = await leerXlsx(await generarXlsx(snap, snap.salas, 'bom'));
+    const material = sinPrecios.getWorksheet('Material')!;
+    assert.equal(material.getCell(10 + filas.length, 16).value, null);
+    assert.equal(material.getCell(10 + filas.length, 17).value, null);
+    assert.ok(filas.every((l) => l.importe_necesidad === null && l.importe_compra === null && l.estado_precio === 'Sin precio'));
+    snap.salas[0].filasCable[0].metros = null;
+    const sinMetros = await leerXlsx(await generarXlsx(snap, snap.salas, 'cables'));
+    assert.equal(sinMetros.getWorksheet('Cables')!.getCell('L11').value, null);
+    snap.articulos = snap.articulos.map((a) => ({ ...a, coste: 0, coste_orientativo: false }));
+    const conCeros = await leerXlsx(await generarXlsx(snap, snap.salas, 'bom'));
+    assert.equal(conCeros.getWorksheet('Material')!.getCell(10 + filas.length, 16).value, 0);
+    assert.equal(conCeros.getWorksheet('Material')!.getCell(10 + filas.length, 16).type, ExcelJS.ValueType.Number);
+  });
+
+
   test('las ausencias de catálogo y metros se explican sin inventar cantidades ni precios', async () => {
     const snap = snapshot(); const s = snap.salas[0];
     s.equipos.push({ ...s.equipos[0], id: 'sin-articulo', articulo_id: '', nombre: 'Equipo libre', cantidad: 7 });
@@ -178,4 +272,18 @@ describe('exportación BOM y cables', () => {
     const libro = await leerXlsx(await generarXlsx(snap, [s], 'bom'));
     assert.ok(libro.getWorksheet('Material')!.getSheetValues().flat(2).some((v) => typeof v === 'string' && v.includes('Equipo libre')));
   });
+});
+
+
+test('las cabeceras de todas las hojas reservan espacio para texto y autofiltro', async () => {
+  const snap = snapshot();
+  snap.salas[0].revisionDiseno = { estado: 'borrador', id: null, numero: null, nombre: null, autor: null,
+    creadoEn: null, hash: 'a'.repeat(64), antecedente: null, heredadaDe: null };
+  for (const tipo of ['bom', 'cables'] as const) {
+    const libro = await leerXlsx(await generarXlsx(snap, snap.salas, tipo));
+    for (const hoja of libro.worksheets) hoja.getRow(9).eachCell((celda, indice) => {
+      assert.ok(hoja.getColumn(indice).width! >= String(celda.value).length + 6,
+        `${hoja.name}: ${celda.value} necesita anchura para el botón del autofiltro`);
+    });
+  }
 });

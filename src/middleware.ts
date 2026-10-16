@@ -20,6 +20,7 @@ import {
  */
 export async function middleware(peticion: NextRequest) {
   const ruta = peticion.nextUrl.pathname;
+  const esApi = ruta === '/api' || ruta.startsWith('/api/');
   if (esRutaLibre(ruta)) return NextResponse.next();
 
   // Se lee con corchetes y no con punto a propósito. Con `process.env.X` el
@@ -34,6 +35,7 @@ export async function middleware(peticion: NextRequest) {
   // Producción sin secreto configurado: no se pasa. Un despliegue al que se le
   // olvidó la variable es justo el caso en el que el inventario acaba abierto.
   if (puerta === 'sin_configurar') {
+    if (esApi) return NextResponse.json({ error: 'Servicio no disponible.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
     return new NextResponse(
       'Falta configurar SESION_SECRETO en el servidor.',
       { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } },
@@ -46,6 +48,7 @@ export async function middleware(peticion: NextRequest) {
     Date.now(),
   );
   if (sesion) return NextResponse.next();
+  if (esApi) return NextResponse.json({ error: 'Sin sesión.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
 
   // A dónde iba, para devolverlo ahí después de entrar. Solo rutas de esta
   // aplicación: un destino con dominio propio convertiría la entrada en un

@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Aviso, Boton, Enlace, Tarjeta } from '@/components/ui';
+import { Aviso, Enlace, Tarjeta } from '@/components/ui';
 import { borrarSala } from '@/app/acciones';
+import { FormularioBorrado } from '@/components/borrado/formulario';
 
 /**
  * Borrar la sala, aparte del trabajo diario y con el mismo patrón de
@@ -36,10 +37,7 @@ export function BorrarSala({
           sin sala, como el material legado. No se puede deshacer.
         </Aviso>
         <div className="flex gap-3 items-center">
-          <form action={borrarSala}>
-            <input type="hidden" name="id" value={salaId} />
-            <Boton variante="peligro">Borrar definitivamente</Boton>
-          </form>
+          <FormularioBorrado id={salaId} accion={borrarSala} />
           <Enlace href={`/salas/${salaId}`}>Cancelar</Enlace>
         </div>
       </div>

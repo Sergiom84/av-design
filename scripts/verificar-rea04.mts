@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { conectarRevisiones, URL_REA_PRUEBA, idPlan, crearIdentidadesPlanes } from './rea04-fixture.mjs';
+import { RepositorioPlanificacion } from '../src/lib/planificacion/repositorio';
+import { ErrorPlan, type SeleccionPlan } from '../src/lib/planificacion/modelo';
+import { randomUUID } from 'node:crypto';
+const salida = resolve(process.env.REA04_EVIDENCIA ?? 'output/rea-integracion/rea04');
+assert.equal(process.env.REA_DATABASE_URL, URL_REA_PRUEBA);
+const c = await conectarRevisiones(process.env.REA_DATABASE_URL!);
+const es = (status: number) => (e: unknown) => e instanceof ErrorPlan && e.status === status;
+try {
+    await mkdir(salida, { recursive: true });
+    await crearIdentidadesPlanes(c);
+    const proyecto = idPlan(10), localizacion = idPlan(11), sala = idPlan(12);
+    await c `insert into proyectos(id,nombre,codigo) values(${proyecto},'OBRA REA04 aceptación','REA04-ACEPTACION') on conflict(id) do nothing`;
+    await c `insert into localizaciones(id,proyecto_id,nombre) values(${localizacion},${proyecto},'Edificio REA04') on conflict(id) do nothing`;
+    await c `insert into salas(id,localizacion_id,nombre,codigo,tipologia,largo_m,ancho_m,alto_m) values(${sala},${localizacion},'Sala REA04','REA04-01','Prueba',6,4,3) on conflict(id) do nothing`;
+    await c `insert into tecnicos(id,nombre,activo,fuente) values(${idPlan(20)},'Técnico REA04 activo',true,'app'),(${idPlan(21)},'Técnico REA04 inactivo',false,'app') on conflict(id) do nothing`;
+    const repo = new RepositorioPlanificacion(c, { secreto: 'rea04-local-prueba-integracion-secreto-2026' }), u = idPlan(1);
+    const resultados: Record<string, unknown>[] = [];
+    const p0 = await repo.leerPlan(u, proyecto);
+    if (!p0.plan) {
+        assert.equal((await c `select id from planes where proyecto_id=${proyecto}`).length, 0);
+        await repo.crearPlan(u, proyecto, randomUUID());
+    }
+    resultados.push({ caso: 'GET no crea; creación explícita única', aprobado: true });
+    let p = await repo.leerPlan(u, proyecto);
+    const b = { titulo: 'Manual REA04 sin estimar', descripcion: '', notas: '', duracionEstimadaMin: null, estado: 'borrador' as const, venceFecha: null, intervalo: null, salaId: sala, trabajoId: null, versionPlan: p.plan!.version, clavePeticion: randomUUID() };
+    const creada = await repo.crearTarea(u, proyecto, b);
+    assert.equal((await repo.crearTarea(u, proyecto, b)).operacionId, creada.operacionId);
+    let t = await repo.tarea(u, String(creada.id));
+    assert.equal(t.duracionEstimadaMin, null);
+    resultados.push({ caso: 'Manual null + idempotencia', aprobado: true });
+    const trabajo = await repo.guardarTrabajo(u, { titulo: 'Montar equipo literal', descripcion: 'Trabajo sintético', duracionEstimadaMin: 45, activo: true });
+    const regla = await repo.guardarRegla(u, { trabajoId: trabajo.id, selector: { tipo: 'sala' }, activo: true });
+    p = await repo.leerPlan(u, proyecto);
+    const seleccion: SeleccionPlan = { versionPlan: p.plan!.version, salas: { modo: 'seleccion', ids: [sala] }, reglas: [String(regla.id)], fuentes: [{ salaId: sala, tipo: 'actual' }] };
+    const previa = await repo.preparar(u, proyecto, seleccion);
+    assert.equal(previa.diff.length, 1);
+    const conf = { seleccion, token: previa.token, clavePeticion: randomUUID(), aceptoFuenteAnterior: false, acciones: [{ clave: previa.diff[0].clave, accion: 'crear' as const, versionTarea: null, campos: [] }] };
+    const confirmada = await repo.confirmar(u, proyecto, conf);
+    assert.equal((await repo.confirmar(u, proyecto, conf)).operacionId, confirmada.operacionId);
+    resultados.push({ caso: 'Preview sin escrituras; confirmación elegida idempotente', aprobado: true });
+    const campos = { titulo: t.titulo, descripcion: t.descripcion, notas: 'Nota de planificación', duracionEstimadaMin: null, estado: 'pendiente' as const, venceFecha: '2026-10-15', intervalo: { inicio: { fecha: '2026-10-15', hora: '09:00' }, fin: { fecha: '2026-10-15', hora: '11:00' } }, versionPlan: Number(confirmada.versionPlan), versionTarea: t.version, clavePeticion: randomUUID() };
+    await repo.editarTarea(u, t.id, campos);
+    t = await repo.tarea(u, t.id);
+    await repo.asignar(u, t.id, { versionPlan: t.versionPlan, versionTarea: t.version, clavePeticion: randomUUID(), tecnicos: [idPlan(20)], grupos: [] });
+    t = await repo.tarea(u, t.id);
+    assert.equal(t.tecnicos[0].id, idPlan(20));
+    const agenda = await repo.agenda(u, { vista: 'hoy' }, new Date('2026-10-15T12:00:00Z'));
+    assert(agenda.tareas.some(a => a.id === t.id));
+    assert.equal(agenda.ocupacion.find(a => a.tecnicoId === idPlan(20))?.minutos, 120);
+    resultados.push({ caso: 'Fecha Madrid, técnico explícito y ocupación120min', aprobado: true });
+    await assert.rejects(() => repo.editarTarea(u, t.id, { ...campos, versionPlan: t.versionPlan, versionTarea: t.version - 1, clavePeticion: randomUUID() }), es(409));
+    const h = await repo.historial(u, t.id);
+    assert(h.length >= 3);
+    const evento = h.find(e => e.tipo === 'crear_manual');
+    assert(evento);
+    await repo.restaurar(u, t.id, { versionPlan: t.versionPlan, versionTarea: t.version, clavePeticion: randomUUID(), motivo: 'Restauración de prueba', eventoId: evento.id });
+    t = await repo.tarea(u, t.id);
+    assert.equal(t.estado, 'borrador');
+    assert.equal(t.inicio, null);
+    assert.equal(t.tecnicos.length, 0);
+    resultados.push({ caso: 'Historial/CAS/restauración no reactiva asignaciones', aprobado: true });
+    await assert.rejects(() => repo.leerPlan(idPlan(4), proyecto), es(403));
+    await assert.rejects(() => repo.leerPlan(idPlan(5), proyecto), es(401));
+    await assert.rejects(() => repo.crearPlan(idPlan(2), proyecto, randomUUID()), es(403));
+    resultados.push({ caso: 'Permisos y estado real de identidad', aprobado: true });
+    await writeFile(resolve(salida, 'sql-inicial-resultados.json'), JSON.stringify(resultados, null, 2));
+    console.log(`${resultados.length} grupos iniciales aprobados.`);
+}
+finally {
+    await c.end();
+}

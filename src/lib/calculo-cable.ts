@@ -154,11 +154,14 @@ export function ajustarALongitudComercial(
   return encaja ?? ordenadas[ordenadas.length - 1];
 }
 
+/** El cálculo geométrico sólo necesita el formato comercial del artículo. */
+export type ArticuloParaCalculo = Pick<Articulo, 'longitudes_comerciales_m'>;
+
 export function calcularConexion(
   conexion: Conexion,
   sala: Sala,
   equipos: Map<string, EquipoEnSala>,
-  articulos: Map<string, Articulo>,
+  articulos: Map<string, ArticuloParaCalculo>,
   parametros: ParametrosCable = PARAMETROS_POR_DEFECTO,
 ): ResultadoCable | null {
   const origen = equipos.get(conexion.origen_id);
@@ -246,10 +249,14 @@ export interface LineaMaterialCable {
  * Agrupa los resultados en líneas de material listas para comprar.
  * Cable a granel → metros totales y bobinas. Latiguillos → unidades por longitud.
  */
+/** Proyección técnica; el coste puede estar ausente en lectores sin finanzas. */
+export type ArticuloParaMaterialCable = Pick<Articulo, 'id' | 'marca' | 'modelo' | 'bobina_m'> &
+  Partial<Pick<Articulo, 'coste'>>;
+
 export function agruparMaterialCable(
   resultados: ResultadoCable[],
   conexiones: Conexion[],
-  articulos: Map<string, Articulo>,
+  articulos: Map<string, ArticuloParaMaterialCable>,
 ): LineaMaterialCable[] {
   const porConexion = new Map(conexiones.map((c) => [c.id, c]));
   const granel = new Map<string, { metros: number; tiradas: number }>();

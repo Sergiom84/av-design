@@ -144,6 +144,43 @@ describe('columnaDeEquipo', () => {
 });
 
 describe('construirDiagrama', () => {
+  for (const sentidoOrigen of ['entrada', 'salida', 'bidireccional', 'control'] as const) {
+    for (const sentidoDestino of ['entrada', 'salida', 'bidireccional', 'control'] as const) {
+      it(`une las bocas reales ${sentidoOrigen} → ${sentidoDestino} sin atravesar sus bloques`, () => {
+        const entrada: EntradaDiagrama = {
+          equipos: [equipo('o', 'Origen', 'ao'), equipo('d', 'Destino', 'ad')],
+          puertosPorArticulo: new Map([
+            ['ao', [puerto('po', 'ao', 'ORIGEN', sentidoOrigen)]],
+            ['ad', [puerto('pd', 'ad', 'DESTINO', sentidoDestino)]],
+          ]),
+          conexiones: [conexion('c1', 'o', 'd', { puerto_origen_id: 'po', puerto_destino_id: 'pd' })],
+        };
+        const antes = JSON.stringify(entrada);
+        const escena = construirDiagrama(entrada);
+        const origen = escena.bloques.find(b => b.equipo_id === 'o')!;
+        const destino = escena.bloques.find(b => b.equipo_id === 'd')!;
+        const puntos = escena.lineas[0].puntos;
+        for (const [bloque, sentido, punto] of [[origen, sentidoOrigen, puntos[0]], [destino, sentidoDestino, puntos.at(-1)!]] as const) {
+          const derecha = ladoDePuerto(sentido) === 'derecha';
+          const fila = (derecha ? bloque.salidas : bloque.entradas)[0];
+          assert.equal(punto.x, bloque.x + (derecha ? bloque.ancho + MEDIDAS_DIAGRAMA.largo_conector : -MEDIDAS_DIAGRAMA.largo_conector));
+          assert.equal(punto.y, fila.y);
+        }
+        for (let i = 1; i < puntos.length; i++) {
+          const a = puntos[i - 1], b = puntos[i];
+          assert.ok(a.x === b.x || a.y === b.y);
+          for (const bloque of [origen, destino]) {
+            const cruza = a.y === b.y
+              ? a.y > bloque.y && a.y < bloque.y + bloque.alto && Math.max(a.x, b.x) > bloque.x && Math.min(a.x, b.x) < bloque.x + bloque.ancho
+              : a.x > bloque.x && a.x < bloque.x + bloque.ancho && Math.max(a.y, b.y) > bloque.y && Math.min(a.y, b.y) < bloque.y + bloque.alto;
+            assert.equal(cruza, false, 'la línea debe permanecer fuera del cuerpo opaco');
+          }
+        }
+        assert.ok(puntos.every(p => p.x >= 0 && p.y >= 0 && p.x <= escena.ancho && p.y <= escena.alto));
+        assert.equal(JSON.stringify(entrada), antes);
+      });
+    }
+  }
   it('coloca cada bloque en su columna, de izquierda a derecha', () => {
     const escena = construirDiagrama(entradaTipo());
     const porId = new Map(escena.bloques.map((b) => [b.equipo_id, b]));

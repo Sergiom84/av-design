@@ -395,3 +395,16 @@ que lo unifican están en `scripts/normalizacion.mjs` y las usan tanto la siembr
   tiene, y el informe marca los casos ajustados para revisarlos a mano.
 
 El informe de la primera pasada está en `docs/04-limpieza-catalogo.md`.
+
+## Continuidad de la integración REA · cierre local 16-10-2026
+
+La integración REA está **cerrada localmente dentro de sus contratos y límites documentados**. El cierre vigente está en
+[`docs/29-rea-entrega-local.md`](docs/29-rea-entrega-local.md), el contrato en
+[`docs/17-integracion-rea.md`](docs/17-integracion-rea.md) y la cobertura en
+[`docs/18-rea-cobertura.md`](docs/18-rea-cobertura.md). La ronda adicional autorizada de serialización REA10 está aplicada y verificada con revisión independiente, ciclo HTTP/navegador completo y gate conjunto1112/1112, WebpacksinBD/tipos/lint66/diff0. No reaplicar el parche, repetir07B/08/09 ni relanzar prompts históricosE2/E3.
+
+Único checkout AV_design, rama `codex/rea-integracion`, HEAD7ba7960 conservado; Xtenav sólo investigación y evidencia auxiliar. July `av-design`, memoria385, sesión285 `av-design-rea10-serializacion-2026-10-16`; pendientes244/233 cerrados. Cualquier nueva tarea empieza verificando Git/agentes/procesos, conservandoWIP/evidencia y límites documentados. Sólo bases sintéticas aisladas. Sin commit,push,merge,despliegue ni producción; este cierre no autoriza ninguna de esas acciones.
+
+### Publicación autorizada posterior ·16-10-2026
+
+Sergio autorizó consolidar la integración con commit y push en `codex/rea-integracion` y aplicar las migraciones necesarias. Esa autorización sustituye para esta entrega las prohibiciones Git/BD del registro de cierre anterior. Neon ya está migrada:14migraciones,104tablas,1357filas previas conservadas. Estado vigente en `docs/30-rea-publicacion.md`; SHA y comprobación remota en July. La base previa era7ba7960; consultar Git para el HEAD vigente. No se ha pedido merge a main ni despliegue. Render usa main y autoDeploy=yes; comprobarlo antes de cualquier publicación futura.

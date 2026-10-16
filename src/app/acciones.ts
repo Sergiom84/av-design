@@ -8,7 +8,14 @@ import { sedeId } from '@/lib/sedes';
 import { expandirPatron, MAXIMO_COPIAS } from '@/lib/nombres-serie';
 import { coordenadasFueraDeSala, puertasFueraDePared } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
-import { exigirEdicion } from '@/lib/sesion-servidor';
+import { exigirEdicion, exigirSeccion } from '@/lib/sesion-servidor';
+import { esUuid } from '@/lib/uuid';
+import { leerDimensiones, firmaMedidasPlantilla } from '@/lib/longitudes';
+import { comprobarPlantillaParaCopiar, comprobarPlantillaSinCambios, leerPlantillaPreview, ErrorCambioPlantilla } from '@/lib/datos-plantillas';
+import { entradaDePlantilla, limitesDeEntrada } from '@/lib/plantilla-preview';
+import { problemasAlMedirSala } from '@/lib/medidas-servidor';
+import { bloquearProyectoParaAlta, ErrorJerarquia } from '@/lib/jerarquia-transaccional';
+import { crearPuertoEnTransaccion, guardarPuertoEnTransaccion, borrarPuertoEnTransaccion } from '@/lib/catalogo-puertos-escritura';
 
 /**
  * Lo que el alta devuelve al formulario. `error` nulo es «no ha pasado nada»:
@@ -161,21 +168,33 @@ function posicionDelFormulario(datos: FormData): {
 }
 
 // ---------------------------------------------------------------- plantillas
-export async function guardarMedidasPlantilla(datos: FormData) {
+export async function guardarMedidasPlantilla(datos: FormData): Promise<EstadoAlta> {
   await exigirEdicion('plantillas');
-  await sql`
-    update plantillas_sala set
-      largo_m            = ${numero(datos.get('largo_m'))},
-      ancho_m            = ${numero(datos.get('ancho_m'))},
-      alto_m             = ${numero(datos.get('alto_m'))},
-      alto_falso_techo_m = ${numero(datos.get('alto_falso_techo_m'))},
-      mesa_largo_m       = ${numero(datos.get('mesa_largo_m'))},
-      mesa_ancho_m       = ${numero(datos.get('mesa_ancho_m'))},
-      mesa_alto_cm       = ${numero(datos.get('mesa_alto_cm'))},
-      ruta_por_defecto   = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable
-    where id = ${String(datos.get('id'))}`;
-  revalidatePath('/plantillas');
-  revalidatePath('/');
+  const id = String(datos.get('id'));
+  if (!esUuid(id)) return { error: 'Plantilla inválida.' };
+  let medidas;
+  try { medidas = leerDimensiones(datos); } catch (e) { return { error: e instanceof Error ? e.message : 'Medida inválida.' }; }
+  const resultado = await sql.begin('isolation level repeatable read', async tx => {
+    const [actual] = await tx`select * from plantillas_sala where id=${id} for update`;
+    if (!actual) return { error: 'La plantilla ya no existe.' };
+    if (String(datos.get('huella_medidas') ?? '') !== firmaMedidasPlantilla(actual)) return { error: 'La plantilla cambió en otra pestaña. Recarga antes de guardar; conserva tus medidas para compararlas.' };
+    const mesa = { mesa_largo_m: numero(datos.get('mesa_largo_m')), mesa_ancho_m: numero(datos.get('mesa_ancho_m')), mesa_alto_cm: numero(datos.get('mesa_alto_cm')) };
+    const vista = await leerPlantillaPreview(id, tx);
+    if (vista) {
+      const entrada = entradaDePlantilla({ ...vista, plantilla: { ...vista.plantilla, ...medidas, ...mesa } });
+      const problemas = limitesDeEntrada(entrada);
+      if (problemas.length) return { error: problemas[0] };
+    }
+    await tx`update plantillas_sala set largo_m=${medidas.largo_m}, ancho_m=${medidas.ancho_m}, alto_m=${medidas.alto_m},
+      alto_falso_techo_m=${numero(datos.get('alto_falso_techo_m'))}, mesa_largo_m=${mesa.mesa_largo_m}, mesa_ancho_m=${mesa.mesa_ancho_m}, mesa_alto_cm=${mesa.mesa_alto_cm},
+      ruta_por_defecto=${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable where id=${id}`;
+    return { error: null };
+  }).catch((e: unknown) => {
+    if ((e as { code?: string }).code === '40001') return { error: 'La plantilla cambió mientras guardabas. Recarga para comparar.' };
+    throw e;
+  });
+  if (!resultado.error) { revalidatePath('/plantillas'); revalidatePath('/'); }
+  return resultado;
 }
 
 // --------------------------------------------------------------------- salas
@@ -218,6 +237,12 @@ export async function crearSala(
 ): Promise<EstadoAlta> {
   await exigirEdicion('salas');
   const plantillaId = texto(datos.get('plantilla_id'));
+  let medidas;
+  try { medidas = leerDimensiones(datos); } catch (e) { return { error: e instanceof Error ? e.message : 'Medida inválida.' }; }
+  if (plantillaId) {
+    await exigirSeccion('plantillas', 'ver');
+    if (!esUuid(plantillaId) || !/^[a-f0-9]{64}$/.test(String(datos.get('huella_plantilla') ?? ''))) return { error: 'Revisa la vista previa de la plantilla antes de crear la sala.' };
+  }
   const copias = Math.min(
     MAXIMO_COPIAS,
     Math.max(1, Math.round(numero(datos.get('copias')) ?? 1)),
@@ -258,19 +283,8 @@ export async function crearSala(
     proyectoId = fila.proyecto_id;
     sede = fila.sede_id;
   } else {
-    sede = await sedeId(texto(datos.get('sede')));
+    sede = null; // se resuelve sólo dentro del commit, tras validar la plantilla
   }
-
-  // Dónde va la mesa en esta tipología. No viene del formulario porque no es
-  // una medida que se compruebe en obra al dar de alta la sala: es el montaje
-  // estándar, y sin copiarlo la sala nueva nacía con la mesa centrada por
-  // implícito y perdía la colocación real de la plantilla.
-  const [plantilla] = plantillaId
-    ? await sql<
-        Array<{ mesa_x_m: string | null; mesa_y_m: string | null; mesa_rotacion_grados: string | null }>
-      >`select mesa_x_m, mesa_y_m, mesa_rotacion_grados
-        from plantillas_sala where id = ${plantillaId}`
-    : [];
 
   const comun = {
     sede_id: sede,
@@ -278,18 +292,18 @@ export async function crearSala(
     plantilla_id: plantillaId,
     tipologia: texto(datos.get('tipologia')),
     aforo: numero(datos.get('aforo')),
-    largo_m: numero(datos.get('largo_m')) ?? 0,
-    ancho_m: numero(datos.get('ancho_m')) ?? 0,
-    alto_m: numero(datos.get('alto_m')) ?? 0,
+    largo_m: medidas.largo_m ?? 0,
+    ancho_m: medidas.ancho_m ?? 0,
+    alto_m: medidas.alto_m ?? 0,
     alto_falso_techo_m: numero(datos.get('alto_falso_techo_m')),
     // La mesa viene de la plantilla y se puede corregir en el alta. Sin ella la
     // sala se crea igual, pero el croquis sale sin mesa ni sillas.
     mesa_largo_m: numero(datos.get('mesa_largo_m')),
     mesa_ancho_m: numero(datos.get('mesa_ancho_m')),
     mesa_alto_cm: numero(datos.get('mesa_alto_cm')),
-    mesa_x_m: plantilla?.mesa_x_m == null ? null : Number(plantilla.mesa_x_m),
-    mesa_y_m: plantilla?.mesa_y_m == null ? null : Number(plantilla.mesa_y_m),
-    mesa_rotacion_grados: Number(plantilla?.mesa_rotacion_grados ?? 0),
+    mesa_x_m: null as number | null,
+    mesa_y_m: null as number | null,
+    mesa_rotacion_grados: 0,
     ruta_por_defecto: texto(datos.get('ruta_por_defecto')) ?? 'falso_techo',
   };
 
@@ -313,56 +327,26 @@ export async function crearSala(
   }
 
   const resultado = await sql.begin(async (tx) => {
+    // Una alta no tiene sala que bloquear todavía: comparte con el cierre la
+    // fila de proyecto. La consulta de cierre se hace DESPUÉS de esperar.
+    if (localizacionId && proyectoId) {
+      const proyectoActual = await bloquearProyectoParaAlta(tx, proyectoId);
+      const [actual] = await tx`select proyecto_id from localizaciones where id=${localizacionId}`;
+      if (!actual || actual.proyecto_id !== proyectoId) throw new AltaRechazada('La localización cambió. Recarga la obra antes de crear salas.');
+      comun.sede_id = proyectoActual.sedeId;
+    }
+    const vista = plantillaId ? await comprobarPlantillaParaCopiar(plantillaId, String(datos.get('huella_plantilla')), tx) : null;
+    if (vista) {
+      comun.mesa_x_m = vista.plantilla.mesa_x_m;
+      comun.mesa_y_m = vista.plantilla.mesa_y_m;
+      comun.mesa_rotacion_grados = vista.plantilla.mesa_rotacion_grados ?? 0;
+    }
+    if (!localizacionId) comun.sede_id = await sedeId(texto(datos.get('sede')), tx);
+
     // El equipamiento estándar de la plantilla se lee una vez y se copia a
     // todas las salas de la serie. Lo marcado como `no en todas` no se hereda.
-    const lineas = plantillaId
-      ? await tx<
-          Array<{
-            id: string;
-            articulo_id: string | null;
-            categoria: string;
-            cantidad: string;
-            modelo_texto: string | null;
-            extremo: string | null;
-            x_m: string | null;
-            y_m: string | null;
-            z_m: string | null;
-            posicion_confirmada: boolean | null;
-            rotacion_grados: string | null;
-          }>
-        >`select id, articulo_id, categoria, cantidad, modelo_texto,
-                 extremo, x_m, y_m, z_m, posicion_confirmada, rotacion_grados
-          from plantilla_articulos
-          where plantilla_id = ${plantillaId} and not opcional`
-      : [];
-
-    // Las tiradas tipo de la plantilla. Se leen una vez y se copian a cada sala
-    // de la serie con los equipos de esa sala.
-    const tiradas = plantillaId
-      ? await tx<
-          Array<{
-            id: string;
-            origen_linea_id: string;
-            destino_linea_id: string;
-            articulo_cable_id: string | null;
-            senal: string;
-            ruta: string | null;
-            notas: string | null;
-            puerto_origen_id: string | null;
-            ordinal_origen: number | null;
-            puerto_destino_id: string | null;
-            ordinal_destino: number | null;
-          }>
-        >`select c.id, c.origen_linea_id, c.destino_linea_id, c.articulo_cable_id,
-                 c.senal, c.ruta, c.notas,
-                 bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
-                 bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
-          from plantilla_conexiones c
-          left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = c.id and bo.lado = 'origen'
-          left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = c.id and bd.lado = 'destino'
-          where c.plantilla_id = ${plantillaId}
-          order by c.orden, c.creado_en`
-      : [];
+    const lineas = vista?.lineas.filter(l=>!l.opcional) ?? [];
+    const tiradas = vista?.conexiones.map(c=>({...c,origen_linea_id:c.origen_id,destino_linea_id:c.destino_id,ordinal_origen:c.puerto_origen_ordinal,ordinal_destino:c.puerto_destino_ordinal})) ?? [];
 
     const creadas: string[] = [];
 
@@ -405,27 +389,11 @@ export async function crearSala(
       // El mobiliario de la plantilla viaja con el equipamiento: la sala nace
       // con sus sillas y sus mesas puestas donde la tipología dice, no vacía.
       if (plantillaId) {
-        await tx`
-          insert into sala_mobiliario
-            (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, alto_m,
-             x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden,
-             origen_plantilla_mobiliario_id)
-          select ${sala.id}, pm.mobiliario_id, pm.nombre, pm.forma,
-                 pm.largo_m, pm.ancho_m, pm.alto_m,
-                 pm.x_m, pm.y_m, pm.z_m, pm.rotacion_grados,
-                 coalesce(pm.posicion_confirmada, pm.x_m is not null and pm.y_m is not null),
-                 pm.orden, pm.id
-          from plantilla_mobiliario pm
-          where pm.plantilla_id = ${plantillaId}`;
-
-        // Las puertas de la plantilla viajan con el resto del montaje. Una
-        // puerta sin medir en la plantilla llega sin medir: la ausencia se
-        // propaga como ausencia.
-        await tx`
-          insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
-          select ${sala.id}, pp.pared, pp.posicion_m, pp.anchura_m, pp.altura_m, pp.orden
-          from puertas pp
-          where pp.plantilla_id = ${plantillaId}`;
+        for(const m of vista!.muebles) await tx`insert into sala_mobiliario
+          (sala_id,mobiliario_id,nombre,forma,largo_m,ancho_m,alto_m,x_m,y_m,z_m,rotacion_grados,posicion_confirmada,orden,origen_plantilla_mobiliario_id)
+          values(${sala.id},${m.mobiliario_id},${m.nombre},${m.forma},${m.largo_m},${m.ancho_m},${m.alto_m},${m.x_m},${m.y_m},${m.z_m},${m.rotacion_grados},${m.posicion_confirmada},${m.orden},${m.id})`;
+        for(const p of vista!.puertas) await tx`insert into puertas(sala_id,pared,posicion_m,anchura_m,altura_m,orden)
+          values(${sala.id},${p.pared},${p.posicion_m},${p.anchura_m},${p.altura_m},${p.orden})`;
 
         // --------------------------------- postcondición: una sola mesa
         //
@@ -599,6 +567,8 @@ export async function crearSala(
                   ${t.senal}::senal,
                   ${t.ruta}::ruta_cable,
                   ${t.notas}) returning id`;
+        for(const p of t.puntos_paso ?? []) await tx`insert into conexion_puntos_paso (conexion_id,orden,x_m,y_m,z_m)
+          values(${conexion.id},${p.orden},${p.x_m},${p.y_m},${p.z_m})`;
         if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
           await guardarDetalleBocas(tx, conexion.id, origen, destino, {
             puertoOrigenId: t.puerto_origen_id,
@@ -609,15 +579,27 @@ export async function crearSala(
         }
       }
 
+      if (plantillaId) {
+        // Incluye las rutas que acaban de copiarse y las dimensiones que la
+        // persona confirmó en el alta. El rechazo deshace toda la serie.
+        const problemas = await problemasAlMedirSala(tx, sala.id,
+          { largo_m: comun.largo_m, ancho_m: comun.ancho_m, alto_m: comun.alto_m }, comun);
+        if (problemas.length) throw new AltaRechazada(problemas[0]);
+      }
+
       creadas.push(sala.id);
     }
 
+    if(vista) await comprobarPlantillaSinCambios(vista,tx);
     return creadas;
   }).catch((error: unknown) => {
     // El rechazo posterior a una escritura llega aquí con la transacción ya
     // deshecha: no queda ninguna sala de la serie, ni sus equipos, ni su
     // mobiliario.
     if (error instanceof AltaRechazada) return error;
+    if (error instanceof ErrorJerarquia) return new AltaRechazada(error.message);
+    if (error instanceof ErrorCambioPlantilla) return new AltaRechazada(error.message);
+    if ((error as { code?: string }).code === '40001') return new AltaRechazada('Los datos cambiaron mientras se creaba la sala. Vuelve a revisar la plantilla.');
     throw error;
   });
 
@@ -834,13 +816,23 @@ export async function crearPlantillaDesdeSala(datos: FormData) {
   if (plantillaId) redirect(`/plantillas#p-${plantillaId}`);
 }
 
-export async function guardarSala(datos: FormData) {
+export async function guardarSala(datos: FormData): Promise<EstadoAlta> {
   await exigirEdicion('salas');
   const id = String(datos.get('id'));
+  if (!esUuid(id)) return { error: 'Sala inválida.' };
+  let medidas;
+  try { medidas = leerDimensiones(datos); } catch (e) { return { error: e instanceof Error ? e.message : 'Medida inválida.' }; }
+  const version = Number(datos.get('version_esperada'));
+  if (datos.get('version_esperada') === null || !Number.isInteger(version) || version < 0) return { error: 'Recarga la sala antes de guardar las medidas.' };
   // Las medidas, la mesa y el aforo son la mitad del plano: el editor los
   // escribe y el croquis los dibuja. La versión sube en la MISMA sentencia que
   // la escritura, que es la forma más barata de que no puedan separarse.
-  await enLaSalaBloqueada(id, async (tx) => {
+  const resultado = await enLaSalaBloqueada(id, async (tx) => {
+    const [actual] = await tx`select diagrama_version,mesa_x_m,mesa_y_m from salas where id=${id}`;
+    if (Number(actual.diagrama_version) !== version) return { error: 'La sala cambió en otra pestaña. Recarga para comparar tus medidas.' };
+    const problemas = await problemasAlMedirSala(tx, id, { largo_m: medidas.largo_m ?? 0, ancho_m: medidas.ancho_m ?? 0, alto_m: medidas.alto_m ?? 0 },
+      { mesa_x_m: actual.mesa_x_m == null ? null : Number(actual.mesa_x_m), mesa_y_m: actual.mesa_y_m == null ? null : Number(actual.mesa_y_m) });
+    if (problemas.length) return { error: problemas[0] };
     // La sede se resuelve DENTRO de la transacción y después del cerrojo,
     // porque `sedeId` escribe: da de alta la sede que no existía. Resolverla
     // antes creaba la sede aunque la escritura de la sala se rechazara —una
@@ -855,9 +847,9 @@ export async function guardarSala(datos: FormData) {
       tipologia            = ${texto(datos.get('tipologia'))},
       codigo               = ${texto(datos.get('codigo'))},
       aforo                = ${numero(datos.get('aforo'))},
-      largo_m              = ${numero(datos.get('largo_m')) ?? 0},
-      ancho_m              = ${numero(datos.get('ancho_m')) ?? 0},
-      alto_m               = ${numero(datos.get('alto_m')) ?? 0},
+      largo_m              = ${medidas.largo_m ?? 0},
+      ancho_m              = ${medidas.ancho_m ?? 0},
+      alto_m               = ${medidas.alto_m ?? 0},
       alto_falso_techo_m   = ${numero(datos.get('alto_falso_techo_m'))},
       alto_canaleta_m      = ${numero(datos.get('alto_canaleta_m'))},
       alto_suelo_tecnico_m = ${numero(datos.get('alto_suelo_tecnico_m'))},
@@ -867,9 +859,13 @@ export async function guardarSala(datos: FormData) {
       ruta_por_defecto     = ${texto(datos.get('ruta_por_defecto')) ?? 'falso_techo'}::ruta_cable,
       notas                = ${texto(datos.get('notas'))}
     where id = ${id}`;
+    return { error: null };
   });
+  if (!resultado) return { error: 'La sala no existe o su obra está cerrada.' };
+  if (resultado.error) return resultado;
   revalidatePath('/salas/[id]', 'layout');
   revalidatePath('/salas');
+  return { error: null };
 }
 
 /**
@@ -895,7 +891,14 @@ export async function borrarSala(datos: FormData) {
   await exigirEdicion('salas');
   const id = String(datos.get('id'));
   if (await proyectoCerradoDeSala(id)) return;
-  await sql`delete from salas where id = ${id}`;
+  try {
+    await sql`delete from salas where id = ${id}`;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === '23503') {
+      return { error: 'La sala conserva registros vinculados y debe mantener su historial. No se ha borrado nada.' };
+    }
+    throw error;
+  }
   revalidatePath('/salas');
   redirect('/salas');
 }
@@ -1006,11 +1009,18 @@ export async function borrarEquipo(datos: FormData) {
   if (!salaId) return;
   // Desaparece un símbolo del plano, y con él sus tiradas. Una pestaña de
   // Diagrama abierta lo sigue enseñando y lo sigue moviendo: que se entere.
-  await enLaSalaBloqueada(salaId, async (tx) => {
+  const necesitaResolverNotas = await enLaSalaBloqueada(salaId, async (tx) => {
+    const [notas] = await tx`select exists(select 1 from anotaciones_sala
+      where sala_id=${salaId} and ((ancla_tipo='equipo' and ancla_id=${id})
+        or (ancla_tipo='conexion' and ancla_id in
+          (select id from conexiones where sala_id=${salaId} and (origen_id=${id} or destino_id=${id}))))) pendiente`;
+    if (notas.pendiente) return true;
     const borrado = await tx`delete from sala_equipos where id = ${id} and sala_id = ${salaId}`;
-    if (borrado.count === 0) return;
+    if (borrado.count === 0) return false;
     await subirVersionDelPlano(tx, salaId);
+    return false;
   });
+  if (necesitaResolverNotas) redirect(`/salas/${salaId}/diagrama?anotaciones=resolver`);
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -1242,13 +1252,18 @@ export async function borrarConexion(datos: FormData) {
   const id = String(datos.get('id'));
   const salaId = await salaIdDeConexion(id);
   if (!salaId) return;
-  await enLaSalaBloqueada(salaId, async (tx) => {
+  const necesitaResolverNotas = await enLaSalaBloqueada(salaId, async (tx) => {
     const [conexion] = await tx<Array<{ id: string }>>`
       select id from conexiones where id = ${id} and sala_id = ${salaId} for update`;
-    if (!conexion) return;
+    if (!conexion) return false;
+    const [notas] = await tx`select exists(select 1 from anotaciones_sala
+      where sala_id=${salaId} and ancla_tipo='conexion' and ancla_id=${id}) pendiente`;
+    if (notas.pendiente) return true;
     await tx`delete from conexiones where id = ${id}`;
     await subirVersionDelPlano(tx, salaId);
+    return false;
   });
+  if (necesitaResolverNotas) redirect(`/salas/${salaId}/diagrama?anotaciones=resolver`);
   revalidatePath('/salas/[id]', 'layout');
 }
 
@@ -1479,42 +1494,34 @@ export async function anadirPuerto(datos: FormData) {
   const nombre = texto(datos.get('nombre'));
   if (!articuloId || !nombre) return;
 
-  await sql`
-    insert into puertos (articulo_id, nombre, total, sentido, senal, conector, orden, notas, fuente)
-    values (${articuloId}, ${nombre},
-            ${Math.max(1, Math.round(numero(datos.get('total')) ?? 1))},
-            ${texto(datos.get('sentido')) ?? 'entrada'}::sentido_puerto,
-            ${texto(datos.get('senal')) ?? 'otro'}::senal,
-            ${texto(datos.get('conector'))},
-            ${numero(datos.get('orden'))},
-            ${texto(datos.get('notas'))},
-            'app')
-    on conflict (articulo_id, nombre) do nothing`;
+  await sql.begin(tx => crearPuertoEnTransaccion(tx, articuloId, {
+    nombre,
+    total: Math.max(1, Math.round(numero(datos.get('total')) ?? 1)),
+    sentido: texto(datos.get('sentido')) ?? 'entrada',
+    senal: texto(datos.get('senal')) ?? 'otro',
+    conector: texto(datos.get('conector')),
+    orden: numero(datos.get('orden')),
+    notas: texto(datos.get('notas')),
+  }));
   revalidatePath(`/articulo/${articuloId}`);
   revalidatePath('/catalogo');
 }
 
 export async function guardarPuerto(datos: FormData) {
   await exigirEdicion('catalogo');
-  const articuloId = String(datos.get('articulo_id'));
-  await sql`
-    update puertos set
-      nombre   = ${texto(datos.get('nombre')) ?? 'Sin nombre'},
-      total    = ${Math.max(1, Math.round(numero(datos.get('total')) ?? 1))},
-      sentido  = ${texto(datos.get('sentido')) ?? 'entrada'}::sentido_puerto,
-      senal    = ${texto(datos.get('senal')) ?? 'otro'}::senal,
-      conector = ${texto(datos.get('conector'))},
-      orden    = ${numero(datos.get('orden'))},
-      notas    = ${texto(datos.get('notas'))}
-    where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/articulo/${articuloId}`);
+  const articuloId = await sql.begin(tx => guardarPuertoEnTransaccion(tx, String(datos.get('id')), {
+    nombre: texto(datos.get('nombre')) ?? 'Sin nombre',
+    total: Math.max(1, Math.round(numero(datos.get('total')) ?? 1)),
+    sentido: texto(datos.get('sentido')) ?? 'entrada', senal: texto(datos.get('senal')) ?? 'otro',
+    conector: texto(datos.get('conector')), orden: numero(datos.get('orden')), notas: texto(datos.get('notas')),
+  }));
+  if (articuloId) revalidatePath(`/articulo/${articuloId}`);
 }
 
 export async function borrarPuerto(datos: FormData) {
   await exigirEdicion('catalogo');
-  const articuloId = String(datos.get('articulo_id'));
-  await sql`delete from puertos where id = ${String(datos.get('id'))}`;
-  revalidatePath(`/articulo/${articuloId}`);
+  const articuloId = await sql.begin(tx => borrarPuertoEnTransaccion(tx, String(datos.get('id'))));
+  if (articuloId) revalidatePath(`/articulo/${articuloId}`);
   revalidatePath('/catalogo');
 }
 

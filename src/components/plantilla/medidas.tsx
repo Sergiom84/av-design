@@ -1,3 +1,8 @@
+'use client';
+
+import { useActionState } from 'react';
+import { DimensionesSala } from '@/components/medidas/dimensiones-sala';
+import { firmaMedidasPlantilla } from '@/lib/longitudes';
 import { Boton, Campo } from '@/components/ui';
 import { guardarMedidasPlantilla } from '@/app/acciones';
 import { ETIQUETA_RUTA, type PlantillaSala } from '@/lib/tipos';
@@ -9,17 +14,18 @@ import { ETIQUETA_RUTA, type PlantillaSala } from '@/lib/tipos';
  */
 export function MedidasDePlantilla({ plantilla }: { plantilla: PlantillaSala }) {
   const p = plantilla;
+  const [estado, guardar, guardando] = useActionState(async (_previo: { error: string | null }, datos: FormData) => guardarMedidasPlantilla(datos), { error: null });
 
   return (
-    <form action={guardarMedidasPlantilla} className="space-y-3">
+    <form action={guardar} className="space-y-3">
       <input type="hidden" name="id" value={p.id} />
+      <input type="hidden" name="huella_medidas" value={firmaMedidasPlantilla(p)} />
+      {estado.error && <p role="alert">{estado.error}</p>}
+      <DimensionesSala valores={{ largo_m: p.largo_m, ancho_m: p.ancho_m, alto_m: p.alto_m }} />
 
       <div className="grid grid-cols-2 gap-2">
         {(
           [
-            ['largo_m', 'Largo (m)', p.largo_m],
-            ['ancho_m', 'Ancho (m)', p.ancho_m],
-            ['alto_m', 'Alto (m)', p.alto_m],
             ['alto_falso_techo_m', 'Falso techo (m)', p.alto_falso_techo_m],
             // La mesa la hereda la sala y es lo que hace que el croquis salga
             // dibujado desde el primer momento, sin tocar nada.
@@ -51,7 +57,7 @@ export function MedidasDePlantilla({ plantilla }: { plantilla: PlantillaSala }) 
         </select>
       </Campo>
 
-      <Boton>Guardar medidas</Boton>
+      <Boton disabled={guardando}>Guardar medidas</Boton>
     </form>
   );
 }

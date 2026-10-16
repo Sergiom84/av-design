@@ -1,0 +1,3 @@
+'use client';
+import { etiquetaEstado } from './cobertura';
+export function HistorialResultados({filas,abrir}:{filas:Array<{id:string;numero:number;estado:string;creado_en:unknown}>;abrir:(id:string)=>void}){return <section className="tarjeta space-y-3 p-4"><h2 className="t-subtitulo">Resultados conservados</h2>{!filas.length?<p>Sin resultados guardados para esta propuesta.</p>:<ul className="space-y-2">{filas.map(r=><li key={r.id}><button type="button" className="text-[var(--acento)] underline" onClick={()=>abrir(r.id)}>Corte {r.numero} · {etiquetaEstado[r.estado as keyof typeof etiquetaEstado]??r.estado} · {String(r.creado_en)}</button></li>)}</ul>}</section>;}

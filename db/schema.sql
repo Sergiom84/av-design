@@ -1982,3 +1982,1546 @@ comment on table usuarios_articulos_favoritos is
   'Favoritos personales reversibles. No modifica catálogo, equipos, precios o puertos de una obra.';
 commit;
 -- Rollback manual en destino previamente identificado: drop table usuarios_articulos_favoritos;
+
+
+-- E3 · Revisiones, alternativas y anotaciones
+-- E3: historial durable y frontera diseño/operación. Sin siembra de negocio.
+alter table salas add column if not exists diseno_version bigint not null default 0;
+alter table salas add column if not exists origen_sala_id uuid references salas on delete restrict;
+alter table salas add column if not exists origen_revision_id uuid;
+alter table salas add column if not exists medidas_heredadas boolean not null default false;
+alter table salas add column if not exists mapa_ids_origen jsonb not null default '{}'::jsonb;
+
+create table if not exists revisiones_diseno (
+  id uuid primary key default gen_random_uuid(),
+  sala_id uuid not null references salas on delete restrict,
+  numero integer not null check(numero > 0),
+  nombre text not null check(length(nombre) between 1 and 160),
+  autor_id uuid not null references usuarios on delete restrict,
+  autor_nombre text not null,
+  creado_en timestamptz not null default now(),
+  hash text not null check(hash ~ '^[a-f0-9]{64}$'),
+  diseno_version bigint not null,
+  antecedente_id uuid references revisiones_diseno on delete restrict,
+  restaurada_de_id uuid references revisiones_diseno on delete restrict,
+  snapshot jsonb not null check(octet_length(snapshot::text) <= 5242880),
+  unique(sala_id, numero)
+);
+create index if not exists revisiones_diseno_sala_idx on revisiones_diseno(sala_id, numero desc);
+do $$ begin
+  if not exists(select 1 from pg_constraint where conname='salas_origen_revision_fk' and conrelid='salas'::regclass) then
+    alter table salas add constraint salas_origen_revision_fk foreign key(origen_revision_id) references revisiones_diseno on delete restrict;
+  end if;
+end $$;
+create or replace function e3_revision_inmutable() returns trigger language plpgsql as $$
+begin raise exception 'Una revisión de diseño es inmutable' using errcode='23514'; end $$;
+drop trigger if exists e3_revision_inmutable on revisiones_diseno;
+create trigger e3_revision_inmutable before update or delete on revisiones_diseno for each row execute function e3_revision_inmutable();
+
+-- El contador no retrocede al borrar un cable. El identificador es por sala.
+alter table conexiones add column if not exists identificador_cable text;
+create table if not exists correlativos_cable (
+  sala_id uuid not null references salas on delete cascade,
+  senal senal not null,
+  siguiente integer not null check(siguiente >= 1000),
+  primary key(sala_id, senal)
+);
+with orden as (
+  select id, senal, row_number() over(partition by sala_id, senal order by creado_en, id)+999 n from conexiones
+), etiquetas as (
+  select id, case senal when 'hdmi' then 'HD' when 'red' then 'RED' when 'usb' then 'USB'
+    when 'audio_linea' then 'AUD' when 'audio_altavoz' then 'ALT' when 'microfono' then 'MIC'
+    when 'alimentacion' then 'PWR' when 'control' then 'RS' else 'CBL' end || '-' || n::text etiqueta from orden
+)
+update conexiones c set identificador_cable=e.etiqueta from etiquetas e where c.id=e.id and c.identificador_cable is null;
+insert into correlativos_cable(sala_id,senal,siguiente)
+select sala_id,senal,coalesce(max(substring(identificador_cable from '-([0-9]+)$')::integer),999)+1
+from conexiones group by sala_id,senal
+on conflict(sala_id,senal) do update set siguiente=greatest(correlativos_cable.siguiente,excluded.siguiente);
+create unique index if not exists conexiones_identificador_idx on conexiones(sala_id,identificador_cable);
+create or replace function e3_identificador_cable() returns trigger language plpgsql as $$
+declare n integer; prefijo text;
+begin
+  if tg_op='UPDATE' then
+    if new.identificador_cable is distinct from old.identificador_cable then
+      raise exception 'El identificador de cable es inmutable' using errcode='23514';
+    end if;
+    return new;
+  end if;
+  if new.identificador_cable is not null then
+    if new.identificador_cable !~ '^[A-Z]+-[0-9]+$' then raise exception 'Identificador de cable inválido'; end if;
+    n := substring(new.identificador_cable from '-([0-9]+)$')::integer;
+    insert into correlativos_cable(sala_id,senal,siguiente) values(new.sala_id,new.senal,n+1)
+      on conflict(sala_id,senal) do update set siguiente=greatest(correlativos_cable.siguiente,excluded.siguiente);
+    return new;
+  end if;
+  insert into correlativos_cable(sala_id,senal,siguiente) values(new.sala_id,new.senal,1001)
+    on conflict(sala_id,senal) do update set siguiente=correlativos_cable.siguiente+1 returning siguiente-1 into n;
+  prefijo := case new.senal when 'hdmi' then 'HD' when 'red' then 'RED' when 'usb' then 'USB'
+    when 'audio_linea' then 'AUD' when 'audio_altavoz' then 'ALT' when 'microfono' then 'MIC'
+    when 'alimentacion' then 'PWR' when 'control' then 'RS' else 'CBL' end;
+  new.identificador_cable := prefijo || '-' || n::text;
+  return new;
+end $$;
+drop trigger if exists e3_identificador_cable on conexiones;
+create trigger e3_identificador_cable before insert or update on conexiones for each row execute function e3_identificador_cable();
+
+-- Versión independiente de la del editor: también cubre BOM/notas/cantidad y ABA.
+create or replace function e3_version_sala() returns trigger language plpgsql as $$
+begin
+  if (to_jsonb(new)-array['diseno_version','diagrama_version','actualizado_en','origen_sala_id','origen_revision_id','medidas_heredadas','mapa_ids_origen'])
+     is distinct from (to_jsonb(old)-array['diseno_version','diagrama_version','actualizado_en','origen_sala_id','origen_revision_id','medidas_heredadas','mapa_ids_origen']) then
+    new.diseno_version := old.diseno_version+1;
+  end if;
+  return new;
+end $$;
+drop trigger if exists e3_version_sala on salas;
+create trigger e3_version_sala before update on salas for each row execute function e3_version_sala();
+create or replace function e3_version_hija() returns trigger language plpgsql as $$
+declare anterior uuid; posterior uuid; fila jsonb;
+begin
+  if tg_op <> 'INSERT' then
+    fila:=to_jsonb(old);
+    if tg_table_name in ('conexion_bocas','conexion_puntos_paso') then select sala_id into anterior from conexiones where id=(fila->>'conexion_id')::uuid;
+    else anterior:=(fila->>'sala_id')::uuid; end if;
+  end if;
+  if tg_op <> 'DELETE' then
+    fila:=to_jsonb(new);
+    if tg_table_name in ('conexion_bocas','conexion_puntos_paso') then select sala_id into posterior from conexiones where id=(fila->>'conexion_id')::uuid;
+    else posterior:=(fila->>'sala_id')::uuid; end if;
+  end if;
+  update salas set diseno_version=diseno_version+1 where id in (anterior,posterior);
+  if tg_op='DELETE' then return old; else return new; end if;
+end $$;
+do $$ declare tabla text;
+begin
+  foreach tabla in array array['sala_equipos','sala_mobiliario','puertas','tomas_red','conexiones','conexion_bocas','conexion_puntos_paso','sala_material_bom'] loop
+    execute format('drop trigger if exists e3_version_hija on %I',tabla);
+    execute format('create trigger e3_version_hija after insert or update or delete on %I for each row execute function e3_version_hija()',tabla);
+  end loop;
+end $$;
+
+-- E3: notas de presentación normalizadas; nunca geometría física paralela.
+create table if not exists anotaciones_sala (
+  id uuid primary key default gen_random_uuid(),
+  sala_id uuid not null references salas(id),
+  texto varchar(1000) not null check (length(trim(texto)) > 0),
+  ancla_tipo text not null check (ancla_tipo in ('sala','equipo','conexion','visual')),
+  ancla_id uuid,
+  x double precision,
+  y double precision,
+  creado_en timestamptz not null default now(),
+  constraint anotacion_ancla_valida check (
+    (ancla_tipo = 'sala' and ancla_id is null and x is null and y is null) or
+    (ancla_tipo in ('equipo','conexion') and ancla_id is not null and x is null and y is null) or
+    (ancla_tipo = 'visual' and ancla_id is null and x between 0 and 100000 and y between 0 and 100000 and x is not null and y is not null)
+  )
+);
+create index if not exists anotaciones_sala_sala on anotaciones_sala(sala_id);
+create or replace function comprobar_ancla_anotacion() returns trigger language plpgsql as $$
+begin
+  if new.ancla_tipo = 'equipo' then
+    perform id from sala_equipos where id = new.ancla_id and sala_id = new.sala_id for key share;
+    if not found then raise check_violation using message = 'El equipo de la anotación no pertenece a esta sala.'; end if;
+  elsif new.ancla_tipo = 'conexion' then
+    perform id from conexiones where id = new.ancla_id and sala_id = new.sala_id for key share;
+    if not found then raise check_violation using message = 'La conexión de la anotación no pertenece a esta sala.'; end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists anotacion_pertenencia on anotaciones_sala;
+create trigger anotacion_pertenencia before insert or update on anotaciones_sala for each row execute function comprobar_ancla_anotacion();
+
+create or replace function proteger_ancla_anotada() returns trigger language plpgsql as $$
+declare tipo text;
+begin
+  tipo := case tg_table_name when 'sala_equipos' then 'equipo' else 'conexion' end;
+  if (tg_op = 'DELETE' or old.sala_id <> new.sala_id) and exists (select 1 from anotaciones_sala where sala_id = old.sala_id and ancla_tipo = tipo and ancla_id = old.id) then
+    raise check_violation using message = 'Decide conservar o retirar las anotaciones desde Diagrama antes de quitar su ancla.';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+drop trigger if exists equipo_anotado on sala_equipos;
+create trigger equipo_anotado before delete or update of sala_id on sala_equipos for each row execute function proteger_ancla_anotada();
+drop trigger if exists conexion_anotada on conexiones;
+create trigger conexion_anotada before delete or update of sala_id on conexiones for each row execute function proteger_ancla_anotada();
+
+create or replace function versionar_anotacion_diseno() returns trigger language plpgsql as $$
+begin
+  update salas set diseno_version = diseno_version + 1 where id = case when tg_op = 'DELETE' then old.sala_id else new.sala_id end;
+  if tg_op = 'UPDATE' and old.sala_id <> new.sala_id then
+    update salas set diseno_version = diseno_version + 1 where id = old.sala_id;
+  end if;
+  return null;
+end $$;
+drop trigger if exists anotacion_version_diseno on anotaciones_sala;
+create trigger anotacion_version_diseno after insert or update or delete on anotaciones_sala for each row execute function versionar_anotacion_diseno();
+
+-- REA-02: presentación personal. No modifica catálogo, diseños ni permisos.
+create table if not exists preferencias_usuario (
+  usuario_id uuid primary key references usuarios(id) on delete cascade,
+  version integer not null default 0 check (version >= 0),
+  panel jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(panel) = 'object' and octet_length(panel::text) <= 16384),
+  catalogo jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(catalogo) = 'object' and octet_length(catalogo::text) <= 16384),
+  actualizado_en timestamptz not null default now()
+);
+
+comment on table preferencias_usuario is
+  'Marcas/filtros y orden/visibilidad de tarjetas propios. Nunca conceden permisos ni sustituyen catálogo o diseño.';
+
+-- REA-03: informes internos durables.
+create table if not exists informes_definiciones (
+  id uuid primary key default gen_random_uuid(),
+  propietario_id uuid not null references usuarios(id) on delete restrict,
+  nombre text not null check (length(btrim(nombre)) between 1 and 120),
+  version integer not null default 0 check (version >= 0),
+  configuracion jsonb not null check (jsonb_typeof(configuracion) = 'object'),
+  archivada_en timestamptz,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create index if not exists informes_def_propietario_idx
+  on informes_definiciones(propietario_id, creado_en desc, id);
+
+create table if not exists informes_grupos (
+  id uuid primary key default gen_random_uuid(),
+  propietario_id uuid not null references usuarios(id) on delete restrict,
+  nombre text not null check (length(btrim(nombre)) between 1 and 120),
+  ambito jsonb not null check (jsonb_typeof(ambito) = 'object'),
+  version integer not null default 0 check (version >= 0),
+  activo boolean not null default true,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists informes_grupo_miembros (
+  grupo_id uuid not null references informes_grupos(id) on delete restrict,
+  usuario_id uuid not null references usuarios(id) on delete restrict,
+  primary key(grupo_id, usuario_id)
+);
+
+create table if not exists informes_programaciones (
+  id uuid primary key default gen_random_uuid(),
+  definicion_id uuid not null references informes_definiciones(id) on delete restrict,
+  version integer not null default 0 check (version >= 0),
+  calendario jsonb not null check (jsonb_typeof(calendario) = 'object'),
+  zona text not null default 'Europe/Madrid' check (zona = 'Europe/Madrid'),
+  activa boolean not null default true,
+  proxima_utc timestamptz,
+  ultima_omision jsonb,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create index if not exists informes_prog_vencida_idx
+  on informes_programaciones(proxima_utc, id) where activa;
+
+create table if not exists informes_ejecuciones (
+  id uuid primary key default gen_random_uuid(),
+  definicion_id uuid not null references informes_definiciones(id) on delete restrict,
+  propietario_id uuid not null references usuarios(id) on delete restrict,
+  programacion_id uuid references informes_programaciones(id) on delete restrict,
+  clave_peticion uuid,
+  ocurrencia_utc timestamptz not null,
+  definicion_snapshot jsonb not null check (jsonb_typeof(definicion_snapshot) = 'object'),
+  definicion_sha256 text not null check (definicion_sha256 ~ '^[0-9a-f]{64}$'),
+  periodo_resuelto jsonb not null check (jsonb_typeof(periodo_resuelto) = 'object'),
+  snapshot jsonb check (jsonb_typeof(snapshot) = 'object'),
+  snapshot_sha256 text check (snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+  observado_en timestamptz,
+  snapshot_expurgado_en timestamptz,
+  estado text not null default 'pendiente' check
+    (estado in ('pendiente','en_curso','correcta','fallida','bloqueada','cancelada','caducada')),
+  reintentar_desde timestamptz,
+  intento_actual integer not null default 0 check (intento_actual between 0 and 3),
+  lease_token uuid,
+  lease_hasta timestamptz,
+  error_codigo text,
+  error_mensaje text,
+  manifiesto jsonb check (jsonb_typeof(manifiesto) = 'object'),
+  entrega_externa text not null default 'no_configurada' check (entrega_externa = 'no_configurada'),
+  revocada_en timestamptz,
+  terminado_en timestamptz,
+  caduca_en timestamptz,
+  creado_en timestamptz not null default now(),
+  check ((programacion_id is null) = (clave_peticion is not null)),
+  check (snapshot is null or snapshot_sha256 is not null),
+  check ((snapshot_sha256 is null) = (observado_en is null)),
+  check (snapshot_expurgado_en is null or
+    (estado = 'caducada' and snapshot is null and snapshot_sha256 is not null)),
+  check ((lease_token is null) = (lease_hasta is null)),
+  check (estado <> 'correcta' or
+    (snapshot is not null and manifiesto is not null and terminado_en is not null and caduca_en is not null)),
+  unique(programacion_id, ocurrencia_utc)
+);
+create unique index if not exists informes_ejec_manual_unica_idx
+  on informes_ejecuciones(propietario_id, clave_peticion) where clave_peticion is not null;
+create index if not exists informes_ejec_cola_idx
+  on informes_ejecuciones(estado, reintentar_desde, creado_en, id);
+create index if not exists informes_ejec_ultimo_correcto_idx
+  on informes_ejecuciones(definicion_id, ocurrencia_utc desc, id desc) where estado = 'correcta';
+
+create table if not exists informes_receptores (
+  ejecucion_id uuid not null references informes_ejecuciones(id) on delete restrict,
+  usuario_id uuid not null references usuarios(id) on delete restrict,
+  -- Origen directo/propietario/grupos y versiones: conjunto congelado, sin permisos cacheados.
+  origenes jsonb not null check (jsonb_typeof(origenes) = 'array'),
+  excluido_codigo text,
+  revocado_en timestamptz,
+  primary key(ejecucion_id, usuario_id)
+);
+create index if not exists informes_rec_usuario_idx on informes_receptores(usuario_id, ejecucion_id);
+
+create table if not exists informes_intentos (
+  ejecucion_id uuid not null references informes_ejecuciones(id) on delete restrict,
+  numero integer not null check (numero between 1 and 3),
+  token uuid not null unique,
+  estado text not null check (estado in ('en_curso','correcta','fallida','interrumpida','bloqueada')),
+  iniciado_en timestamptz not null default now(),
+  latido_en timestamptz not null default now(),
+  terminado_en timestamptz,
+  error_codigo text,
+  error_mensaje text,
+  primary key(ejecucion_id, numero)
+);
+create unique index if not exists informes_intento_vivo_idx
+  on informes_intentos(ejecucion_id) where estado = 'en_curso';
+
+create table if not exists informes_archivos (
+  id uuid primary key default gen_random_uuid(),
+  ejecucion_id uuid not null references informes_ejecuciones(id) on delete restrict,
+  formato text not null check (formato in ('pdf','xlsx','csv')),
+  nombre text not null check (nombre ~ '^informe-[0-9a-f-]+[.](pdf|xlsx|csv)$'),
+  mime text not null,
+  contenido bytea not null check (octet_length(contenido) between 1 and 26214400),
+  bytes integer generated always as (octet_length(contenido)) stored,
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  creado_en timestamptz not null default now(),
+  unique(ejecucion_id, formato),
+  check (encode(digest(contenido, 'sha256'), 'hex') = sha256)
+);
+
+create table if not exists informes_runner_latidos (
+  id uuid primary key,
+  modo text not null check (modo in ('manual','continuo')),
+  version text not null,
+  iniciado_en timestamptz not null default now(),
+  latido_en timestamptz not null default now(),
+  detenido_en timestamptz
+);
+
+-- Rechazar la reescritura de identidad/definición y de una captura ya persistida.
+create or replace function guardar_inmutabilidad_informe() returns trigger
+language plpgsql as $$ begin
+  if row(new.id,new.definicion_id,new.propietario_id,new.programacion_id,
+         new.clave_peticion,new.ocurrencia_utc,new.definicion_snapshot,
+         new.definicion_sha256,new.periodo_resuelto,new.creado_en)
+     is distinct from
+     row(old.id,old.definicion_id,old.propietario_id,old.programacion_id,
+         old.clave_peticion,old.ocurrencia_utc,old.definicion_snapshot,
+         old.definicion_sha256,old.periodo_resuelto,old.creado_en) then
+    raise exception 'La definicion de una ejecucion es inmutable';
+  end if;
+  if old.snapshot_sha256 is not null then
+    if new.caduca_en is distinct from old.caduca_en then
+      raise exception 'La retencion de una captura no se prolonga';
+    end if;
+    if row(new.snapshot_sha256,new.observado_en)
+       is distinct from row(old.snapshot_sha256,old.observado_en) then
+      raise exception 'La identidad de una captura es inmutable';
+    end if;
+    if new.snapshot is distinct from old.snapshot or
+       new.snapshot_expurgado_en is distinct from old.snapshot_expurgado_en then
+      -- Excepcion unica: expurgar contenido vencido, conservando identidad y auditoria.
+      if not (old.snapshot is not null and new.snapshot is null and
+        old.snapshot_expurgado_en is null and new.snapshot_expurgado_en is not null and
+        new.estado = 'caducada' and old.caduca_en is not null and
+        old.caduca_en <= now()) then
+        raise exception 'La captura de una ejecucion es inmutable';
+      end if;
+    end if;
+  end if;
+  if old.manifiesto is not null and
+     row(new.manifiesto,new.terminado_en) is distinct from
+     row(old.manifiesto,old.terminado_en) then
+    raise exception 'Un resultado correcto no se sobrescribe';
+  end if;
+  return new;
+end $$;
+drop trigger if exists informes_ejec_inmutable on informes_ejecuciones;
+create trigger informes_ejec_inmutable before update on informes_ejecuciones
+  for each row execute function guardar_inmutabilidad_informe();
+
+create or replace function impedir_actualizar_archivo_informe() returns trigger
+language plpgsql as $$ begin
+  raise exception 'Un archivo de informe no se sobrescribe';
+end $$;
+drop trigger if exists informes_arch_inmutable on informes_archivos;
+create trigger informes_arch_inmutable before update on informes_archivos
+  for each row execute function impedir_actualizar_archivo_informe();
+
+-- REA-04: planes y agenda.
+create table if not exists catalogo_tareas (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null check (length(btrim(titulo)) between 1 and 160),
+  descripcion text not null default '' check (length(descripcion) <= 2000),
+  duracion_estimada_min integer check (duracion_estimada_min between 1 and 43200),
+  activo boolean not null default true,
+  version integer not null default 0 check (version >= 0),
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists reglas_plan (
+  id uuid primary key default gen_random_uuid(),
+  trabajo_id uuid not null references catalogo_tareas(id) on delete restrict,
+  selector jsonb not null check (jsonb_typeof(selector) = 'object'),
+  activo boolean not null default true,
+  version integer not null default 0 check (version >= 0),
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists planes (
+  id uuid primary key default gen_random_uuid(),
+  proyecto_id uuid not null unique references proyectos(id) on delete restrict,
+  version integer not null default 0 check (version >= 0),
+  notas text not null default '' check (length(notas) <= 2000),
+  archivado_en timestamptz,
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists plan_fuentes (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references planes(id) on delete restrict,
+  version_modelo integer not null default 1 check (version_modelo = 1),
+  generador text not null default 'rea04-1' check (generador = 'rea04-1'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  -- Proyecciones separadas: no seleccionar la privada sin catálogo autorizado.
+  publico jsonb not null check (jsonb_typeof(publico) = 'object'),
+  catalogo jsonb not null default '{}' check (jsonb_typeof(catalogo) = 'object'),
+  revisiones_e3 jsonb not null default '[]' check (jsonb_typeof(revisiones_e3) = 'array'),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  unique(plan_id, sha256)
+);
+create table if not exists plan_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references planes(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  tipo text not null check (tipo in
+    ('crear_plan','editar_plan','confirmar_fuente','crear_tarea','editar_tarea',
+     'estado_tarea','asignar','restaurar_tarea','grupo','archivar_plan','reactivar_plan')),
+  version_antes integer not null check (version_antes >= 0),
+  version_despues integer not null check (version_despues >= version_antes),
+  fuente_id uuid references plan_fuentes(id) on delete restrict,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  motivo text check (length(motivo) between 1 and 2000),
+  resumen jsonb not null check (jsonb_typeof(resumen) = 'object'),
+  creado_en timestamptz not null default now(),
+  unique(plan_id, clave_peticion)
+);
+create table if not exists plan_tareas (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references planes(id) on delete restrict,
+  sala_id uuid references salas(id) on delete restrict,
+  trabajo_id uuid references catalogo_tareas(id) on delete restrict,
+  regla_id uuid references reglas_plan(id) on delete restrict,
+  clave_origen text check (clave_origen ~ '^[0-9a-f]{64}$'),
+  fuente_id uuid references plan_fuentes(id) on delete restrict,
+  origen_publico jsonb not null default '{}' check (jsonb_typeof(origen_publico) = 'object'),
+  origen_catalogo jsonb not null default '{}' check (jsonb_typeof(origen_catalogo) = 'object'),
+  base_generada jsonb check (jsonb_typeof(base_generada) = 'object'),
+  titulo text not null check (length(btrim(titulo)) between 1 and 160),
+  descripcion text not null default '' check (length(descripcion) <= 2000),
+  notas text not null default '' check (length(notas) <= 2000),
+  duracion_estimada_min integer check (duracion_estimada_min between 1 and 43200),
+  estado text not null default 'borrador' check
+    (estado in ('borrador','pendiente','en_curso','hecha','anulada')),
+  vence_fecha date,
+  inicio_utc timestamptz,
+  fin_utc timestamptz,
+  zona text not null default 'Europe/Madrid' check (zona = 'Europe/Madrid'),
+  version integer not null default 0 check (version >= 0),
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now(),
+  check ((inicio_utc is null) = (fin_utc is null)),
+  check (fin_utc is null or
+    (fin_utc > inicio_utc and fin_utc - inicio_utc <= interval '7 days')),
+  check ((clave_origen is null and regla_id is null and fuente_id is null) or
+    (clave_origen is not null and regla_id is not null and fuente_id is not null and sala_id is not null)),
+  unique(plan_id, clave_origen)
+);
+create index if not exists plan_tareas_obra_estado_idx on plan_tareas(plan_id, estado, id);
+create index if not exists plan_tareas_vencimiento_idx on plan_tareas(vence_fecha, id);
+create index if not exists plan_tareas_intervalo_idx on plan_tareas(inicio_utc, fin_utc);
+
+create table if not exists plan_grupos (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references planes(id) on delete restrict,
+  nombre text not null check (length(btrim(nombre)) between 1 and 120),
+  activo boolean not null default true,
+  version integer not null default 0 check (version >= 0),
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists plan_grupo_miembros (
+  grupo_id uuid not null references plan_grupos(id) on delete restrict,
+  tecnico_id uuid not null references tecnicos(id) on delete restrict,
+  primary key(grupo_id, tecnico_id)
+);
+create table if not exists plan_asignaciones (
+  tarea_id uuid not null references plan_tareas(id) on delete restrict,
+  tecnico_id uuid not null references tecnicos(id) on delete restrict,
+  activo boolean not null default true,
+  origen_grupos jsonb not null default '[]' check (jsonb_typeof(origen_grupos) = 'array'),
+  asignado_por uuid not null references usuarios(id) on delete restrict,
+  actualizado_en timestamptz not null default now(),
+  primary key(tarea_id, tecnico_id)
+);
+create index if not exists plan_asignaciones_tecnico_idx
+  on plan_asignaciones(tecnico_id, tarea_id) where activo;
+
+create table if not exists plan_eventos (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references planes(id) on delete restrict,
+  tarea_id uuid references plan_tareas(id) on delete restrict,
+  operacion_id uuid not null references plan_operaciones(id) on delete restrict,
+  version_plan integer not null check (version_plan >= 0),
+  orden integer not null check (orden >= 0),
+  tipo text not null,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  antecedente_id uuid references plan_eventos(id) on delete restrict,
+  motivo text check (length(motivo) between 1 and 2000),
+  antes jsonb,
+  despues jsonb,
+  -- Detalle privado de procedencia nunca se devuelve por una lectura operativa.
+  catalogo jsonb not null default '{}' check (jsonb_typeof(catalogo) = 'object'),
+  creado_en timestamptz not null default now(),
+  unique(plan_id, version_plan, orden)
+);
+create index if not exists plan_eventos_tarea_idx
+  on plan_eventos(tarea_id, creado_en desc, id);
+
+create or replace function plan_registro_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'El historial y la fuente de un plan son inmutables';
+end $$;
+drop trigger if exists plan_fuente_inmutable on plan_fuentes;
+create trigger plan_fuente_inmutable before update or delete on plan_fuentes
+  for each row execute function plan_registro_inmutable();
+drop trigger if exists plan_operacion_inmutable on plan_operaciones;
+create trigger plan_operacion_inmutable before update or delete on plan_operaciones
+  for each row execute function plan_registro_inmutable();
+drop trigger if exists plan_evento_inmutable on plan_eventos;
+create trigger plan_evento_inmutable before update or delete on plan_eventos
+  for each row execute function plan_registro_inmutable();
+
+create or replace function plan_identidad_tarea_inmutable() returns trigger
+language plpgsql as $$ begin
+  if row(new.id,new.plan_id,new.sala_id,new.regla_id,new.clave_origen,
+         new.creado_por,new.creado_en) is distinct from
+     row(old.id,old.plan_id,old.sala_id,old.regla_id,old.clave_origen,
+         old.creado_por,old.creado_en) then
+    raise exception 'La identidad y el ambito de una tarea no se trasladan';
+  end if;
+  return new;
+end $$;
+drop trigger if exists plan_tarea_identidad on plan_tareas;
+create trigger plan_tarea_identidad before update on plan_tareas
+  for each row execute function plan_identidad_tarea_inmutable();
+
+
+-- REA-06: propuestas internas y PDF inmutables.
+create table if not exists propuestas (
+  id uuid primary key default gen_random_uuid(),
+  ambito text not null check (ambito in ('sala','obra')),
+  sala_id uuid references salas(id) on delete restrict,
+  proyecto_id uuid references proyectos(id) on delete restrict,
+  version integer not null default 0 check (version >= 0),
+  actual_revision_id uuid,
+  contiene_valoracion boolean not null default false,
+  archivada_en timestamptz,
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  check ((ambito='sala' and sala_id is not null and proyecto_id is null) or
+    (ambito='obra' and proyecto_id is not null and sala_id is null)),
+  check ((version=0) = (actual_revision_id is null))
+);
+create table if not exists propuesta_plantillas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null check (length(btrim(nombre)) between 1 and 160),
+  version integer not null default 0 check (version >= 0),
+  secciones jsonb not null check (jsonb_typeof(secciones)='array'),
+  activo boolean not null default true,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  actualizado_en timestamptz not null default now()
+);
+create table if not exists propuesta_revisiones (
+  id uuid primary key default gen_random_uuid(),
+  propuesta_id uuid not null references propuestas(id) on delete restrict,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid references propuesta_revisiones(id) on delete restrict,
+  version_modelo integer not null default 1 check (version_modelo=1),
+  generador text not null default 'rea06-1' check (generador='rea06-1'),
+  titulo text not null check (length(btrim(titulo)) between 1 and 160),
+  tecnico jsonb not null check (jsonb_typeof(tecnico)='object'),
+  fuente jsonb not null check (jsonb_typeof(fuente)='object'),
+  fuente_sha256 text not null check (fuente_sha256 ~ '^[0-9a-f]{64}$'),
+  tecnico_sha256 text not null check (tecnico_sha256 ~ '^[0-9a-f]{64}$'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  contiene_valoracion boolean not null,
+  pdf_id uuid not null,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  autor_nombre text not null,
+  creado_en timestamptz not null default now(),
+  unique(propuesta_id,numero), unique(propuesta_id,id), unique(id,pdf_id)
+);
+create table if not exists propuesta_valoraciones (
+  revision_id uuid primary key references propuesta_revisiones(id) on delete restrict,
+  snapshot jsonb not null check (jsonb_typeof(snapshot)='object'),
+  estado text not null check (estado in ('sin_datos','parcial','completo')),
+  totales jsonb not null check (jsonb_typeof(totales)='object'),
+  redondeo text not null default 'mitad_fuera_cero_v1' check (redondeo='mitad_fuera_cero_v1'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$')
+);
+create table if not exists propuesta_archivos (
+  id uuid primary key default gen_random_uuid(),
+  revision_id uuid not null unique references propuesta_revisiones(id) on delete restrict,
+  nombre text not null check (nombre ~ '^propuesta-[0-9a-f-]+[.]pdf$'),
+  mime text not null default 'application/pdf' check (mime='application/pdf'),
+  contenido bytea not null check (octet_length(contenido) between 1 and 20971520),
+  bytes integer generated always as (octet_length(contenido)) stored,
+  paginas integer not null check (paginas between 1 and 100),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  check (encode(digest(contenido,'sha256'),'hex')=sha256),
+  unique(revision_id,id)
+);
+do $$ begin
+  if not exists(select 1 from pg_constraint where conname='propuesta_actual_fk'
+    and conrelid='propuestas'::regclass) then
+    alter table propuestas add constraint propuesta_actual_fk
+      foreign key(id,actual_revision_id) references propuesta_revisiones(propuesta_id,id)
+      deferrable initially deferred;
+  end if;
+  if not exists(select 1 from pg_constraint where conname='propuesta_pdf_fk'
+    and conrelid='propuesta_revisiones'::regclass) then
+    alter table propuesta_revisiones add constraint propuesta_pdf_fk
+      foreign key(id,pdf_id) references propuesta_archivos(revision_id,id)
+      deferrable initially deferred;
+  end if;
+end $$;
+create table if not exists propuesta_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  propuesta_id uuid not null references propuestas(id) on delete restrict,
+  revision_id uuid not null references propuesta_revisiones(id) on delete restrict,
+  tipo text not null check (tipo in ('revision','archivar','reactivar')),
+  creado_en timestamptz not null default now(), unique(autor_id,clave_peticion)
+);
+create index if not exists propuestas_contexto_sala_idx on propuestas(sala_id,id);
+create index if not exists propuestas_contexto_obra_idx on propuestas(proyecto_id,id);
+create index if not exists propuesta_revisiones_historia_idx
+  on propuesta_revisiones(propuesta_id,numero desc);
+
+create or replace function propuesta_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'Una revision y su PDF no se sobrescriben';
+end $$;
+do $$ declare tabla text; begin
+  foreach tabla in array array['propuesta_revisiones','propuesta_valoraciones',
+    'propuesta_archivos','propuesta_operaciones'] loop
+    execute format('drop trigger if exists propuesta_inmutable on %I',tabla);
+    execute format('create trigger propuesta_inmutable before update or delete on %I '
+      'for each row execute function propuesta_inmutable()',tabla);
+  end loop;
+end $$;
+create or replace function propuesta_identidad() returns trigger
+language plpgsql as $$ begin
+  if row(new.id,new.ambito,new.sala_id,new.proyecto_id,new.creado_por,new.creado_en)
+     is distinct from
+     row(old.id,old.ambito,old.sala_id,old.proyecto_id,old.creado_por,old.creado_en) then
+    raise exception 'Una propuesta no cambia de ambito';
+  end if;
+  return new;
+end $$;
+drop trigger if exists propuesta_identidad on propuestas;
+create trigger propuesta_identidad before update on propuestas
+  for each row execute function propuesta_identidad();
+
+-- REA-05: tiempos y costes imputados.
+create table if not exists tiempo_registros (
+  id uuid primary key default gen_random_uuid(),
+  tarea_id uuid not null references plan_tareas(id) on delete restrict,
+  proyecto_id uuid not null references proyectos(id) on delete restrict,
+  sala_id uuid references salas(id) on delete restrict,
+  tecnico_id uuid not null references tecnicos(id) on delete restrict,
+  titular_usuario_id uuid references usuarios(id) on delete restrict,
+  relacionado_id uuid references tiempo_registros(id) on delete restrict,
+  numero_actual integer not null default 1 check (numero_actual > 0),
+  actual_id uuid not null,
+  creado_en timestamptz not null default now()
+);
+create table if not exists tiempo_versiones (
+  id uuid primary key default gen_random_uuid(),
+  registro_id uuid not null references tiempo_registros(id) on delete restrict,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique references tiempo_versiones(id) on delete restrict,
+  accion text not null check (accion in ('registro','correccion','anulacion')),
+  inicio_utc timestamptz not null,
+  fin_utc timestamptz not null,
+  minutos integer not null check (minutos between 1 and 1440),
+  zona text not null default 'Europe/Madrid' check (zona = 'Europe/Madrid'),
+  entrada_local jsonb not null check (jsonb_typeof(entrada_local) = 'object'),
+  notas text not null default '' check (length(notas) <= 2000),
+  motivo text check (length(motivo) between 1 and 2000),
+  autor_usuario_id uuid not null references usuarios(id) on delete restrict,
+  autor_nombre text not null,
+  creado_en timestamptz not null default now(),
+  check (fin_utc > inicio_utc and
+    extract(epoch from (fin_utc-inicio_utc)) = minutos::numeric * 60),
+  check (date_trunc('minute',inicio_utc) = inicio_utc and date_trunc('minute',fin_utc) = fin_utc),
+  check ((numero = 1 and antecedente_id is null and accion = 'registro') or
+    (numero > 1 and antecedente_id is not null and accion <> 'registro' and motivo is not null)),
+  unique(registro_id, numero), unique(registro_id, id)
+);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname='tiempo_actual_fk'
+    and conrelid='tiempo_registros'::regclass) then
+    alter table tiempo_registros add constraint tiempo_actual_fk
+      foreign key(id,actual_id) references tiempo_versiones(registro_id,id)
+      deferrable initially deferred;
+  end if;
+end $$;
+create index if not exists tiempo_tecnico_idx on tiempo_registros(tecnico_id, id);
+create index if not exists tiempo_tarea_idx on tiempo_registros(tarea_id, id);
+create index if not exists tiempo_titular_idx on tiempo_registros(titular_usuario_id, id);
+create index if not exists tiempo_intervalo_idx on tiempo_versiones(inicio_utc, fin_utc);
+
+create table if not exists tiempo_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  registro_id uuid not null references tiempo_registros(id) on delete restrict,
+  version_id uuid not null references tiempo_versiones(id) on delete restrict,
+  tipo text not null check (tipo in ('registro','correccion','anulacion','restauracion')),
+  creado_en timestamptz not null default now(), unique(autor_id,clave_peticion)
+);
+
+create table if not exists coste_tarifa_versiones (
+  id uuid primary key default gen_random_uuid(),
+  serie_id uuid not null,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique references coste_tarifa_versiones(id) on delete restrict,
+  tecnico_id uuid not null references tecnicos(id) on delete restrict,
+  accion text not null check (accion in ('definir','corregir','anular')),
+  desde date not null, hasta_exclusivo date,
+  precio_hora numeric(12,4) not null check (precio_hora >= 0),
+  moneda text not null check (moneda in ('EUR','USD')),
+  calidad text not null check (calidad in ('estimada','validada')),
+  fuente text not null check (length(btrim(fuente)) between 1 and 1000),
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  check (hasta_exclusivo is null or hasta_exclusivo > desde),
+  check ((numero=1 and antecedente_id is null and accion='definir') or
+    (numero>1 and antecedente_id is not null and accion<>'definir')),
+  unique(serie_id,numero)
+);
+create index if not exists coste_tarifa_tecnico_idx on coste_tarifa_versiones(tecnico_id,desde);
+
+create table if not exists coste_labor_versiones (
+  id uuid primary key default gen_random_uuid(),
+  registro_id uuid not null references tiempo_registros(id) on delete restrict,
+  tiempo_version_id uuid not null references tiempo_versiones(id) on delete restrict,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique references coste_labor_versiones(id) on delete restrict,
+  accion text not null check (accion in ('valorar','revalorar','anular')),
+  tramos jsonb not null check (jsonb_typeof(tramos) = 'array'),
+  totales jsonb not null check (jsonb_typeof(totales) = 'object'),
+  estado text not null check (estado in ('sin_datos','parcial','completo')),
+  redondeo text not null default 'mitad_fuera_cero_v1' check (redondeo='mitad_fuera_cero_v1'),
+  fuente_sha256 text not null check (fuente_sha256 ~ '^[0-9a-f]{64}$'),
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(), unique(registro_id,numero)
+);
+
+create table if not exists coste_material_apuntes (
+  id uuid primary key default gen_random_uuid(),
+  movimiento_id uuid not null references movimientos(id) on delete restrict,
+  proyecto_id uuid not null references proyectos(id) on delete restrict,
+  sala_id uuid references salas(id) on delete restrict,
+  tarea_id uuid references plan_tareas(id) on delete restrict,
+  creado_en timestamptz not null default now()
+);
+create index if not exists coste_material_mov_idx on coste_material_apuntes(movimiento_id,id);
+create index if not exists coste_material_obra_idx on coste_material_apuntes(proyecto_id,id);
+create table if not exists coste_material_versiones (
+  id uuid primary key default gen_random_uuid(),
+  apunte_id uuid not null references coste_material_apuntes(id) on delete restrict,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique references coste_material_versiones(id) on delete restrict,
+  accion text not null check (accion in ('imputar','corregir','anular')),
+  cantidad numeric(12,2) not null check (cantidad > 0),
+  unidad text not null check (unidad in ('ud','m')),
+  tipo_hecho text not null check (tipo_hecho in ('salida','devolucion','baja')),
+  signo integer not null check (signo in (-1,1)),
+  movimiento_snapshot jsonb not null check (jsonb_typeof(movimiento_snapshot) = 'object'),
+  movimiento_sha256 text not null check (movimiento_sha256 ~ '^[0-9a-f]{64}$'),
+  precio_unitario numeric(12,4) check (precio_unitario >= 0),
+  moneda text check (moneda in ('EUR','USD')),
+  calidad text not null check (calidad in ('sin_valorar','estimado','documentado')),
+  importe_minor numeric(30,0),
+  origen_salida_version_id uuid references coste_material_versiones(id) on delete restrict,
+  origen_devolucion_version_id uuid references coste_material_versiones(id) on delete restrict,
+  linaje text not null check (linaje in ('salida','devolucion','reingreso_baja','baja_directa','pendiente')),
+  evidencia jsonb not null check (jsonb_typeof(evidencia) = 'object'),
+  redondeo text not null default 'mitad_fuera_cero_v1' check (redondeo='mitad_fuera_cero_v1'),
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  check ((precio_unitario is null) = (moneda is null)),
+  check (tipo_hecho <> 'devolucion' or signo=-1),
+  check (tipo_hecho='devolucion' or signo=1),
+  check (calidad <> 'documentado' or
+    (precio_unitario is not null and importe_minor is not null and linaje <> 'pendiente')),
+  unique(apunte_id,numero)
+);
+
+create table if not exists coste_cortes (
+  id uuid primary key default gen_random_uuid(),
+  proyecto_id uuid not null references proyectos(id) on delete restrict,
+  serie_id uuid not null, numero integer not null check (numero > 0),
+  antecedente_id uuid unique references coste_cortes(id) on delete restrict,
+  tipo text not null check (tipo in ('previsto','real','comparacion')),
+  version_modelo integer not null default 1 check (version_modelo=1),
+  alcance jsonb not null check (jsonb_typeof(alcance) = 'object'),
+  snapshot jsonb not null check (jsonb_typeof(snapshot) = 'object'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  estado text not null check (estado in ('sin_datos','parcial','completo')),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(), unique(serie_id,numero)
+);
+create table if not exists coste_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  tipo text not null check (tipo in ('tarifa','laboral','material','corte')),
+  resultado jsonb not null check (jsonb_typeof(resultado) = 'object'),
+  creado_en timestamptz not null default now(), unique(autor_id,clave_peticion)
+);
+
+create or replace function rea05_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'El registro historico REA05 no se sobrescribe';
+end $$;
+-- Integrar el mismo trigger antes de UPDATE/DELETE en:
+-- tiempo_versiones, tiempo_operaciones, coste_tarifa_versiones,
+-- coste_labor_versiones, coste_material_versiones, coste_cortes, coste_operaciones.
+do $$ declare nombre text; begin
+  foreach nombre in array array['tiempo_versiones','tiempo_operaciones',
+    'coste_tarifa_versiones','coste_labor_versiones','coste_material_versiones',
+    'coste_cortes','coste_operaciones','coste_material_apuntes'] loop
+    execute format('drop trigger if exists rea05_inmutable on %I',nombre);
+    execute format('create trigger rea05_inmutable before update or delete on %I '
+      'for each row execute function rea05_inmutable()',nombre);
+  end loop;
+end $$;
+
+create or replace function rea05_identidad_tiempo() returns trigger
+language plpgsql as $$ declare n integer; begin
+  if tg_op='DELETE' then
+    raise exception 'La cabecera de tiempo con historia no se borra';
+  end if;
+  if (to_jsonb(new)-array['numero_actual','actual_id']) is distinct from
+     (to_jsonb(old)-array['numero_actual','actual_id']) then
+    raise exception 'La identidad del tiempo no se traslada';
+  end if;
+  select numero into n from tiempo_versiones
+    where registro_id=new.id and id=new.actual_id;
+  if n is null or n<>new.numero_actual or new.numero_actual<>old.numero_actual+1 then
+    raise exception 'El tiempo avanza una version por correccion';
+  end if;
+  return new;
+end $$;
+drop trigger if exists tiempo_identidad on tiempo_registros;
+create trigger tiempo_identidad before update or delete on tiempo_registros
+  for each row execute function rea05_identidad_tiempo();
+
+
+-- INTEGRACION REA07 ADITIVA 2026-10-15
+-- REA07: seguimiento interno, sin transporte ni hechos físicos.
+create table if not exists propuesta_seguimientos (
+  revision_id uuid primary key references propuesta_revisiones(id) on delete restrict,
+  version integer not null default 0 check (version >= 0),
+  ultimo_evento_id uuid,
+  check ((version=0) = (ultimo_evento_id is null))
+);
+create table if not exists propuesta_eventos (
+  id uuid primary key default gen_random_uuid(),
+  propuesta_id uuid not null,
+  revision_id uuid not null,
+  revision_sha256 text not null check (revision_sha256 ~ '^[0-9a-f]{64}$'),
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique,
+  tipo text not null check (tipo in ('emitir','aceptar','rechazar','revocar_decision')),
+  decision_revocada_id uuid,
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  referencia text not null check (length(btrim(referencia)) between 1 and 1000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  autor_nombre text not null check (length(btrim(autor_nombre)) between 1 and 200),
+  creado_en timestamptz not null default now(),
+  foreign key(propuesta_id,revision_id)
+    references propuesta_revisiones(propuesta_id,id) on delete restrict,
+  unique(revision_id,numero), unique(revision_id,id),
+  foreign key(revision_id,antecedente_id)
+    references propuesta_eventos(revision_id,id) on delete restrict,
+  foreign key(revision_id,decision_revocada_id)
+    references propuesta_eventos(revision_id,id) on delete restrict,
+  check ((numero=1) = (antecedente_id is null)),
+  check ((tipo='revocar_decision') = (decision_revocada_id is not null))
+);
+do $$ begin
+  if not exists(select 1 from pg_constraint where conname='propuesta_seguimiento_actual_fk'
+    and conrelid='propuesta_seguimientos'::regclass) then
+    alter table propuesta_seguimientos add constraint propuesta_seguimiento_actual_fk
+      foreign key(revision_id,ultimo_evento_id)
+      references propuesta_eventos(revision_id,id) deferrable initially deferred;
+  end if;
+end $$;
+create index if not exists propuesta_eventos_historia_idx
+  on propuesta_eventos(propuesta_id,revision_id,numero);
+create index if not exists propuesta_eventos_fecha_idx
+  on propuesta_eventos(creado_en,id);
+
+create table if not exists propuesta_resultado_cortes (
+  id uuid primary key default gen_random_uuid(),
+  serie_id uuid not null,
+  numero integer not null check (numero > 0),
+  antecedente_id uuid unique references propuesta_resultado_cortes(id) on delete restrict,
+  propuesta_id uuid not null,
+  revision_id uuid not null,
+  aceptacion_id uuid not null,
+  coste_corte_id uuid not null references coste_cortes(id) on delete restrict,
+  version_modelo integer not null default 1 check (version_modelo=1),
+  alcance jsonb not null check (jsonb_typeof(alcance)='object'),
+  snapshot jsonb not null check (jsonb_typeof(snapshot)='object'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  estado text not null check (estado in ('sin_datos','parcial','comparable_registrado')),
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  foreign key(propuesta_id,revision_id)
+    references propuesta_revisiones(propuesta_id,id) on delete restrict,
+  foreign key(revision_id,aceptacion_id)
+    references propuesta_eventos(revision_id,id) on delete restrict,
+  check ((numero=1) = (antecedente_id is null)),
+  unique(serie_id,numero)
+);
+create table if not exists propuesta_seguimiento_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  propuesta_id uuid not null,
+  revision_id uuid not null,
+  tipo text not null check (tipo in ('evento','resultado')),
+  evento_id uuid references propuesta_eventos(id) on delete restrict,
+  resultado_id uuid references propuesta_resultado_cortes(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  foreign key(propuesta_id,revision_id)
+    references propuesta_revisiones(propuesta_id,id) on delete restrict,
+  check ((tipo='evento' and evento_id is not null and resultado_id is null) or
+    (tipo='resultado' and resultado_id is not null and evento_id is null)),
+  unique(autor_id,clave_peticion)
+);
+create index if not exists propuesta_resultados_historia_idx
+  on propuesta_resultado_cortes(propuesta_id,revision_id,creado_en,id);
+
+create or replace function rea07_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'El historial REA07 no se sobrescribe';
+end $$;
+do $$ declare tabla text; begin
+  foreach tabla in array array['propuesta_eventos','propuesta_resultado_cortes',
+    'propuesta_seguimiento_operaciones'] loop
+    execute format('drop trigger if exists rea07_inmutable on %I',tabla);
+    execute format('create trigger rea07_inmutable before update or delete on %I '
+      'for each row execute function rea07_inmutable()',tabla);
+  end loop;
+end $$;
+
+create or replace function rea07_identidad_seguimiento() returns trigger
+language plpgsql as $$ declare n integer; begin
+  if tg_op='DELETE' then
+    raise exception 'El seguimiento con historia no se borra';
+  end if;
+  if new.revision_id is distinct from old.revision_id or new.version<>old.version+1 then
+    raise exception 'El seguimiento avanza una version sin cambiar su revision';
+  end if;
+  select numero into n from propuesta_eventos
+    where revision_id=new.revision_id and id=new.ultimo_evento_id;
+  if n is null or n<>new.version then
+    raise exception 'El ultimo evento debe pertenecer a esta revision y version';
+  end if;
+  return new;
+end $$;
+drop trigger if exists propuesta_seguimiento_identidad on propuesta_seguimientos;
+create trigger propuesta_seguimiento_identidad before update or delete on propuesta_seguimientos
+  for each row execute function rea07_identidad_seguimiento();
+
+
+-- Proyección física mínima para ACL técnica, sin leer valoraciones al consultar07.
+create table if not exists propuesta_revision_visibilidad (
+ revision_id uuid primary key references propuesta_revisiones(id) on delete restrict,
+ requiere_catalogo boolean not null
+);
+create or replace function rea07_visibilidad_propuesta() returns trigger
+language plpgsql as $$ begin
+ if jsonb_typeof(new.snapshot->'lineas') is distinct from 'array' then
+  raise exception 'La valoración necesita líneas válidas para derivar su acceso';
+ end if;
+ insert into propuesta_revision_visibilidad(revision_id,requiere_catalogo)
+ values(new.revision_id,exists(select 1 from jsonb_array_elements(new.snapshot->'lineas') l
+   where l->'origenCoste'->>'tipo'='catalogo'));
+ return new;
+end $$;
+drop trigger if exists propuesta_visibilidad_nueva on propuesta_valoraciones;
+create trigger propuesta_visibilidad_nueva after insert on propuesta_valoraciones
+ for each row execute function rea07_visibilidad_propuesta();
+insert into propuesta_revision_visibilidad(revision_id,requiere_catalogo)
+ select v.revision_id,exists(select 1 from jsonb_array_elements(v.snapshot->'lineas') l
+   where l->'origenCoste'->>'tipo'='catalogo')
+ from propuesta_valoraciones v on conflict(revision_id) do nothing;
+drop trigger if exists rea07_inmutable on propuesta_revision_visibilidad;
+create trigger rea07_inmutable before update or delete on propuesta_revision_visibilidad
+ for each row execute function rea07_inmutable();
+
+
+-- INTEGRACION REA09 ADITIVA 2026-10-15
+-- REA09: historial propio y fuentes; SQL aditivo, sin datos de negocio.
+create table if not exists consultas_conversaciones (
+  id uuid primary key default gen_random_uuid(),
+  propietario_id uuid not null references usuarios(id) on delete restrict,
+  ambito jsonb not null check (jsonb_typeof(ambito)='object'),
+  version integer not null default 0 check (version>=0),
+  retencion_dias integer not null default 30 check (retencion_dias in (7,30,90)),
+  creado_en timestamptz not null default now(),
+  caduca_en timestamptz not null,
+  unique(id,propietario_id),
+  check(caduca_en=creado_en+retencion_dias*interval '1 day')
+);
+create table if not exists consultas_turnos (
+  id uuid primary key default gen_random_uuid(),
+  conversacion_id uuid not null, propietario_id uuid not null,
+  numero integer not null check(numero between 1 and 100),
+  clave_peticion uuid not null, entrada_sha256 text not null,
+  version_modelo integer not null default 1 check(version_modelo=1),
+  intent text not null, motor text not null check(motor='local-1'),
+  acl_fuentes jsonb not null check(jsonb_typeof(acl_fuentes)='object'),
+  observado_en timestamptz not null, captura_sha256 text not null,
+  creado_en timestamptz not null default now(),
+  foreign key(conversacion_id,propietario_id)
+    references consultas_conversaciones(id,propietario_id) on delete cascade,
+  unique(conversacion_id,numero), unique(propietario_id,clave_peticion),
+  check(entrada_sha256~'^[a-f0-9]{64}$' and captura_sha256~'^[a-f0-9]{64}$')
+);
+create table if not exists consultas_contenidos (
+  turno_id uuid primary key references consultas_turnos(id) on delete cascade,
+  pregunta text not null check(char_length(pregunta) between 1 and 2000),
+  respuesta jsonb not null check(jsonb_typeof(respuesta)='object'),
+  check(octet_length(pregunta)+octet_length(respuesta::text)<=262144)
+);
+create index if not exists consultas_propias on consultas_conversaciones(propietario_id,creado_en,id);
+create index if not exists consultas_caducadas on consultas_conversaciones(caduca_en,id);
+
+create or replace function rea09_turno_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'El turno de consulta observado no se sobrescribe';
+end $$;
+drop trigger if exists consulta_turno_inmutable on consultas_turnos;
+create trigger consulta_turno_inmutable before update on consultas_turnos
+  for each row execute function rea09_turno_inmutable();
+drop trigger if exists consulta_contenido_inmutable on consultas_contenidos;
+create trigger consulta_contenido_inmutable before update on consultas_contenidos
+  for each row execute function rea09_turno_inmutable();
+
+create or replace function rea09_identidad_conversacion() returns trigger
+language plpgsql as $$ begin
+  if (to_jsonb(new)-array['version','retencion_dias','caduca_en']) is distinct from
+     (to_jsonb(old)-array['version','retencion_dias','caduca_en']) then
+    raise exception 'La conversación conserva propietario, ámbito y creación';
+  end if;
+  if new.version<>old.version+1 then
+    raise exception 'La conversación avanza una versión por operación';
+  end if;
+  return new;
+end $$;
+drop trigger if exists consulta_identidad on consultas_conversaciones;
+create trigger consulta_identidad before update on consultas_conversaciones
+  for each row execute function rea09_identidad_conversacion();
+
+-- INTEGRACION REA08 ADITIVA 2026-10-15
+-- REA08: activos y servicio; sin hechos físicos ni condiciones implícitas.
+create table if not exists servicio_registros (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null check (tipo in ('activo','acuerdo','incidencia','visita')),
+  sala_id uuid not null references salas(id) on delete restrict,
+  proyecto_id uuid references proyectos(id) on delete restrict,
+  numero_actual integer not null default 1 check (numero_actual>0),
+  actual_id uuid not null,
+  creado_por uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(), unique(id,tipo)
+);
+create table if not exists servicio_versiones (
+  id uuid primary key default gen_random_uuid(),
+  registro_id uuid not null references servicio_registros(id) on delete restrict,
+  numero integer not null check (numero>0),
+  antecedente_id uuid unique,
+  accion text not null check (length(btrim(accion)) between 1 and 80),
+  version_modelo integer not null default 1 check (version_modelo=1),
+  sala_id uuid not null references salas(id) on delete restrict,
+  proyecto_id uuid references proyectos(id) on delete restrict,
+  revision_diseno_id uuid references revisiones_diseno(id) on delete restrict,
+  hito_entrega_id uuid, -- informativo: deliberadamente SIN FK a hitos_sala
+  entrega_snapshot jsonb check (jsonb_typeof(entrega_snapshot)='object'),
+  snapshot jsonb not null check (jsonb_typeof(snapshot)='object'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  autor_nombre text not null,
+  creado_en timestamptz not null default now(),
+  check ((numero=1) = (antecedente_id is null)),
+  check ((hito_entrega_id is null) = (entrega_snapshot is null)),
+  unique(registro_id,numero), unique(registro_id,id),
+  foreign key(registro_id,antecedente_id)
+    references servicio_versiones(registro_id,id) on delete restrict
+);
+do $$ begin
+  if not exists(select 1 from pg_constraint where conname='servicio_actual_fk'
+    and conrelid='servicio_registros'::regclass) then
+    alter table servicio_registros add constraint servicio_actual_fk
+      foreign key(id,actual_id) references servicio_versiones(registro_id,id)
+      deferrable initially deferred;
+  end if;
+end $$;
+create table if not exists servicio_activos (
+  id uuid primary key,
+  tipo text not null default 'activo' check (tipo='activo'),
+  sala_origen_id uuid not null references salas(id) on delete restrict,
+  origen_tipo text not null check (origen_tipo in ('equipo','manual','sustitucion')),
+  equipo_origen_id uuid, -- identidad de fuente, SIN FK al diseño mutable
+  ordinal integer check (ordinal between 1 and 10000),
+  clave_origen text not null unique,
+  fuente jsonb not null check (jsonb_typeof(fuente)='object'),
+  fuente_sha256 text not null check (fuente_sha256 ~ '^[0-9a-f]{64}$'),
+  foreign key(id,tipo) references servicio_registros(id,tipo) on delete restrict,
+  check ((origen_tipo='equipo' and equipo_origen_id is not null and ordinal is not null)
+    or (origen_tipo<>'equipo' and equipo_origen_id is null and ordinal is null))
+);
+create unique index if not exists servicio_activo_unidad_origen_idx
+  on servicio_activos(sala_origen_id,equipo_origen_id,ordinal)
+  where origen_tipo='equipo';
+create table if not exists servicio_acuerdos (
+  id uuid primary key,
+  tipo text not null default 'acuerdo' check (tipo='acuerdo'),
+  foreign key(id,tipo) references servicio_registros(id,tipo) on delete restrict
+);
+create table if not exists servicio_incidencias (
+  id uuid primary key,
+  tipo text not null default 'incidencia' check (tipo='incidencia'),
+  activo_id uuid not null references servicio_activos(id) on delete restrict,
+  activo_version_id uuid not null,
+  foreign key(id,tipo) references servicio_registros(id,tipo) on delete restrict,
+  foreign key(activo_id,activo_version_id)
+    references servicio_versiones(registro_id,id) on delete restrict
+);
+create table if not exists servicio_visitas (
+  id uuid primary key,
+  tipo text not null default 'visita' check (tipo='visita'),
+  incidencia_id uuid not null references servicio_incidencias(id) on delete restrict,
+  tarea_id uuid references plan_tareas(id) on delete restrict,
+  foreign key(id,tipo) references servicio_registros(id,tipo) on delete restrict
+);
+create table if not exists servicio_sustituciones (
+  id uuid primary key default gen_random_uuid(),
+  antiguo_id uuid not null references servicio_activos(id) on delete restrict,
+  antiguo_version_id uuid not null,
+  nuevo_id uuid not null references servicio_activos(id) on delete restrict,
+  nuevo_version_id uuid not null,
+  motivo text not null check (length(btrim(motivo)) between 1 and 2000),
+  evidencia jsonb not null check (jsonb_typeof(evidencia)='object'),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  creado_en timestamptz not null default now(),
+  check (antiguo_id<>nuevo_id), unique(antiguo_id,antiguo_version_id),
+  foreign key(antiguo_id,antiguo_version_id)
+    references servicio_versiones(registro_id,id) on delete restrict,
+  foreign key(nuevo_id,nuevo_version_id)
+    references servicio_versiones(registro_id,id) on delete restrict
+);
+create table if not exists servicio_operaciones (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null,
+  hash_peticion text not null check (hash_peticion ~ '^[0-9a-f]{64}$'),
+  tipo text not null check (tipo in ('materializar','activo','acuerdo','incidencia','visita','sustituir')),
+  resultado jsonb not null check (jsonb_typeof(resultado)='object'),
+  creado_en timestamptz not null default now(), unique(autor_id,clave_peticion)
+);
+create index if not exists servicio_contexto_idx
+  on servicio_registros(sala_id,tipo,id);
+create index if not exists servicio_obra_idx
+  on servicio_registros(proyecto_id,tipo,id);
+create index if not exists servicio_historia_idx
+  on servicio_versiones(registro_id,numero desc);
+create or replace function servicio_inmutable() returns trigger
+language plpgsql as $$ begin
+  raise exception 'La historia de servicio no se sobrescribe';
+end $$;
+do $$ declare tabla text; begin
+  foreach tabla in array array['servicio_versiones','servicio_activos',
+    'servicio_acuerdos','servicio_incidencias','servicio_visitas',
+    'servicio_sustituciones','servicio_operaciones'] loop
+    execute format('drop trigger if exists servicio_inmutable on %I',tabla);
+    execute format('create trigger servicio_inmutable before update or delete on %I '
+      'for each row execute function servicio_inmutable()',tabla);
+  end loop;
+end $$;
+
+create or replace function servicio_identidad_registro() returns trigger
+language plpgsql as $$ declare v record; begin
+  if tg_op='DELETE' then
+    raise exception 'El registro de servicio con historia no se borra';
+  end if;
+  if (to_jsonb(new)-array['numero_actual','actual_id','sala_id','proyecto_id']) is distinct from
+     (to_jsonb(old)-array['numero_actual','actual_id','sala_id','proyecto_id']) or
+     new.numero_actual<>old.numero_actual+1 then
+    raise exception 'La identidad de servicio se conserva y avanza una version';
+  end if;
+  select numero,sala_id,proyecto_id,accion into v from servicio_versiones
+    where registro_id=new.id and id=new.actual_id;
+  if not found then
+    raise exception 'La version de servicio debe pertenecer al registro';
+  end if;
+  if v.numero<>new.numero_actual or row(v.sala_id,v.proyecto_id) is distinct from
+     row(new.sala_id,new.proyecto_id) then
+    raise exception 'El contexto de servicio debe coincidir con su version';
+  end if;
+  if row(new.sala_id,new.proyecto_id) is distinct from row(old.sala_id,old.proyecto_id) and
+     (old.tipo<>'activo' or v.accion not in ('trasladar','reconciliar_contexto')) then
+    raise exception 'Solo un traslado o conciliacion de activo cambia su contexto';
+  end if;
+  return new;
+end $$;
+drop trigger if exists servicio_identidad on servicio_registros;
+create trigger servicio_identidad before update or delete on servicio_registros
+  for each row execute function servicio_identidad_registro();
+
+-- INTEGRACION REA10 ADITIVA 2026-10-15
+-- REA10 aditivo. Fuentes privadas separadas; ningún hecho AV nace al extraer.
+create sequence if not exists revision_fuentes_requisitos;
+alter table articulos_tecnicos add column if not exists revision_fuente bigint not null default nextval('revision_fuentes_requisitos');
+alter table articulos_archivos_tecnicos add column if not exists revision_fuente bigint not null default nextval('revision_fuentes_requisitos');
+alter table puertos add column if not exists revision_fuente bigint not null default nextval('revision_fuentes_requisitos');
+alter table localizaciones add column if not exists revision_fuente bigint not null default nextval('revision_fuentes_requisitos');
+create or replace function rea10_revision_fuente() returns trigger language plpgsql as $$
+begin
+  new.revision_fuente := nextval('revision_fuentes_requisitos');
+  return new;
+end $$;
+do $$ declare tabla text;
+begin
+  foreach tabla in array array['articulos_tecnicos','articulos_archivos_tecnicos','puertos','localizaciones'] loop
+    execute format('drop trigger if exists rea10_revision_fuente on %I',tabla);
+    execute format('create trigger rea10_revision_fuente before insert or update on %I for each row execute function rea10_revision_fuente()',tabla);
+  end loop;
+end $$;
+
+-- La revisión del artículo también representa el conjunto, incluido el vacío.
+-- Así alta -> baja de su último puerto no recupera un checkpoint anterior.
+-- Usa el contador E2 existente; no hay una segunda colección de puertos.
+create or replace function rea10_revision_articulo_por_puerto() returns trigger language plpgsql as $$
+declare anterior uuid; siguiente uuid; articulo uuid;
+begin
+  if tg_op <> 'INSERT' then anterior := old.articulo_id; end if;
+  if tg_op <> 'DELETE' then siguiente := new.articulo_id; end if;
+  for articulo in select a.id from articulos a where a.id in (anterior,siguiente) order by a.id for update loop
+    -- e2_revision_articulos incrementa siempre, también sin cambiar el modelo.
+    update articulos set revision=revision where id=articulo;
+  end loop;
+  return null;
+end $$;
+drop trigger if exists rea10_revision_conjunto_puertos on puertos;
+create trigger rea10_revision_conjunto_puertos after insert or update or delete on puertos
+  for each row execute function rea10_revision_articulo_por_puerto();
+
+create table if not exists requisitos_documentos (
+  id uuid primary key default gen_random_uuid(),
+  proyecto_id uuid not null references proyectos(id) on delete restrict,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  version integer not null default 0 check(version>=0),
+  tipo text not null check(tipo in ('archivo_obra','ficha_e2','lote_e2')),
+  origen_ref jsonb check(origen_ref is null or (jsonb_typeof(origen_ref)='object' and octet_length(origen_ref::text)<=4096)),
+  sha256 text not null check(sha256~'^[a-f0-9]{64}$'),
+  estado text not null default 'activo' check(estado in ('activo','retirado','purgado')),
+  creado_en timestamptz not null default now(), retirado_en timestamptz, purgado_en timestamptz,
+  check((tipo='archivo_obra')=(origen_ref is null)),
+  check((estado='activo')=(retirado_en is null)),
+  check((estado='purgado')=(purgado_en is not null))
+);
+create index if not exists requisitos_documentos_obra on requisitos_documentos(proyecto_id,creado_en desc,id);
+create index if not exists requisitos_documentos_autor on requisitos_documentos(autor_id,estado);
+create table if not exists requisitos_contenidos (
+  documento_id uuid primary key references requisitos_documentos(id) on delete restrict,
+  metadatos jsonb check(metadatos is null or (jsonb_typeof(metadatos)='object' and octet_length(metadatos::text)<=16384)),
+  bytes bytea check(bytes is null or octet_length(bytes) between 1 and 5242880)
+);
+create table if not exists requisitos_extracciones (
+  id uuid primary key default gen_random_uuid(),
+  documento_id uuid not null references requisitos_documentos(id) on delete restrict,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  version_modelo integer not null default 1 check(version_modelo=1),
+  metodo text not null check(metodo in ('pdf_local','txt_utf8','transcripcion_manual','referencia_e2')),
+  parser text not null check(length(parser) between 1 and 80),
+  parser_version text not null check(length(parser_version) between 1 and 80),
+  fuente_sha256 text not null check(fuente_sha256~'^[a-f0-9]{64}$'),
+  texto_sha256 text not null check(texto_sha256~'^[a-f0-9]{64}$'),
+  sha256 text not null check(sha256~'^[a-f0-9]{64}$'),
+  resultado jsonb check(resultado is null or (jsonb_typeof(resultado)='object' and octet_length(resultado::text)<=6291456)),
+  creado_en timestamptz not null default now()
+);
+create index if not exists requisitos_extracciones_fuente on requisitos_extracciones(documento_id,creado_en,id);
+create table if not exists requisitos_planes (
+  id uuid primary key default gen_random_uuid(),
+  extraccion_id uuid not null references requisitos_extracciones(id) on delete restrict,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  version integer not null default 0 check(version>=0),
+  destino text not null check(destino in ('areas_bom','catalogo','ofertas','tecnico','puerto')),
+  estado text not null default 'borrador' check(estado in ('borrador','aplicado','purgado')),
+  decisiones jsonb check(decisiones is null or (jsonb_typeof(decisiones)='object' and octet_length(decisiones::text)<=262144)),
+  creado_en timestamptz not null default now(), actualizado_en timestamptz not null default now()
+);
+create index if not exists requisitos_planes_autor on requisitos_planes(autor_id,estado,actualizado_en,id);
+create table if not exists requisitos_aplicaciones (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null unique references requisitos_planes(id) on delete restrict,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  version_plan integer not null check(version_plan>=0), clave_peticion uuid not null,
+  entrada_sha256 text not null check(entrada_sha256~'^[a-f0-9]{64}$'),
+  -- Sólo IDs, hashes y decisiones de negocio; nunca fragmentos copiados de fuente.
+  resultado jsonb not null check(jsonb_typeof(resultado)='object' and octet_length(resultado::text)<=262144),
+  creado_en timestamptz not null default now(), unique(autor_id,clave_peticion)
+);
+create table if not exists requisitos_reversiones (
+  id uuid primary key default gen_random_uuid(),
+  aplicacion_id uuid not null references requisitos_aplicaciones(id) on delete restrict,
+  numero integer not null check(numero>=1), antecedente_id uuid unique,
+  autor_id uuid not null references usuarios(id) on delete restrict,
+  clave_peticion uuid not null, entrada_sha256 text not null check(entrada_sha256~'^[a-f0-9]{64}$'),
+  resultado jsonb not null check(jsonb_typeof(resultado)='object' and octet_length(resultado::text)<=262144),
+  sha256 text not null check(sha256~'^[a-f0-9]{64}$'), creado_en timestamptz not null default now(),
+  unique(aplicacion_id,numero), unique(aplicacion_id,id), unique(autor_id,clave_peticion),
+  foreign key(aplicacion_id,antecedente_id) references requisitos_reversiones(aplicacion_id,id) on delete restrict,
+  check((numero=1)=(antecedente_id is null))
+);
+
+-- Auditoría mínima de retirada/purga. Las filas previas conservan null: no se inventan motivos.
+alter table requisitos_documentos add column if not exists retirada jsonb
+  check(retirada is null or (jsonb_typeof(retirada)='object' and octet_length(retirada::text)<=12288));
+alter table requisitos_documentos add column if not exists purga jsonb
+  check(purga is null or (jsonb_typeof(purga)='object' and octet_length(purga::text)<=12288));
+
+create or replace function rea10_validar_auditoria(auditoria jsonb, fecha_registro timestamptz)
+returns void language plpgsql as $$
+declare clave text;
+begin
+  if auditoria is null or jsonb_typeof(auditoria)<>'object' or
+     auditoria-array['motivo','autorId','fecha','diff']<>'{}'::jsonb or
+     jsonb_typeof(auditoria->'motivo') is distinct from 'string' or
+     length(btrim(auditoria->>'motivo')) not between 1 and 2000 or
+     jsonb_typeof(auditoria->'autorId') is distinct from 'string' or
+     (auditoria->>'autorId') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or
+     jsonb_typeof(auditoria->'fecha') is distinct from 'string' or
+     jsonb_typeof(auditoria->'diff') is distinct from 'object' or
+     (auditoria->'diff')-array['bytes','extracciones','planes']<>'{}'::jsonb then
+    raise exception 'La auditoría conserva sólo motivo, autor, fecha y cantidades retiradas';
+  end if;
+  foreach clave in array array['bytes','extracciones','planes'] loop
+    if jsonb_typeof(auditoria->'diff'->clave) is distinct from 'number' or
+       (auditoria->'diff'->>clave) !~ '^(0|[1-9][0-9]*)$' then
+      raise exception 'El diff de retirada conserva cantidades enteras no negativas';
+    end if;
+  end loop;
+  if fecha_registro is null or (auditoria->>'fecha')::timestamptz<>fecha_registro then
+    raise exception 'La auditoría conserva la fecha exacta de su operación';
+  end if;
+end $$;
+
+create or replace function rea10_identidad_documento() returns trigger language plpgsql as $$
+begin
+  if tg_op='DELETE' then raise exception 'La fuente conserva tombstone e historia'; end if;
+  if (to_jsonb(new)-array['version','estado','retirado_en','purgado_en','retirada','purga']) is distinct from
+     (to_jsonb(old)-array['version','estado','retirado_en','purgado_en','retirada','purga']) then
+    raise exception 'La identidad y procedencia de la fuente son inmutables';
+  end if;
+  if new.version<>old.version+1 then raise exception 'La fuente avanza una versión por operación'; end if;
+  if old.estado='purgado' or (old.estado='retirado' and new.estado='activo') then
+    raise exception 'La fuente retirada no se reactiva implícitamente';
+  end if;
+  if old.retirado_en is not null and new.retirado_en is distinct from old.retirado_en then
+    raise exception 'La retirada original se conserva';
+  end if;
+  if old.retirada is not null and new.retirada is distinct from old.retirada then
+    raise exception 'La auditoría de retirada no se sobrescribe';
+  end if;
+  if new.retirada is distinct from old.retirada and
+     (old.estado<>'activo' or new.estado not in ('retirado','purgado')) then
+    raise exception 'La auditoría de retirada se registra con la transición';
+  end if;
+  if old.estado='activo' and new.estado in ('retirado','purgado') then
+    perform rea10_validar_auditoria(new.retirada,new.retirado_en);
+  end if;
+  if new.purga is distinct from old.purga and
+     (old.estado='purgado' or new.estado<>'purgado') then
+    raise exception 'La auditoría de purga se registra con la transición';
+  end if;
+  if new.estado='purgado' then
+    perform rea10_validar_auditoria(new.purga,new.purgado_en);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists rea10_documento_identidad on requisitos_documentos;
+create trigger rea10_documento_identidad before update or delete on requisitos_documentos
+  for each row execute function rea10_identidad_documento();
+
+create or replace function rea10_contenido_fuente() returns trigger language plpgsql as $$
+declare documento requisitos_documentos; identificador uuid;
+begin
+  identificador:=case when tg_op='DELETE' then old.documento_id else new.documento_id end;
+  select * into documento from requisitos_documentos where id=identificador;
+  if tg_op='DELETE' then
+    if documento.estado<>'purgado' then raise exception 'La fuente activa o retirada conserva su contenido'; end if;
+    return old;
+  end if;
+  if tg_op='UPDATE' and (documento.estado<>'purgado' or new.bytes is not null or new.metadatos is not null or
+      new.documento_id<>old.documento_id) then raise exception 'Sólo la purga explícita retira contenido'; end if;
+  if documento.estado='purgado' then
+    if new.bytes is not null or new.metadatos is not null then raise exception 'Una fuente purgada no recupera contenido'; end if;
+  elsif new.metadatos is null or ((documento.tipo='archivo_obra')<>(new.bytes is not null)) then
+    raise exception 'Archivo y referencia conservan una sola fuente';
+  end if;
+  if new.bytes is not null and encode(public.digest(new.bytes,'sha256'),'hex')<>documento.sha256 then
+    raise exception 'Los bytes no coinciden con la fuente';
+  end if;
+  return new;
+end $$;
+drop trigger if exists rea10_contenido on requisitos_contenidos;
+create trigger rea10_contenido before insert or update or delete on requisitos_contenidos
+  for each row execute function rea10_contenido_fuente();
+
+create or replace function rea10_extraccion_inmutable() returns trigger language plpgsql as $$
+declare estado_fuente text;
+begin
+  if tg_op='DELETE' then raise exception 'La extracción conserva hashes y procedencia'; end if;
+  select estado into estado_fuente from requisitos_documentos where id=old.documento_id;
+  if estado_fuente<>'purgado' or new.resultado is not null or
+     (to_jsonb(new)-'resultado') is distinct from (to_jsonb(old)-'resultado') then
+    raise exception 'La extracción es inmutable salvo retirada de contenido por purga';
+  end if;
+  return new;
+end $$;
+drop trigger if exists rea10_extraccion_historia on requisitos_extracciones;
+create trigger rea10_extraccion_historia before update or delete on requisitos_extracciones
+  for each row execute function rea10_extraccion_inmutable();
+
+create or replace function rea10_plan_cas() returns trigger language plpgsql as $$
+declare estado_fuente text;
+begin
+  if tg_op='DELETE' then raise exception 'El plan conserva decisiones e historia'; end if;
+  if (to_jsonb(new)-array['version','estado','decisiones','actualizado_en']) is distinct from
+     (to_jsonb(old)-array['version','estado','decisiones','actualizado_en']) or new.version<>old.version+1 then
+    raise exception 'El plan conserva identidad y avanza una versión';
+  end if;
+  select d.estado into estado_fuente from requisitos_documentos d join requisitos_extracciones e on e.documento_id=d.id
+    where e.id=old.extraccion_id;
+  if new.estado='purgado' then
+    if estado_fuente<>'purgado' or new.decisiones is not null then raise exception 'La purga del plan requiere fuente purgada'; end if;
+  elsif old.estado<>'borrador' or estado_fuente<>'activo' or new.decisiones is null then
+    raise exception 'El plan aplicado o de fuente retirada no se vuelve a editar';
+  end if;
+  return new;
+end $$;
+drop trigger if exists rea10_plan_version on requisitos_planes;
+create trigger rea10_plan_version before update or delete on requisitos_planes
+  for each row execute function rea10_plan_cas();
+
+create or replace function rea10_historia_inmutable() returns trigger language plpgsql as $$
+begin raise exception 'La aplicación y cada intento de reversión conservan su historia'; end $$;
+drop trigger if exists rea10_aplicacion_historia on requisitos_aplicaciones;
+create trigger rea10_aplicacion_historia before update or delete on requisitos_aplicaciones
+  for each row execute function rea10_historia_inmutable();
+drop trigger if exists rea10_reversion_historia on requisitos_reversiones;
+create trigger rea10_reversion_historia before update or delete on requisitos_reversiones
+  for each row execute function rea10_historia_inmutable();
+
+create or replace function rea10_alta_extraccion() returns trigger language plpgsql as $$
+declare fuente requisitos_documentos;
+begin
+  select * into fuente from requisitos_documentos where id=new.documento_id;
+  if fuente.estado<>'activo' or new.fuente_sha256<>fuente.sha256 or new.resultado is null then
+    raise exception 'La extracción requiere fuente activa, hash exacto y resultado completo';
+  end if;
+  return new;
+end $$;
+drop trigger if exists rea10_extraccion_fuente on requisitos_extracciones;
+create trigger rea10_extraccion_fuente before insert on requisitos_extracciones
+  for each row execute function rea10_alta_extraccion();
+
+create or replace function rea10_consistencia_plan() returns trigger language plpgsql as $$
+declare plan_actual requisitos_planes; plan_id_actual uuid; cantidad integer;
+begin
+  if tg_table_name='requisitos_planes' then plan_id_actual:=new.id;
+  else plan_id_actual:=new.plan_id; end if;
+  select * into plan_actual from requisitos_planes where id=plan_id_actual;
+  select count(*)::int into cantidad from requisitos_aplicaciones where plan_id=plan_id_actual;
+  if (plan_actual.estado='aplicado' and cantidad<>1) or
+     (plan_actual.estado='borrador' and cantidad<>0) then
+    raise exception 'El plan y su única aplicación se confirman en la misma transacción';
+  end if;
+  if tg_table_name='requisitos_aplicaciones' then
+    if plan_actual.estado<>'aplicado' or plan_actual.autor_id<>new.autor_id or plan_actual.version<=new.version_plan then
+      raise exception 'La aplicación conserva autor y versión confirmada del plan';
+    end if;
+  end if;
+  return null;
+end $$;
+drop trigger if exists rea10_plan_consistente on requisitos_planes;
+create constraint trigger rea10_plan_consistente after insert or update on requisitos_planes
+  deferrable initially deferred for each row execute function rea10_consistencia_plan();
+drop trigger if exists rea10_aplicacion_consistente on requisitos_aplicaciones;
+create constraint trigger rea10_aplicacion_consistente after insert on requisitos_aplicaciones
+  deferrable initially deferred for each row execute function rea10_consistencia_plan();
+
+create or replace function rea10_purga_completa() returns trigger language plpgsql as $$
+begin
+  if new.estado='purgado' and (
+    exists(select 1 from requisitos_contenidos c where c.documento_id=new.id and (c.bytes is not null or c.metadatos is not null)) or
+    exists(select 1 from requisitos_extracciones e where e.documento_id=new.id and e.resultado is not null) or
+    exists(select 1 from requisitos_planes p join requisitos_extracciones e on e.id=p.extraccion_id
+      where e.documento_id=new.id and (p.decisiones is not null or p.estado<>'purgado'))
+  ) then raise exception 'La purga retira todas las copias de contenido en la misma transacción'; end if;
+  return null;
+end $$;
+drop trigger if exists rea10_purga_atomica on requisitos_documentos;
+create constraint trigger rea10_purga_atomica after update on requisitos_documentos
+  deferrable initially deferred for each row execute function rea10_purga_completa();

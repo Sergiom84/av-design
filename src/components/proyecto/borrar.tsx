@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Aviso, Boton, Enlace, Tarjeta } from '@/components/ui';
+import { Aviso, Enlace, Tarjeta } from '@/components/ui';
 import { borrarProyecto } from '@/app/acciones-proyectos';
+import { FormularioBorrado } from '@/components/borrado/formulario';
 
 /**
  * Borrar la obra, aparte del trabajo diario y con el mismo patrón de
@@ -38,10 +39,7 @@ export function BorrarProyecto({
           deshacer.
         </Aviso>
         <div className="flex gap-3 items-center">
-          <form action={borrarProyecto}>
-            <input type="hidden" name="id" value={proyectoId} />
-            <Boton variante="peligro">Borrar definitivamente</Boton>
-          </form>
+          <FormularioBorrado id={proyectoId} accion={borrarProyecto} />
           <Enlace href={`/proyectos/${proyectoId}`}>Cancelar</Enlace>
         </div>
       </div>

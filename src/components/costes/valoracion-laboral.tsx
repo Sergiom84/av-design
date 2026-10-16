@@ -1,0 +1,24 @@
+'use client';
+import { useRef, useState } from 'react';
+import { Tarjeta, ContenedorTabla } from '@/components/ui';
+import type { RepositorioCostes } from '@/lib/costes/repositorio';
+import { Campo, EstadoOperacion, importe, pedirCostes, Paginacion, Totales, useOperacionCoste } from './comun';
+type Lista=Awaited<ReturnType<RepositorioCostes['listarPartes']>>;
+type Preview=Awaited<ReturnType<RepositorioCostes['prepararLaboral']>>;
+export function ValoracionLaboral({proyectoId,desde,hasta,alGuardar}:{proyectoId:string;desde:string;hasta:string;alGuardar:()=>void}) {
+  const [lista,setLista]=useState<Lista>(),[seleccion,setSeleccion]=useState<string[]>([]),[motivo,setMotivo]=useState(''),[preview,setPreview]=useState<Preview>(),[historia,setHistoria]=useState<Array<Record<string,unknown>>>([]);
+  const edicion=useRef(0),turno=useRef(0),clave=useRef(crypto.randomUUID()),op=useOperacionCoste();
+  const invalidar=()=>{edicion.current++;setPreview(undefined);clave.current=crypto.randomUUID();};
+  async function cargar(p=1){const n=++turno.current;const r=await pedirCostes<Lista>(`/api/costes/laboral/partes?proyectoId=${proyectoId}&desde=${desde}&hasta=${hasta}&pagina=${p}`);if(n===turno.current){setLista(r);setSeleccion([]);invalidar();}}
+  return <Tarjeta titulo="Valorar trabajo registrado" pie="Coste laboral imputado por tramo de parte, día civil y tarifa. Un parte corregido exige otra valoración.">
+    <button className="boton" disabled={op.ocupado} onClick={()=>void op.ejecutar(()=>cargar(),'Partes actualizados.')}>Cargar partes sin valorar y valorados</button>
+    {lista&&<><ContenedorTabla etiqueta="Partes para valoración"><table className="datos mt-4"><thead><tr><th>Seleccionar</th><th>Técnico / tarea</th><th>Trabajo real</th><th>Valoración</th><th>Historial</th></tr></thead><tbody>{lista.partes.map(p=><tr key={p.registroId}><td><input type="checkbox" aria-label={'Valorar parte '+p.registroId} checked={seleccion.includes(p.registroId)} onChange={e=>{invalidar();setSeleccion(a=>e.target.checked?[...a,p.registroId]:a.filter(id=>id!==p.registroId));}}/></td><td>{p.tecnicoNombre}<br/>{p.titulo} · v{p.numero}</td><td className="font-mono">{p.minutos} min<br/>{p.inicioUtc}</td><td>{p.requiereRevaloracion?'Requiere revaloración':p.valoracion?String(p.valoracion.estado):'Sin valorar'}</td><td><button className="enlace" onClick={()=>void op.ejecutar(async()=>{const r=await pedirCostes<{versiones:Array<Record<string,unknown>>}>('/api/costes/laboral/registros/'+p.registroId);setHistoria(r.versiones);},'Historial financiero leído.')}>Historial de valoración</button></td></tr>)}</tbody></table></ContenedorTabla><Paginacion pagina={lista.pagina} total={lista.total} ocupado={op.ocupado} cambiar={p=>void op.ejecutar(()=>cargar(p))}/>
+      <form className="mt-4" onSubmit={e=>{e.preventDefault();const n=edicion.current;void op.ejecutar(async()=>{const r=await pedirCostes<Preview>('/api/costes/laboral/preparar','POST',{partes:lista.partes.filter(p=>seleccion.includes(p.registroId)).map(p=>({registroId:p.registroId,versionId:p.versionId})),motivo});if(n===edicion.current)setPreview(r);},'Valoración preparada. Revisa los tramos.');}}>
+        <Campo etiqueta="Motivo de valoración laboral"><input required maxLength={2000} value={motivo} onChange={e=>{invalidar();setMotivo(e.target.value);}}/></Campo><button className="boton mt-3" disabled={op.ocupado||!seleccion.length}>Preparar valoración de seleccionados ({seleccion.length})</button>
+      </form>
+    </>}
+    {preview&&<div className="mt-4 space-y-4">{preview.valoraciones.map(v=><div key={v.parte.registroId} className="rounded border border-linea p-3"><h3 className="font-semibold">{v.parte.tecnicoNombre} · {v.estado} · {v.minutosPendientes} min pendientes</h3><Totales totales={v.totales}/>{v.estimados.EUR!==null&&<p>Estimado: {importe(v.estimados.EUR,'EUR')}</p>}{v.tramos.map(t=><p key={t.inicioUtc} className="font-mono">{t.fecha} · {t.minutos} min · {t.tarifa?`${t.tarifa.precioHora} ${t.tarifa.moneda}/h · ${t.tarifa.calidad} · v${t.tarifa.numero}`:'Sin tarifa'}</p>)}</div>)}<button className="boton boton-principal" disabled={op.ocupado} onClick={()=>void op.ejecutar(async()=>{await pedirCostes('/api/costes/laboral/confirmar','POST',{seleccion:preview.seleccion,token:preview.token,clavePeticion:clave.current});await cargar();alGuardar();},'Valoraciones congeladas.')}>Confirmar valoración laboral</button></div>}
+    {historia.length>0&&<div className="mt-4"><h3 className="font-semibold">Historial financiero</h3>{historia.map(v=><details key={String(v.id)}><summary>v{String(v.numero)} · {String(v.accion)} · {String(v.motivo)}</summary><pre className="whitespace-pre-wrap break-all text-xs">{JSON.stringify(v.tramos,null,2)}</pre></details>)}</div>}
+    <EstadoOperacion op={op}/>
+  </Tarjeta>;
+}

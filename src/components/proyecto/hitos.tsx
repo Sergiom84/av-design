@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Aviso, Boton, Campo, Tarjeta } from '@/components/ui';
-import { borrarHitoProyecto, registrarHitoProyecto } from '@/app/acciones-ciclo';
+import { Aviso, Boton, Tarjeta } from '@/components/ui';
+import { borrarHitoProyecto } from '@/app/acciones-ciclo';
+import { FormularioHitoProyecto } from './formulario-hito';
 import {
   tecnicosDeRol,
   type HitoProyecto,
@@ -33,34 +34,7 @@ export function HitosDeProyecto({
   const iniciadores = tecnicosDeRol(tecnicos, roles, 'inicio');
 
   const formulario = (tipo: 'inicio' | 'cierre', etiqueta: string) => (
-    <form
-      action={registrarHitoProyecto}
-      className="flex flex-wrap items-end gap-3 pt-3 border-t border-linea-suave"
-    >
-      <input type="hidden" name="proyecto_id" value={proyectoId} />
-      <input type="hidden" name="tipo" value={tipo} />
-      <Campo etiqueta="Quién">
-        <select name="tecnico_id" required className="w-40" defaultValue="">
-          <option value="" disabled>
-            Elegir técnico
-          </option>
-          {iniciadores.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.nombre}
-            </option>
-          ))}
-        </select>
-      </Campo>
-      <Campo etiqueta="Fecha">
-        <input name="fecha" type="date" className="w-40 num" />
-      </Campo>
-      {tipo === 'cierre' && salasSinEntregar > 0 && (
-        <Campo etiqueta="Nota (obligatoria)">
-          <input name="notas" required className="w-56" />
-        </Campo>
-      )}
-      <Boton variante="secundario">{etiqueta}</Boton>
-    </form>
+    <FormularioHitoProyecto proyectoId={proyectoId} tipo={tipo} etiqueta={etiqueta} iniciadores={iniciadores} exigeNota={tipo==='cierre' && salasSinEntregar>0}/>
   );
 
   const fila = (titulo: string, hito: HitoProyecto | undefined, pendiente: string) => (

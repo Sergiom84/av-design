@@ -2,6 +2,8 @@ import type { Puerto } from '@/lib/tipos';
 import { ETIQUETA_SENAL, ETIQUETA_SENTIDO } from '@/lib/tipos';
 import { Aviso, Boton, Campo, ContenedorTabla, Tarjeta } from '@/components/ui';
 import { anadirPuerto, borrarPuerto, guardarPuerto } from '@/app/acciones';
+import { PuertoDesdeRequisito, type PrefillRequisito } from '@/components/catalogo-tecnico/ficha-tecnica';
+import type { Decisiones } from '@/lib/requisitos/modelo';
 
 /**
  * Los puertos de un artículo: los conectores físicos que trae el equipo.
@@ -16,13 +18,17 @@ import { anadirPuerto, borrarPuerto, guardarPuerto } from '@/app/acciones';
 export function TablaPuertos({
   articuloId,
   puertos,
+  requisito,
 }: {
   articuloId: string;
   puertos: Puerto[];
+  requisito?:PrefillRequisito<Extract<Decisiones,{destino:'puerto'}>>;
 }) {
   const total = puertos.reduce((s, p) => s + p.total, 0);
 
   return (
+    <>
+    {requisito&&<div className="mb-6"><PuertoDesdeRequisito requisito={requisito}/></div>}
     <Tarjeta
       titulo={
         puertos.length
@@ -152,11 +158,11 @@ export function TablaPuertos({
                     />
                   </td>
                   <td>
-                    <div className="flex gap-2 justify-end">
-                      <Boton form={`puerto-${p.id}`} variante="secundario">
+                    <div className="flex gap-2 justify-end whitespace-nowrap">
+                      <Boton form={`puerto-${p.id}`} variante="secundario" className="shrink-0">
                         Guardar
                       </Boton>
-                      <Boton form={`borrar-puerto-${p.id}`} variante="peligro">
+                      <Boton form={`borrar-puerto-${p.id}`} variante="peligro" className="shrink-0">
                         Borrar
                       </Boton>
                     </div>
@@ -215,5 +221,6 @@ export function TablaPuertos({
         </div>
       </form>
     </Tarjeta>
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Campo } from '@/components/ui';
 import { cambiarMedidasSala, type BorradorPlano } from '@/lib/plano-editor';
-import { CampoMetros } from './campos-plano';
+import { DimensionesSala } from '@/components/medidas/dimensiones-sala';
 
 /**
  * Las medidas de la sala. Es lo que se ve sin nada seleccionado, y lo primero
@@ -18,36 +18,10 @@ export function InspectorSala({
   alCambiar: (b: BorradorPlano) => void;
   soloLectura: boolean;
 }) {
-  const medida = (campo: 'largo_m' | 'ancho_m' | 'alto_m') => (n: number | null) =>
-    alCambiar(cambiarMedidasSala(borrador, { [campo]: n ?? 0 }));
-
   return (
     <div className="space-y-3">
-      <CampoMetros
-        etiqueta="Largo"
-        valor={borrador.largo_m || null}
-        alCambiar={medida('largo_m')}
-        admiteVacio
-        minimo={0}
-        deshabilitado={soloLectura}
-      />
-      <CampoMetros
-        etiqueta="Ancho"
-        valor={borrador.ancho_m || null}
-        alCambiar={medida('ancho_m')}
-        admiteVacio
-        minimo={0}
-        deshabilitado={soloLectura}
-      />
-      <CampoMetros
-        etiqueta="Alto"
-        valor={borrador.alto_m || null}
-        alCambiar={medida('alto_m')}
-        ayuda="Sin el alto no se calculan las subidas del cable."
-        admiteVacio
-        minimo={0}
-        deshabilitado={soloLectura}
-      />
+      <DimensionesSala valores={{ largo_m: borrador.largo_m || null, ancho_m: borrador.ancho_m || null, alto_m: borrador.alto_m || null }} maximo={1000}
+        deshabilitado={soloLectura} alCambiar={valores => alCambiar(cambiarMedidasSala(borrador, { largo_m: valores.largo_m ?? 0, ancho_m: valores.ancho_m ?? 0, alto_m: valores.alto_m ?? 0 }))} />
       <Campo etiqueta="Aforo" ayuda="Reparte las sillas alrededor de la mesa.">
         <input
           type="number"

@@ -12,6 +12,8 @@ import { Aviso, Cabecera, Enlace } from '@/components/ui';
 import { tablasDeCicloListas } from '@/lib/datos-ciclo';
 import { ListaDeProyectos } from '@/components/proyecto/lista';
 import { AltaDeProyecto } from '@/components/proyecto/alta';
+import { sesionActual } from '@/lib/sesion-servidor';
+import { puede } from '@/lib/usuarios';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +27,7 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
 
   const { nueva } = await searchParams;
   const abrirAlta = nueva === '1';
+  const usuario = await sesionActual();
 
   const [proyectos, salasSinProyecto, sedes, codigos, cicloListo] = await Promise.all([
     listarProyectos(),
@@ -51,6 +54,12 @@ export default async function Proyectos({ searchParams }: PageProps<'/proyectos'
       />
 
       <div className="space-y-6">
+        <nav aria-label="Planificación" className="flex flex-wrap gap-4">
+          {usuario && puede(usuario.permisos, 'salas', 'ver') && (
+            <Enlace href={'/proyectos/agenda' as never}>Agenda de montaje</Enlace>
+          )}
+          <Enlace href={'/proyectos/planificacion/catalogo' as never}>Catálogo de trabajos</Enlace>
+        </nav>
         {!cicloListo && (
           <Aviso tono="alerta">
             Faltan las tablas de técnicos e hitos: el despliegue llegó antes que su

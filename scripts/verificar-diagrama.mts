@@ -990,7 +990,9 @@ try {
       version: number,
     ): Promise<ResPlantilla> => {
       try {
-        return await aplicarPlantillaAlDiagrama(salaId, plantillaId, version);
+        const { obtenerPlantillaPreview } = await import('../src/lib/datos-plantillas');
+        const vista = await obtenerPlantillaPreview(plantillaId);
+        return await aplicarPlantillaAlDiagrama(salaId, plantillaId, version, vista?.huella ?? '0'.repeat(64));
       } catch (e) {
         const mensaje = e instanceof Error ? e.message : String(e);
         const codigo = (e as { ['__NEXT_ERROR_CODE']?: string })?.['__NEXT_ERROR_CODE'];

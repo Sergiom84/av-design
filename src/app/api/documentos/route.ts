@@ -1,6 +1,6 @@
 import { hayConfiguracion } from '@/lib/db';
 import { sesionActual } from '@/lib/sesion-servidor';
-import { cargarSnapshot } from '@/lib/documentos/datos';
+import { cargarSnapshot, ErrorSeleccionDocumentos } from '@/lib/documentos/datos';
 import { seleccionDocumentos, permisoExportacion } from '@/lib/documentos/seleccion';
 import { generarPaquete, type EventoPaquete } from '@/lib/documentos/paquete';
 import { generarPdfTecnico } from '@/lib/documentos/pdf';
@@ -9,7 +9,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request:Request) {
-  const yo=await sesionActual();
+  let yo;
+  try {yo=await sesionActual();}
+  catch {return Response.json({error:'Servicio temporalmente no disponible. Prueba de nuevo.'},{status:503});}
   if(!yo) return Response.json({error:'Sin sesión.'},{status:401});
   if(yo.debeCambiarClave) return Response.json({error:'Cambia la contraseña provisional antes de descargar.'},{status:403});
   if(!hayConfiguracion()) return Response.json({error:'Base de datos sin configurar.'},{status:503});
@@ -26,7 +28,11 @@ export async function POST(request:Request) {
   }
   let snapshot;
   try {snapshot=await cargarSnapshot(seleccion.salaIds,seleccion.proyectoId);}
-  catch(e) {return Response.json({error:e instanceof Error ? e.message : 'No se pudo leer la selección.'},{status:400});}
+  catch(e) {
+    const seleccionInvalida=e instanceof ErrorSeleccionDocumentos;
+    return Response.json({error:seleccionInvalida ? e.message : 'No se pudieron leer los datos. Prueba una nueva generación.'},
+      {status:seleccionInvalida ? 400 : 503});
+  }
   // Inyección exclusiva del servidor de prueba local; inaccesible en producción.
   const simular = process.env.NODE_ENV !== 'production' && process.env.AV_DOCUMENTOS_PRUEBA === '1'
     ? request.headers.get('x-av-prueba-fallo-pdf') : null;

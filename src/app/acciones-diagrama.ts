@@ -12,7 +12,9 @@ import {
   type PatchPlano,
 } from '@/lib/plano-editor';
 import { extremoPorCategoria, MENSAJE_MESA_EN_PLANTILLA } from '@/lib/tipos';
-import { exigirEdicion } from '@/lib/sesion-servidor';
+import { exigirEdicion, exigirSeccion } from '@/lib/sesion-servidor';
+import { comprobarPlantillaParaCopiar, comprobarPlantillaSinCambios, ErrorCambioPlantilla } from '@/lib/datos-plantillas';
+import { estadoFinalCoordenadas } from '@/lib/estado-final-plano';
 
 /**
  * El guardado del plano: una acción, una transacción, todo o nada.
@@ -299,9 +301,11 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
         ancho_m: string | null;
         alto_m: string | null;
         sillas_modo: string;
+        mesa_x_m: string | null;
+        mesa_y_m: string | null;
       }>
     >`
-      select id, diagrama_version, localizacion_id, largo_m, ancho_m, alto_m, sillas_modo
+      select id, diagrama_version, localizacion_id, largo_m, ancho_m, alto_m, sillas_modo,mesa_x_m,mesa_y_m
       from salas where id = ${p.sala_id}
       for update`;
     if (!sala) return fallo('no_existe');
@@ -328,7 +332,17 @@ export async function guardarDiagramaSala(patch: PatchPlano): Promise<ResultadoG
       ancho_m: p.sala ? p.sala.ancho_m : Number(sala.ancho_m ?? 0),
       alto_m: p.sala ? p.sala.alto_m : Number(sala.alto_m ?? 0),
     };
-    if (coordenadasFueraDeSala(p, medidas).length > 0) return fallo('fuera');
+    // Se reconstruye TODO el estado final. Un equipo/mueble/roseta que no
+    // cambió no viaja en el patch, pero sigue dentro del diseño que se guarda.
+    const equiposPersistidos=await tx<Array<{id:string;x_m:string;y_m:string;z_m:string;posicion_confirmada:boolean}>>`select id,x_m,y_m,z_m,posicion_confirmada from sala_equipos where sala_id=${p.sala_id} order by id`;
+    const mueblesPersistidos=await tx<Array<{id:string;x_m:string|null;y_m:string|null;z_m:string|null;posicion_confirmada:boolean}>>`select id,x_m,y_m,z_m,posicion_confirmada from sala_mobiliario where sala_id=${p.sala_id} order by id`;
+    const tomasPersistidas=await tx<Array<{id:string;x_m:string|null;y_m:string|null;z_m:string|null}>>`select id,x_m,y_m,z_m from tomas_red where sala_id=${p.sala_id} order by id`;
+    const n=(v:string|null)=>v==null?null:Number(v);
+    const finales=estadoFinalCoordenadas({sala:{mesa_x_m:n(sala.mesa_x_m),mesa_y_m:n(sala.mesa_y_m)},
+      equipos:equiposPersistidos.map(e=>({...e,x_m:Number(e.x_m),y_m:Number(e.y_m),z_m:Number(e.z_m)})),
+      mobiliario:mueblesPersistidos.map(m=>({...m,x_m:n(m.x_m),y_m:n(m.y_m),z_m:n(m.z_m)})),
+      tomas:tomasPersistidas.map(t=>({...t,x_m:n(t.x_m),y_m:n(t.y_m),z_m:n(t.z_m)}))},p);
+    if (coordenadasFueraDeSala(finales, medidas).length > 0) return fallo('fuera');
 
     // Se juzga el estado FINAL de todas las rutas, no solo las que viajan en
     // el patch. Reducir la sala puede dejar fuera un punto persistido aunque
@@ -765,6 +779,8 @@ const esquemaEditorConexiones = z.object({
   versionEsperada: z.number().int().min(0),
   equipos_alta: z.array(z.object({ temporal_id: z.string().min(1).max(120), articulo_id: z.string().refine(esUuid) })).max(200).default([]),
   posiciones: z.array(z.object({ equipo_id: z.string().min(1).max(120), x: z.number().finite().min(0).max(100000), y: z.number().finite().min(0).max(100000) })).max(500).default([]),
+  anotaciones: z.array(z.object({ id: z.string().min(1).max(120), texto: z.string().trim().min(1).max(1000), ancla_tipo: z.enum(['sala','equipo','conexion','visual']), ancla_id: z.string().min(1).max(120).nullable(), x: z.number().finite().min(0).max(100000).nullable(), y: z.number().finite().min(0).max(100000).nullable() })).max(200).optional(),
+  decisiones_anotaciones: z.array(z.object({ anotacion_id: z.string().min(1).max(120), accion: z.enum(['conservar','retirar']) })).max(200).default([]),
   altas: z.array(extremosConexion.extend({ temporal_id: z.string().min(1).max(120) })).max(500),
   cambios: z
     .array(extremosConexion.extend({ id: z.string().refine(esUuid, 'id no es un uuid') }))
@@ -774,7 +790,7 @@ const esquemaEditorConexiones = z.object({
 
 export type PatchEditorConexiones = z.input<typeof esquemaEditorConexiones>;
 export type ResultadoEditorConexiones =
-  | { ok: true; version: number; ids: Record<string, string>; equipos_ids: Record<string, string> }
+  | { ok: true; version: number; ids: Record<string, string>; equipos_ids: Record<string, string>; anotaciones_ids?: Record<string, string>; identificadores_cable?: Record<string, string> }
   | {
       ok: false;
       motivo: 'invalido' | 'no_existe' | 'cerrado' | 'conflicto' | 'ajeno';
@@ -812,6 +828,13 @@ export async function guardarEditorConexiones(
   const validado = esquemaEditorConexiones.safeParse(patch);
   if (!validado.success) return falloConexiones('invalido');
   const p = validado.data;
+
+  if (p.anotaciones && (new Set(p.anotaciones.map(a => a.id)).size !== p.anotaciones.length || p.anotaciones.some(a =>
+    ['__proto__','constructor','prototype'].includes(a.id) ||
+    (a.ancla_tipo === 'visual' ? a.ancla_id !== null || a.x === null || a.y === null :
+      a.x !== null || a.y !== null || (a.ancla_tipo === 'sala' ? a.ancla_id !== null : a.ancla_id === null))
+  ))) return falloConexiones('invalido');
+  if (new Set(p.decisiones_anotaciones.map(d => d.anotacion_id)).size !== p.decisiones_anotaciones.length) return falloConexiones('invalido');
 
   const temporales = p.altas.map((c) => c.temporal_id);
   if (temporales.some((id) => ['__proto__', 'constructor', 'prototype'].includes(id))) return falloConexiones('invalido');
@@ -861,6 +884,27 @@ export async function guardarEditorConexiones(
       if (cierre?.cerrado) return falloConexiones('cerrado');
       if (Number(sala.diagrama_version) !== p.versionEsperada) {
         return falloConexiones('conflicto');
+      }
+
+      const anotacionesActuales = await tx<Array<{ id: string; ancla_tipo: string; ancla_id: string | null }>>`select id, ancla_tipo, ancla_id from anotaciones_sala where sala_id = ${p.sala_id} order by id for update`;
+      for (const a of anotacionesActuales.filter(a => a.ancla_tipo === 'conexion' && a.ancla_id && p.bajas.includes(a.ancla_id))) {
+        const decision = p.decisiones_anotaciones.find(d => d.anotacion_id === a.id);
+        const siguiente = p.anotaciones?.find(n => n.id === a.id);
+        if (!decision || (decision.accion === 'conservar' ? !siguiente || siguiente.ancla_tipo !== 'sala' : Boolean(siguiente))) {
+          return { ...falloConexiones('invalido'), detalle: 'Decide conservar o retirar cada anotación antes de quitar su conexión.' };
+        }
+      }
+      if (p.anotaciones) {
+        const persistentes = p.anotaciones.filter(a => esUuid(a.id) && !anotacionesActuales.some(n => n.id === a.id));
+        if (persistentes.length && (await tx`select id from anotaciones_sala where id in ${tx(persistentes.map(a => a.id))}`).length) return falloConexiones('ajeno');
+        const equiposAncla = p.anotaciones.filter(a => a.ancla_tipo === 'equipo').map(a => a.ancla_id!);
+        const equipoExistente = equiposAncla.filter(id => !altasEquipos.has(id));
+        if (equipoExistente.some(id => !esUuid(id))) return falloConexiones('invalido');
+        if (equipoExistente.length && (await tx`select id from sala_equipos where sala_id = ${p.sala_id} and id in ${tx([...new Set(equipoExistente)])}`).length !== new Set(equipoExistente).size) return falloConexiones('ajeno');
+        const conexionesAncla = p.anotaciones.filter(a => a.ancla_tipo === 'conexion').map(a => a.ancla_id!);
+        const conexionesExistentes = conexionesAncla.filter(id => !temporales.includes(id));
+        if (conexionesExistentes.some(id => !esUuid(id) || p.bajas.includes(id))) return falloConexiones('invalido');
+        if (conexionesExistentes.length && (await tx`select id from conexiones where sala_id = ${p.sala_id} and id in ${tx([...new Set(conexionesExistentes)])}`).length !== new Set(conexionesExistentes).size) return falloConexiones('ajeno');
       }
 
       const idsPersistidos = [...new Set([...cambios, ...p.bajas])].sort();
@@ -977,6 +1021,15 @@ export async function guardarEditorConexiones(
           where id = ${resolver(posicion.equipo_id)} and sala_id = ${p.sala_id}`;
       }
 
+      // Retirar/desvincular notas precede a borrar anclas: el trigger protege
+      // también bajas efectuadas desde otras pantallas.
+      if (p.anotaciones) {
+        for (const a of anotacionesActuales) {
+          const siguiente = p.anotaciones.find(n => n.id === a.id);
+          if (!siguiente) await tx`delete from anotaciones_sala where id = ${a.id} and sala_id = ${p.sala_id}`;
+          else if (a.ancla_tipo === 'conexion' && a.ancla_id && p.bajas.includes(a.ancla_id)) await tx`update anotaciones_sala set ancla_tipo = 'sala', ancla_id = null, x = null, y = null where id = ${a.id}`;
+        }
+      }
       if (p.bajas.length > 0) {
         await tx`delete from conexiones where sala_id = ${p.sala_id} and id in ${tx(p.bajas)}`;
       }
@@ -1013,10 +1066,23 @@ export async function guardarEditorConexiones(
         ids[c.temporal_id] = nueva.id;
       }
 
+      const anotaciones_ids: Record<string, string> = Object.create(null);
+      if (p.anotaciones) for (const a of p.anotaciones) {
+        const ancla = a.ancla_tipo === 'equipo' ? resolver(a.ancla_id!) : a.ancla_tipo === 'conexion' ? ids[a.ancla_id!] ?? a.ancla_id : null;
+        if (anotacionesActuales.some(n => n.id === a.id)) {
+          await tx`update anotaciones_sala set texto = ${a.texto}, ancla_tipo = ${a.ancla_tipo}, ancla_id = ${ancla}, x = ${a.x}, y = ${a.y} where id = ${a.id} and sala_id = ${p.sala_id}`;
+        } else {
+          const [alta] = await tx<Array<{ id: string }>>`insert into anotaciones_sala (sala_id, texto, ancla_tipo, ancla_id, x, y) values (${p.sala_id}, ${a.texto}, ${a.ancla_tipo}, ${ancla}, ${a.x}, ${a.y}) returning id`;
+          anotaciones_ids[a.id] = alta.id;
+        }
+      }
+
       const [nuevaVersion] = await tx<Array<{ diagrama_version: number }>>`
         update salas set diagrama_version = diagrama_version + 1
         where id = ${p.sala_id} returning diagrama_version`;
-      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids, equipos_ids };
+      const etiquetas = await tx<Array<{ id: string; identificador_cable: string }>>`select id, identificador_cable from conexiones where sala_id = ${p.sala_id}`;
+      const identificadores_cable = Object.fromEntries(etiquetas.map(c => [c.id, c.identificador_cable]));
+      return { ok: true, version: Number(nuevaVersion.diagrama_version), ids, equipos_ids: { ...equipos_ids }, anotaciones_ids: { ...anotaciones_ids }, identificadores_cable };
     });
 
     if (resultado.ok) revalidarLaFicha();
@@ -1118,12 +1184,17 @@ export async function aplicarPlantillaAlDiagrama(
   salaId: string,
   plantillaId: string,
   versionEsperada: number,
+  huellaEsperada: string,
 ): Promise<ResultadoPlantilla> {
   await exigirEdicion('salas');
+  await exigirSeccion('plantillas', 'ver');
   if (!esUuid(salaId) || !esUuid(plantillaId) || !Number.isInteger(versionEsperada)) {
     return { ok: false, motivo: 'invalido', detalle: MENSAJE.invalido };
   }
 
+  // READ COMMITTED permite ver el cierre después de esperar por la sala.
+  // El origen no depende de snapshots de transacción: todas sus piezas se
+  // copian exclusivamente del DTO de una sentencia y se recomprueba al final.
   const transaccion = sql.begin(async (tx): Promise<ResultadoPlantilla> => {
     const [sala] = await tx<
       Array<{
@@ -1153,24 +1224,6 @@ export async function aplicarPlantillaAlDiagrama(
     if (Number(sala.diagrama_version) !== versionEsperada) {
       return { ok: false, motivo: 'conflicto', detalle: MENSAJE.conflicto };
     }
-
-    const [plantilla] = await tx<
-      Array<{
-        id: string;
-        aforo: number | null;
-        largo_m: string | null;
-        ancho_m: string | null;
-        alto_m: string | null;
-        alto_falso_techo_m: string | null;
-        mesa_largo_m: string | null;
-        mesa_ancho_m: string | null;
-        mesa_alto_cm: string | null;
-        mesa_x_m: string | null;
-        mesa_y_m: string | null;
-        mesa_rotacion_grados: string | null;
-      }>
-    >`select * from plantillas_sala where id = ${plantillaId}`;
-    if (!plantilla) return { ok: false, motivo: 'catalogo', detalle: MENSAJE.catalogo };
 
     // Las rosetas cuentan como ocupación por lo mismo que los equipos: son de
     // la sala concreta, alguien las midió, y aplicar una plantilla sustituye
@@ -1241,22 +1294,9 @@ export async function aplicarPlantillaAlDiagrama(
     }
 
     if (vacia) {
-      // La mesa principal no se instancia por ninguna vía. El alta manual ya
-      // se rechaza; una fila de `plantilla_mobiliario` cuyo catálogo sea la
-      // mesa principal es la misma segunda mesa por otro camino, y una
-      // plantilla antigua o manipulada puede tenerla. Se rechaza entera en
-      // vez de saltarse la fila: copiar una plantilla a medias deja una sala
-      // que nadie diseñó y nadie se entera.
-      const [mesaEnPlantilla] = await tx<Array<{ nombre: string }>>`
-        select pm.nombre from plantilla_mobiliario pm
-        join catalogo_mobiliario c on c.id = pm.mobiliario_id
-        where pm.plantilla_id = ${plantillaId} and c.rol = 'mesa_principal'
-        limit 1`;
-      if (mesaEnPlantilla) {
-        return { ok: false, motivo: 'catalogo', detalle: MENSAJE_MESA_EN_PLANTILLA };
-      }
-
-      const num = (v: string | null) => (v == null ? null : Number(v));
+      const vista = await comprobarPlantillaParaCopiar(plantillaId, huellaEsperada ?? '', tx);
+      const plantilla = vista.plantilla;
+      const num = (v: number | string | null) => (v == null ? null : Number(v));
       await tx`
         update salas set
           plantilla_id         = ${plantillaId},
@@ -1264,7 +1304,6 @@ export async function aplicarPlantillaAlDiagrama(
           ancho_m              = ${num(plantilla.ancho_m) ?? 0},
           alto_m               = ${num(plantilla.alto_m) ?? 0},
           alto_falso_techo_m   = ${num(plantilla.alto_falso_techo_m)},
-          aforo                = coalesce(aforo, ${plantilla.aforo}),
           mesa_largo_m         = ${num(plantilla.mesa_largo_m)},
           mesa_ancho_m         = ${num(plantilla.mesa_ancho_m)},
           mesa_alto_cm         = ${num(plantilla.mesa_alto_cm)},
@@ -1273,24 +1312,7 @@ export async function aplicarPlantillaAlDiagrama(
           mesa_rotacion_grados = ${normalizarGrados(num(plantilla.mesa_rotacion_grados))}
         where id = ${salaId}`;
 
-      const lineas = await tx<
-        Array<{
-          id: string;
-          articulo_id: string | null;
-          categoria: string;
-          modelo_texto: string | null;
-          cantidad: string;
-          extremo: string | null;
-          x_m: string | null;
-          y_m: string | null;
-          z_m: string | null;
-          posicion_confirmada: boolean | null;
-          rotacion_grados: string | null;
-        }>
-      >`select id, articulo_id, categoria, modelo_texto, cantidad, extremo,
-               x_m, y_m, z_m, posicion_confirmada, rotacion_grados
-        from plantilla_articulos
-        where plantilla_id = ${plantillaId} and not opcional`;
+      const lineas = vista.lineas.filter(l=>!l.opcional);
 
       const equipoDeLinea = new Map<string, string>();
       for (const l of lineas) {
@@ -1314,27 +1336,11 @@ export async function aplicarPlantillaAlDiagrama(
 
       // El mobiliario de la plantilla: colocar la silla una vez sirve para las
       // 144 salas iguales. La ausencia de posición se conserva.
-      await tx`
-        insert into sala_mobiliario
-          (sala_id, mobiliario_id, nombre, forma, largo_m, ancho_m, alto_m,
-           x_m, y_m, z_m, rotacion_grados, posicion_confirmada, orden,
-           origen_plantilla_mobiliario_id)
-        select ${salaId}, pm.mobiliario_id, pm.nombre, pm.forma,
-               pm.largo_m, pm.ancho_m, pm.alto_m,
-               pm.x_m, pm.y_m, pm.z_m, pm.rotacion_grados,
-               coalesce(pm.posicion_confirmada, pm.x_m is not null and pm.y_m is not null),
-               pm.orden, pm.id
-        from plantilla_mobiliario pm
-        where pm.plantilla_id = ${plantillaId}`;
-
-      // Las puertas de la plantilla, con su estado tal cual: una puerta sin
-      // medir en la plantilla llega sin medir a la sala. La ausencia se
-      // propaga como ausencia.
-      await tx`
-        insert into puertas (sala_id, pared, posicion_m, anchura_m, altura_m, orden)
-        select ${salaId}, pp.pared, pp.posicion_m, pp.anchura_m, pp.altura_m, pp.orden
-        from puertas pp
-        where pp.plantilla_id = ${plantillaId}`;
+      for(const m of vista.muebles) await tx`insert into sala_mobiliario
+        (sala_id,mobiliario_id,nombre,forma,largo_m,ancho_m,alto_m,x_m,y_m,z_m,rotacion_grados,posicion_confirmada,orden,origen_plantilla_mobiliario_id)
+        values(${salaId},${m.mobiliario_id},${m.nombre},${m.forma},${m.largo_m},${m.ancho_m},${m.alto_m},${m.x_m},${m.y_m},${m.z_m},${m.rotacion_grados},${m.posicion_confirmada},${m.orden},${m.id})`;
+      for(const p of vista.puertas) await tx`insert into puertas(sala_id,pared,posicion_m,anchura_m,altura_m,orden)
+        values(${salaId},${p.pared},${p.posicion_m},${p.anchura_m},${p.altura_m},${p.orden})`;
 
       // ------------------------------------- postcondición: una sola mesa
       //
@@ -1363,28 +1369,7 @@ export async function aplicarPlantillaAlDiagrama(
         });
       }
 
-      const tiradas = await tx<
-        Array<{
-          id: string;
-          origen_linea_id: string;
-          destino_linea_id: string;
-          articulo_cable_id: string | null;
-          senal: string;
-          ruta: string | null;
-          notas: string | null;
-          puerto_origen_id: string | null;
-          ordinal_origen: number | null;
-          puerto_destino_id: string | null;
-          ordinal_destino: number | null;
-        }>
-      >`select c.id, c.origen_linea_id, c.destino_linea_id, c.articulo_cable_id, c.senal, c.ruta, c.notas,
-               bo.puerto_id as puerto_origen_id, bo.ordinal as ordinal_origen,
-               bd.puerto_id as puerto_destino_id, bd.ordinal as ordinal_destino
-        from plantilla_conexiones c
-        left join plantilla_conexion_bocas bo on bo.plantilla_conexion_id = c.id and bo.lado = 'origen'
-        left join plantilla_conexion_bocas bd on bd.plantilla_conexion_id = c.id and bd.lado = 'destino'
-        where c.plantilla_id = ${plantillaId}
-        order by c.orden, c.creado_en`;
+      const tiradas = vista.conexiones.map(c=>({...c,origen_linea_id:c.origen_id,destino_linea_id:c.destino_id,ordinal_origen:c.puerto_origen_ordinal,ordinal_destino:c.puerto_destino_ordinal}));
 
       // Una tirada cuyo equipo no se heredó —la línea estaba marcada «no en
       // todas»— se salta: insertarla apuntando a nada deja la sala con una
@@ -1401,11 +1386,8 @@ export async function aplicarPlantillaAlDiagrama(
           insert into conexiones (sala_id, origen_id, destino_id, articulo_cable_id, senal, ruta, notas)
           values (${salaId}, ${origen}, ${destino}, ${t.articulo_cable_id},
                   ${t.senal}::senal, ${t.ruta}::ruta_cable, ${t.notas}) returning id`;
-        await tx`insert into conexion_puntos_paso (conexion_id, orden, x_m, y_m, z_m)
-          select ${conexion.id}, orden, x_m, y_m, z_m
-          from plantilla_conexion_puntos_paso
-          where plantilla_conexion_id = ${t.id}
-          order by orden`;
+        for(const p of t.puntos_paso ?? []) await tx`insert into conexion_puntos_paso (conexion_id,orden,x_m,y_m,z_m)
+          values(${conexion.id},${p.orden},${p.x_m},${p.y_m},${p.z_m})`;
         if (t.puerto_origen_id && t.ordinal_origen && t.puerto_destino_id && t.ordinal_destino) {
           await tx`update conexiones set puerto_origen_id = ${t.puerto_origen_id},
               puerto_destino_id = ${t.puerto_destino_id} where id = ${conexion.id}`;
@@ -1526,6 +1508,7 @@ export async function aplicarPlantillaAlDiagrama(
           detalle: `La plantilla deja elementos fuera de la sala que describe, así que no se aplica: ${problemas[0]}`,
         });
       }
+      await comprobarPlantillaSinCambios(vista,tx);
     }
 
     // Se marca iniciado en los dos casos: reconocer una plantilla ya heredada
@@ -1565,6 +1548,8 @@ export async function aplicarPlantillaAlDiagrama(
     // El rechazo posterior a una escritura llega aquí con la transacción ya
     // deshecha: la sala no cambió, no se copió nada y la versión no subió.
     if (error instanceof PlantillaRechazada) return error.resultado;
+    if (error instanceof ErrorCambioPlantilla) return { ok: false, motivo: error.motivo, detalle: error.message };
+    if ((error as { code?: string }).code === '40001') return { ok: false, motivo: 'conflicto', detalle: MENSAJE.conflicto };
     throw error;
   }
 

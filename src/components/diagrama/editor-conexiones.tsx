@@ -9,6 +9,10 @@ import { BuscadorArticulo } from '@/components/catalogo/buscador-articulo';
 import { GuardiaSalida } from '@/components/plano-editor/guardia-salida';
 import { LienzoConexiones } from './lienzo-conexiones';
 import { useEditorConexiones } from './use-editor-conexiones';
+import { HerramientasOrganizacion } from './herramientas-organizacion';
+import { LeyendaDiseno } from './leyenda-diseno';
+import { AnotacionesEditor } from './anotaciones-editor';
+import type { AnotacionDiseno } from '@/lib/anotaciones-diseno';
 
 interface Props {
   sala: Sala;
@@ -19,15 +23,18 @@ interface Props {
   articulos: Articulo[];
   parametros?: ParametrosCable;
   posicionesIniciales?: Record<string, { x: number; y: number }>;
+  anotacionesIniciales?: AnotacionDiseno[];
   cerrado: boolean;
   guardar: GuardarEditorConexiones;
 }
 
 export function EditorConexiones(props: Props) {
   const e = useEditorConexiones({ ...props, salaId: props.sala.id });
-  const { actual, bloqueado } = e;
+  const { actual } = e;
+  const bloqueado = e.bloqueado || Boolean(e.vistaPrevia);
   const identificadores = identificadoresDeCable(e.borrador);
   const cables = props.articulos.filter((a) => a.tipo === 'cable');
+  const categorias = new Map(props.articulos.map(a => [a.id, a.categoria]));
   const avisos = actual ? avisosDeConexion(actual, e.puertosPorId.get(actual.puerto_origen_id ?? ''), e.puertosPorId.get(actual.puerto_destino_id ?? ''), cables.find((c) => c.id === actual.articulo_cable_id)) : [];
   const extremoNuevo = actual && e.altasEquipo.some((equipo) => [actual.origen_id, actual.destino_id].includes(equipo.id));
   const longitud = actual && !extremoNuevo && props.sala.largo_m && props.sala.ancho_m && props.sala.alto_m && props.parametros
@@ -67,11 +74,15 @@ export function EditorConexiones(props: Props) {
           <BuscadorArticulo etiqueta="Añadir equipo" tipo="equipo" className="w-full sm:max-w-lg" vaciarAlElegir alElegir={e.anadirEquipo} />
         </fieldset>
         {e.cargandoEquipo && <p role="status">Cargando puertos…</p>}
+        {e.equipos.length > 0 && <HerramientasOrganizacion editor={e} />}
         {e.equipos.length === 0 ? <Vacio>Busca un equipo para empezar el diagrama.</Vacio> : <LienzoConexiones
-          equipos={e.equipos} puertos={e.puertos} conexiones={e.borrador} posiciones={e.posiciones}
+          equipos={e.equipos} puertos={e.puertos} conexiones={e.borrador} posiciones={e.vistaPrevia ?? e.posiciones}
           onMover={e.mover} onConectar={e.nuevaConexion} onSeleccionarConexion={e.setSeleccionada}
-          conexionSeleccionada={e.seleccionada} bloqueado={bloqueado}
+          conexionSeleccionada={e.seleccionada} bloqueado={bloqueado || Boolean(e.vistaPrevia)}
+          seleccionEquipos={e.seleccionEquipos} onSeleccionarEquipo={(id, seleccion) => e.setSeleccionEquipos(ids => seleccion ? [...ids.filter(i => i !== id), id] : ids.filter(i => i !== id))}
+          categorias={categorias} anotaciones={e.anotaciones}
         />}
+        <LeyendaDiseno equipos={e.equipos} conexiones={e.borrador} categorias={categorias} />
         {e.altasEquipo.length > 0 && <ul className="mt-4 space-y-2" aria-label="Equipos nuevos sin guardar">
           {e.altasEquipo.map((equipo) => <li key={equipo.id} className="flex flex-wrap items-center justify-between gap-2">
             <span className="min-w-0 break-words">{equipo.nombre} · Sin guardar</span>
@@ -80,6 +91,7 @@ export function EditorConexiones(props: Props) {
         </ul>}
       </Tarjeta>
       <aside className="space-y-4 min-w-0" aria-label="Inspector de conexión">
+        {e.anclaPendiente && <Tarjeta titulo="Anotaciones del ancla retirada"><p className="mb-3">Elige qué ocurre con las anotaciones antes de quitar el {e.anclaPendiente.tipo === 'equipo' ? 'equipo' : 'cable'}.</p><div className="flex flex-wrap gap-2"><Boton tipo="button" disabled={bloqueado} onClick={() => e.resolverBaja('conservar')}>Conservar anotaciones en sala</Boton><Boton tipo="button" variante="peligro" disabled={bloqueado} onClick={() => e.resolverBaja('retirar')}>Retirar anotaciones</Boton><Boton tipo="button" variante="secundario" onClick={e.cancelarBaja}>Cancelar baja</Boton></div></Tarjeta>}
         <Tarjeta titulo="Conexión seleccionada">
           {e.borrador.length > 0 && <label className="block mb-4"><span className="t-etiqueta block mb-1">Conexión</span>
             <select className="w-full min-w-0" aria-label="Seleccionar conexión" value={e.seleccionada ?? ''} onChange={(evento) => e.setSeleccionada(evento.target.value || null)}>
@@ -107,10 +119,11 @@ export function EditorConexiones(props: Props) {
         <Tarjeta titulo="Borrador" variante="operativa">
           <p aria-live="polite" className="text-tinta-tenue mb-3">{e.estado ?? (e.hayCambios ? 'Hay cambios sin guardar.' : 'Sin cambios pendientes.')}</p>
           <div className="flex flex-wrap gap-2">
-            <Boton tipo="button" onClick={e.guardarTodo} disabled={bloqueado || !e.hayCambios}>{e.pendiente ? 'Guardando…' : 'Guardar borrador'}</Boton>
+            <Boton tipo="button" onClick={e.guardarTodo} disabled={bloqueado || Boolean(e.vistaPrevia) || Boolean(e.anclaPendiente) || !e.hayCambios}>{e.pendiente ? 'Guardando…' : 'Guardar borrador'}</Boton>
             <Boton tipo="button" variante="secundario" onClick={e.descartar} disabled={props.cerrado || e.pendiente || e.cargandoEquipo || (!e.enConflicto && !e.hayCambios)}>{e.enConflicto ? 'Recargar sala' : 'Descartar'}</Boton>
           </div>
         </Tarjeta>
+        <AnotacionesEditor editor={e} />
       </aside>
     </div>
   </>;

@@ -34,19 +34,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    ".next-e2e-diagrama/types/**/*.ts",
-    ".next-e2e-diagrama/dev/types/**/*.ts",
-    ".next-e1-documentos/types/**/*.ts",
-    ".next-e1-documentos/dev/types/**/*.ts",
-    ".next-e2-importacion/types/**/*.ts",
-    ".next-e2-importacion/dev/types/**/*.ts",
-    ".next-e2-reanudacion/types/**/*.ts",
-    ".next-e2-reanudacion/dev/types/**/*.ts",
-    ".next-e2-build/types/**/*.ts",
-    ".next-e2-build/dev/types/**/*.ts"
+    "**/*.mts"
   ],
-  "//exclude": "`output/` son artefactos locales ignorados por git —copias del árbol que dejan las auditorías, informes, capturas—. Comprobarles los tipos hace fallar el build por código viejo que ya no es el del repositorio.",
+  "//exclude": "`output/` son artefactos locales ignorados por git \u2014copias del \u00e1rbol que dejan las auditor\u00edas, informes, capturas\u2014. Comprobarles los tipos hace fallar el build por c\u00f3digo viejo que ya no es el del repositorio.",
   "exclude": [
     "node_modules",
     "output"

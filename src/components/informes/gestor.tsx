@@ -349,41 +349,41 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
         }
     };
     return <div className="min-w-0 max-w-full space-y-6 [overflow-wrap:anywhere] [&_fieldset]:min-w-0 [&_select]:max-w-full [&_input]:max-w-full">
-    
+
     <header>
-    
+
     <h1 className="text-2xl font-semibold">Informes</h1>
-    
+
     <p className="mt-2 text-slate-600">Capturas reproducibles del material, la carga y el estado. Archivos conservados durante treinta días.</p>
-    
+
     </header>
-    
+
     <div className="tarjeta p-4 shadow-sm" aria-live="polite">
-    
+
     <p className="font-semibold">
-    
+
     {runner?.estado ?? 'Consultando runner…'}
-    
+
     </p>
-    
+
     <p className="text-sm">{runner?.ultimaPasadaManual ? 'Última pasada manual registrada.' : 'Sin pasadas manuales registradas.'} · Cola propia: {runner?.cola.pendientes ?? 0} pendientes y {runner?.cola.en_curso ?? 0} en curso.</p>
-    
+
     {runner?.ultimoError && <p className="text-sm">Último error propio: {runner.ultimoError.error_mensaje} ({runner.ultimoError.error_codigo})</p>}
-    
+
     {runner?.programaciones.filter(p => p.atraso > 0).map(p => <p key={p.id} className="text-sm">Atraso pendiente: {p.atrasoAcotado ? 'al menos ' : ''}{p.atraso} ocurrencias · próxima UTC {p.proxima_utc}</p>)}
-    
+
     <p className="text-sm text-slate-600">Scheduler de producción sin configurar. Entrega externa sin configurar; los resultados se descargan desde esta aplicación.</p>
-    
+
     <button className="mt-2 underline" type="button" onClick={() => { edicion.current++; void solicitar(() => cargar()); }}>Actualizar estado</button>
-    
+
     </div>
-        
+
         {error && <p ref={foco} tabIndex={-1} role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">
-        
+
         {error}
-        
+
         </p>}
-        
+
         {error && actual && <button type="button" className="boton" onClick={() => void solicitar(async () => {
                 setServidorComparado(await consultarEdicion<DefinicionUI>(`/api/informes/${actual.id}`));
                 setMensaje('La edición sigue en el formulario. Compara antes de continuar.');
@@ -411,18 +411,18 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
         </section>}
 
         {mensaje && <p role="status" className="rounded-lg bg-blue-50 p-3">
-        
+
         {mensaje}
-        
+
         </p>}
-    
-    
+
+
     <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[18rem_1fr]">
-    
+
     <aside className="space-y-3 tarjeta p-4 shadow-sm">
-    
+
     <h2 className="font-semibold">Mis definiciones</h2>
-    
+
     <button type="button" className="boton" onClick={() => {
             setActual(null);
             setServidorComparado(null);
@@ -430,40 +430,40 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
             setNombre('');
             cambiar(inicial());
         }}>Nueva definición</button>
-    
+
     <ul className="space-y-2">
-        
+
         {definiciones.map(d => <li key={d.id}>
-        
+
         <button type="button" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left" aria-pressed={actual?.id === d.id} onClick={() => editar(d)}>
-        
+
         {d.nombre}
-        
+
         <span className="block text-xs text-slate-600">v{d.version}{d.archivada_en ? ' · Archivada' : ''}</span>
-        
+
         </button>
-        
+
         </li>)}
-    
+
     </ul>
-    
+
     </aside>
-    
+
     <div className="min-w-0 space-y-6">
-    
+
     <form className="space-y-5 tarjeta p-5 shadow-sm" onSubmit={e => {
             e.preventDefault();
             void solicitar(async () => {
                 await revisar();
             });
         }}>
-    
+
     <h2 className="text-lg font-semibold">
-    
+
     {actual ? 'Editar definición' : 'Nueva definición'}
-    
+
     </h2>
-    
+
     <Definicion nombre={nombre} configuracion={configuracion} claves={claves} opciones={opciones} cambiarNombre={n => {
             edicion.current++;
             setOcupado(false);
@@ -471,53 +471,53 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
             setPrevia(null);
             setClaveManual(null);
         }} cambiar={cambiar}/>
-    
+
     <Audiencia configuracion={configuracion} admin={admin} grupos={grupos} cambiar={cambiar}/>
-    
+
     <div className="flex flex-wrap gap-3">
-    
+
     <button className="boton" disabled={ocupado} type="submit">Revisar selección y audiencia</button>
-    
+
     <button className="boton boton-principal" disabled={ocupado || !previa} type="button" onClick={() => void solicitar(async () => {
             const d = await consultarEdicion<DefinicionUI>(actual ? `/api/informes/${actual.id}` : '/api/informes', actual ? 'PATCH' : 'POST', { nombre, configuracion, ...actual ? { version: actual.version } : {} });
             setActual(d);
             await cargar();
             setMensaje('Definición guardada.');
         })}>Guardar definición revisada</button>
-        
+
         {actual && !actual.archivada_en && <button className="boton" disabled={ocupado} type="button" onClick={() => void solicitar(async () => {
                 const d = await consultarEdicion<DefinicionUI>(`/api/informes/${actual.id}`, 'PATCH', { nombre: actual.nombre, configuracion: actual.configuracion, version: actual.version, archivada: true });
                 setActual(d);
                 await cargar();
                 setMensaje('Definición archivada y programaciones detenidas.');
             })}>Archivar</button>}
-    
+
     </div>
-        
+
         {previa && <section className="space-y-2 rounded-lg bg-slate-50 p-4" aria-label="Selección revisada">
-        
+
         <h3 className="font-semibold">{previa.ambito.nombre} · {previa.ambito.salas.length} salas</h3>
-        
+
         <ul className="max-h-56 overflow-y-auto text-sm">
-        
+
         {previa.ambito.salas.map(s => <li key={s.id}>{s.nombre}{s.codigo ? ` (${s.codigo})` : ''} · {s.id}</li>)}
-        
+
         </ul>
-        
+
         <p className="break-words text-sm">Período resuelto: {JSON.stringify(previa.periodo)}</p>
-        
+
         <p>Formatos: {configuracion.formatos.join(', ').toUpperCase()}</p>
-        
+
         <h4 className="font-medium">Receptores efectivos</h4>
-        
+
         <ul className="text-sm">
-            
+
             {previa.audiencia.map(r => <li key={r.usuarioId}>{r.nombre} · {r.origenes.map((o: unknown) => String((o as {
                     tipo: string;
                 }).tipo)).join(', ')}</li>)}
-        
+
         </ul>
-        
+
         <button className="boton boton-principal" type="button" disabled={!guardado || ocupado || !!actual?.archivada_en} onClick={() => void solicitar(async () => {
                 if (!actual || !claveManual)
                     return;
@@ -529,21 +529,21 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
                 await cargar();
                 setMensaje('Informe encolado. El runner lo procesará.');
             })}>Solicitar informe</button>
-        
+
         {!guardado && <p className="text-sm">Guarda esta definición antes de solicitarla.</p>}
-        
+
         <button type="button" className="ml-3 underline" onClick={() => {
                 setClaveManual(crypto.randomUUID());
                 setMensaje('Nueva captura preparada con otra clave.');
             }}>Preparar nueva captura</button>
-        
+
         </section>}
-    
+
     </form>
-    
-        
+
+
         {actual && !actual.archivada_en && <div className="tarjeta p-5 shadow-sm">
-        
+
         <Programacion programaciones={programaciones} guardar={async (calendario: CalendarioInforme) => {
                 await consultarEdicion(`/api/informes/${actual.id}/programaciones`, 'POST', { versionDefinicion: actual.version, calendario });
                 await refrescarProgramaciones();
@@ -551,22 +551,22 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
                 await consultarEdicion(`/api/informes/programaciones/${p.id}`, 'PATCH', { version: p.version, activa, ...calendario ? { calendario } : {} });
                 await refrescarProgramaciones();
             }}/>
-        
+
         </div>}
-    
-        
+
+
         {admin && <section className="space-y-3 tarjeta p-5 shadow-sm">
-        
+
         <h2 className="text-lg font-semibold">Grupos internos</h2>
-        
+
         <p className="text-sm text-slate-600">Un grupo distribuye el informe en su ámbito exacto; cada miembro necesita permiso propio sobre las fuentes.</p>
-        
+
         <label className="block">Nombre del grupo<input className="campo ml-2" value={nombreGrupo} maxLength={120} onChange={e => setNombreGrupo(e.target.value)}/></label>
-        
+
         <p className="text-sm">Ámbito: {(grupoConfig ?? configuracion).ambito.tipo} · {(grupoConfig ?? configuracion).ambito.id}</p>
-        
+
         <Audiencia configuracion={{ ...(grupoConfig ?? configuracion), audiencia: { usuarios: miembros, grupos: [] } }} admin grupos={[]} cambiar={c => setMiembros(c.audiencia.usuarios)}/>
-        
+
         <button type="button" className="boton" disabled={ocupado} onClick={() => void solicitar(async () => {
                 await consultarEdicion(grupoEditado ? `/api/informes/grupos/${grupoEditado.id}` : '/api/informes/grupos', grupoEditado ? 'PATCH' : 'POST', { nombre: nombreGrupo, configuracion: grupoConfig ?? configuracion, miembros, ...grupoEditado ? { version: grupoEditado.version, activo: true } : {} });
                 setNombreGrupo('');
@@ -576,49 +576,49 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
                 await cargar();
                 setMensaje('Grupo guardado.');
             })}>
-        
+
         {grupoEditado ? 'Guardar grupo' : 'Crear grupo con el ámbito seleccionado'}
-        
+
         </button>
-            
+
             {grupoEditado && <button type="button" className="ml-2 underline" onClick={() => {
                     setGrupoEditado(null);
                     setGrupoConfig(null);
                     setMiembros([]);
                     setNombreGrupo('');
                 }}>Cancelar edición</button>}
-        
+
         <ul className="space-y-2">
-            
+
             {grupos.map(g => <li key={g.id} className="border-t pt-2">
-            
+
             <p>{g.nombre} · {g.miembros.length} miembros · v{g.version} · {g.activo ? 'Activo' : 'Inactivo'}</p>
-            
+
             <button type="button" className="mr-3 underline" onClick={() => {
                     setGrupoEditado(g);
                     setNombreGrupo(g.nombre);
                     setMiembros(g.miembros);
                     setGrupoConfig({ ...configuracion, ambito: g.ambito });
                 }}>Editar grupo</button>
-            
+
             <button type="button" className="underline" onClick={() => void solicitar(async () => {
                     await consultarEdicion(`/api/informes/grupos/${g.id}`, 'PATCH', { nombre: g.nombre, configuracion: { ...configuracion, ambito: g.ambito }, miembros: g.miembros, version: g.version, activo: !g.activo });
                     await cargar();
                 })}>
-            
+
             {g.activo ? 'Desactivar' : 'Activar'}
-            
+
             </button>
-            
+
             </li>)}
-        
+
         </ul>
-        
+
         </section>}
-    
-    
+
+
     <div className="tarjeta p-5 shadow-sm">
-    
+
     <Historial ejecuciones={ejecuciones} ultimos={ultimos} seleccionar={id => {
             setSeleccionada(id);
             setObservacion(n => n + 1);
@@ -634,11 +634,11 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
             setEjecuciones(actuales => [...actuales, ...r.ejecuciones.filter(e => ejecucionPermitida(e) && !actuales.some(a => a.id === e.id))]);
             setCursor(r.cursor);
         })}/>
-    
+
     </div>
-        
+
         {resultado && <div className="tarjeta p-5 shadow-sm">
-        
+
         <Resultado ejecucion={resultado} propietario={resultado.propietario_id === usuarioId} reintentar={() => solicitar(async () => {
                 await consultarEdicion(`/api/informes/ejecuciones/${resultado.id}/reintentar`, 'POST', { estado: resultado.estado, intento: resultado.intento_actual });
                 setSeleccionada(resultado.id);
@@ -651,12 +651,12 @@ export function GestorInformes({ usuarioId, claves, opciones, admin, inicio = {}
                 setResultado({ ...resultado, revocada_en: new Date().toISOString() });
                 await cargar();
             })}/>
-        
+
         </div>}
-    
+
     </div>
-    
+
     </div>
-    
+
     </div>;
 }

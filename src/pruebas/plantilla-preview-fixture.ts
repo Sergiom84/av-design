@@ -15,4 +15,3 @@ export function fixturePlantilla(): DatosPlantillaPreview {
     ], muebles: [], puertas: [], conexiones: [], referenciasCable: [], avisos: [],
   };
 }
-
